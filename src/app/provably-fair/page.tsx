@@ -111,18 +111,19 @@ export default function ProvablyFairPage() {
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Video poker with digits 0–9 instead of cards. 5 digits dealt from
-          live ticks. Hold any cards, draw replacements. Full House or better wins.
+          live ticks. Hold any cards, draw replacements. Two Pair or better
+          returns a profit.
         </p>
         <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
           <p className="font-medium">Pay Table</p>
           <div className="space-y-1">
             {[
-              ['Five of a Kind', '77777', '250×'],
-              ['Four of a Kind', '33383', '12×'],
-              ['Full House', '44422', '1×'],
-              ['Straight', '89012', '0×'],
-              ['Three of a Kind', '55563', '0×'],
-              ['Two Pair', '33448', '0×'],
+              ['Five of a Kind', '77777', '40×'],
+              ['Four of a Kind', '33383', '9×'],
+              ['Full House', '44422', '1.8×'],
+              ['Straight', '89012', '1.5×'],
+              ['Three of a Kind', '55563', '1.2×'],
+              ['Two Pair', '33448', '1.1×'],
               ['One Pair', '33567', '0×'],
               ['High Card', '13579', '0×'],
             ].map(([hand, example, payout]) => (
@@ -134,11 +135,11 @@ export default function ProvablyFairPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          With only 10 digit values (vs 13 ranks and 4 suits in standard poker),
-          matching hands occur far more often and the hold/redraw mechanic is very
-          powerful. The pay table is calibrated for ~97% RTP with optimal hold
-          strategy via exact brute-force computation over all possible hands and
-          hold patterns.
+          With only 10 digit values, matching hands occur far more often than in
+          standard poker. The top-end payouts are compressed to compensate, while
+          every hand from Two Pair upward returns a profit. Calibrated to ~96.6%
+          RTP with optimal hold strategy via exact brute-force computation over
+          all 100,000 possible hands and 32 hold patterns.
         </p>
       </section>
 

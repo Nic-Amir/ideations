@@ -278,18 +278,18 @@ export function DigitPokerGame() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <GameNotice tone={result.multiplier > 0 ? 'success' : 'default'}>
+                <GameNotice tone={result.multiplier >= 1 ? 'success' : 'default'}>
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="font-display text-lg font-semibold">{result.label}</p>
                       <p className="mt-1 text-xs opacity-80">
-                        {result.multiplier > 0
+                        {result.multiplier >= 1
                           ? `Settled for ${lastWin?.toFixed(0)} credits at ${result.multiplier}x.`
-                          : 'Full House or better is required to return a payout.'}
+                          : 'Two Pair or better is required to return a payout.'}
                       </p>
                     </div>
                     <div className="font-mono-game text-lg font-semibold">
-                      {result.multiplier > 0 ? `+${lastWin?.toFixed(0)}` : '0'}
+                      {result.multiplier >= 1 ? `+${lastWin?.toFixed(0)}` : '0'}
                     </div>
                   </div>
                 </GameNotice>
@@ -392,7 +392,7 @@ export function DigitPokerGame() {
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>Deal five digits from consecutive live ticks.</p>
               <p>Hold the positions you want to keep, then redraw the rest once.</p>
-              <p>Full House or better qualifies for a payout.</p>
+              <p>Two Pair or better qualifies for a payout.</p>
             </div>
           ),
         },

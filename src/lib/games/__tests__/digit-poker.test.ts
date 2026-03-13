@@ -62,25 +62,28 @@ describe('Digit Poker Engine', () => {
     expect(table[table.length - 1].rank).toBe('high_card');
   });
 
-  test('five of a kind pays 250x', () => {
+  test('five of a kind pays 40x', () => {
     const result = evaluateHand([7, 7, 7, 7, 7]);
-    expect(result.multiplier).toBe(250);
+    expect(result.multiplier).toBe(40);
   });
 
-  test('four of a kind pays 12x', () => {
+  test('four of a kind pays 9x', () => {
     const result = evaluateHand([3, 3, 3, 8, 3]);
-    expect(result.multiplier).toBe(12);
+    expect(result.multiplier).toBe(9);
   });
 
-  test('full house pays 1x', () => {
+  test('full house pays 1.8x', () => {
     const result = evaluateHand([4, 4, 4, 2, 2]);
-    expect(result.multiplier).toBe(1);
+    expect(result.multiplier).toBe(1.8);
   });
 
-  test('hands below full house pay 0x', () => {
-    expect(evaluateHand([3, 4, 5, 6, 7]).multiplier).toBe(0);
-    expect(evaluateHand([5, 5, 5, 6, 3]).multiplier).toBe(0);
-    expect(evaluateHand([3, 3, 4, 4, 8]).multiplier).toBe(0);
+  test('two pair and above all profit (multiplier > 1)', () => {
+    expect(evaluateHand([3, 4, 5, 6, 7]).multiplier).toBe(1.5);
+    expect(evaluateHand([5, 5, 5, 6, 3]).multiplier).toBe(1.2);
+    expect(evaluateHand([3, 3, 4, 4, 8]).multiplier).toBe(1.1);
+  });
+
+  test('one pair and high card pay 0x', () => {
     expect(evaluateHand([3, 3, 5, 6, 7]).multiplier).toBe(0);
     expect(evaluateHand([1, 3, 5, 7, 9]).multiplier).toBe(0);
   });
@@ -129,7 +132,8 @@ describe('Digit Poker Engine', () => {
       totalPayout += evaluateHand(hand).multiplier;
     }
     const rtp = totalPayout / 100_000;
-    expect(rtp).toBeLessThan(0.15);
+    expect(rtp).toBeGreaterThan(0.25);
+    expect(rtp).toBeLessThan(0.35);
   });
 
   test(
@@ -189,7 +193,7 @@ describe('Digit Poker Engine', () => {
 
       const optimalRTP = totalOptimalEV / 100_000;
       expect(optimalRTP).toBeGreaterThan(0.95);
-      expect(optimalRTP).toBeLessThan(0.99);
+      expect(optimalRTP).toBeLessThan(0.98);
     },
     60_000,
   );
