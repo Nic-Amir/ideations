@@ -11,39 +11,24 @@ interface DigitExtractionProps {
 export function DigitExtraction({ tick, triggerKey }: DigitExtractionProps) {
   if (!tick) return null;
 
-  const quoteStr = tick.numericQuote.toFixed(2);
   const digitStr = String(tick.lastDigit);
-  const prefix = quoteStr.slice(0, -1);
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={triggerKey}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.3 }}
-        className="flex items-center justify-center gap-1 py-2"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.15 }}
+        className="inline-flex items-center gap-1"
       >
-        <span className="font-mono-game text-sm text-muted-foreground">
-          {prefix}
+        <span className="font-mono-game text-[10px] text-muted-foreground">
+          digit
         </span>
-        <motion.span
-          initial={{ scale: 1.8, color: '#FF6B35' }}
-          animate={{ scale: 1, color: '#00D4AA' }}
-          transition={{ duration: 0.5, type: 'spring', stiffness: 200 }}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 font-mono-game text-lg font-bold"
-        >
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-foreground/10 font-mono-game text-xs font-bold text-foreground">
           {digitStr}
-        </motion.span>
-        <motion.span
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="ml-2 text-xs text-muted-foreground"
-        >
-          digit extracted
-        </motion.span>
+        </span>
       </motion.div>
     </AnimatePresence>
   );

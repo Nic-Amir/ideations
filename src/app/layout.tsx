@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DerivProvider } from "@/lib/deriv/provider";
+import { NavBar } from "@/components/nav/nav-bar";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -43,7 +44,10 @@ export default function RootLayout({
       >
         <DerivProvider>
           <TooltipProvider>
-            {children}
+            <NavBar />
+            <main className="min-h-screen pt-11 pb-16 md:pb-0">
+              {children}
+            </main>
           </TooltipProvider>
         </DerivProvider>
       </body>

@@ -37,12 +37,10 @@ const PlinkoGame = dynamic(
 
 function GameLoading() {
   return (
-    <div className="page-gutter">
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
-          <p className="text-[11px] text-muted-foreground">Loading module</p>
-        </div>
+    <div className="flex h-[60vh] items-center justify-center">
+      <div className="flex flex-col items-center gap-2">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
+        <p className="font-mono-game text-[10px] text-muted-foreground">Loading module</p>
       </div>
     </div>
   );

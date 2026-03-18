@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useDerivConnection } from '@/hooks/use-tick-stream';
+import { useMounted } from '@/hooks/use-mounted';
+import { SUPPORTED_SYMBOLS } from '@/types';
 import { LiveTickChart } from './live-tick-chart';
 import { DigitExtraction } from './digit-extraction';
 import type { ParsedTick } from '@/types';
@@ -46,7 +50,7 @@ export function GameNotice({
             : 'bg-accent text-foreground';
 
   return (
-    <div className={cn('rounded-md border px-3 py-2.5 text-sm', toneClass)}>
+    <div className={cn('rounded border px-3 py-2.5 text-sm', toneClass)}>
       {children}
     </div>
   );
@@ -60,26 +64,15 @@ export function GameStatusLine({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        'px-1 text-[12px] text-muted-foreground',
-        className
-      )}
-    >
+    <div className={cn('px-1 text-[11px] text-muted-foreground', className)}>
       {children}
     </div>
   );
 }
 
-export function GameBetslip({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function GameBetslip({ children }: { children: React.ReactNode }) {
   return (
-    <section className="surface-panel rounded-lg p-3">
-      {children}
-    </section>
+    <section className="surface-panel rounded p-3">{children}</section>
   );
 }
 
@@ -97,14 +90,14 @@ export function GameSecondaryTabs({
   const selectedTab = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 
   return (
-    <section className={cn('surface-panel rounded-lg p-3', className)}>
+    <section className={cn('surface-panel rounded p-3', className)}>
       <div className="mb-3 flex gap-1 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors',
+              'rounded px-2.5 py-1 font-mono-game text-[10px] font-medium transition-colors',
               selectedTab.id === tab.id
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -119,35 +112,51 @@ export function GameSecondaryTabs({
   );
 }
 
-function MobileMarketStrip({
+function MarketBar({
+  ticks,
   lastConsumedTick,
   extractionKey,
-  ticks,
 }: {
+  ticks: ParsedTick[];
   lastConsumedTick: ParsedTick | null;
   extractionKey: number;
-  ticks: ParsedTick[];
 }) {
-  if (!lastConsumedTick && ticks.length === 0) return null;
+  const { selectedIndex } = useSettingsStore();
+  const status = useDerivConnection();
+  const mounted = useMounted();
+  const symbol = SUPPORTED_SYMBOLS.find((s) => s.id === selectedIndex);
+
+  if (!mounted) return null;
+  if (ticks.length === 0 && !lastConsumedTick) return null;
+
+  const statusDot =
+    status === 'connected'
+      ? 'bg-emerald-400'
+      : status === 'connecting' || status === 'reconnecting'
+        ? 'bg-amber-400'
+        : 'bg-rose-400';
 
   return (
-    <div className="flex items-center gap-3 rounded-md bg-accent px-3 py-2 xl:hidden">
+    <div className="flex items-center gap-3 rounded bg-accent px-3 py-2 font-mono-game text-[11px]">
+      <span className="flex items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+        <span className="text-muted-foreground">
+          {symbol?.name ?? selectedIndex}
+        </span>
+      </span>
       {lastConsumedTick ? (
         <>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Quote</span>
-            <span className="font-mono-game text-[12px] text-foreground">
-              {lastConsumedTick.numericQuote.toFixed(2)}
-            </span>
-          </div>
-          <div className="h-3 w-px bg-border" />
-          <div className="flex-1">
-            <DigitExtraction tick={lastConsumedTick} triggerKey={extractionKey} />
-          </div>
+          <span className="text-foreground">
+            {lastConsumedTick.numericQuote.toFixed(2)}
+          </span>
+          <DigitExtraction tick={lastConsumedTick} triggerKey={extractionKey} />
         </>
       ) : (
-        <span className="text-[11px] text-muted-foreground">Waiting for ticks...</span>
+        <span className="text-muted-foreground">Waiting for ticks...</span>
       )}
+      <span className="ml-auto text-[9px] text-muted-foreground">
+        {ticks.length} ticks
+      </span>
     </div>
   );
 }
@@ -164,72 +173,60 @@ export function GameLayout({
   marketSummary,
   marketContent,
 }: GameLayoutProps) {
+  const hasTickData = ticks.length > 0 || lastConsumedTick !== null;
+
+  const allTabs: GameTab[] = [
+    ...tabs,
+  ];
+
+  if (hasTickData) {
+    allTabs.push({
+      id: 'chart',
+      label: 'Chart',
+      content: (
+        <div className="space-y-2">
+          <LiveTickChart
+            ticks={ticks}
+            highlightedTicks={highlightedTicks}
+            height={180}
+          />
+          {marketSummary ? (
+            <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
+              {marketSummary}
+            </p>
+          ) : null}
+        </div>
+      ),
+    });
+  }
+
   return (
-    <div className="page-gutter space-y-3">
+    <div className="mx-auto max-w-5xl space-y-2 px-3 py-3 md:px-4">
       {statusLine}
 
-      <MobileMarketStrip
-        lastConsumedTick={lastConsumedTick}
-        extractionKey={extractionKey}
-        ticks={ticks}
-      />
+      {hasTickData && (
+        <MarketBar
+          ticks={ticks}
+          lastConsumedTick={lastConsumedTick}
+          extractionKey={extractionKey}
+        />
+      )}
 
-      <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)_248px]">
-        <aside className="order-3 xl:order-1">
-          <section className="surface-panel rounded-lg p-3 xl:sticky xl:top-16">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="section-label">Market feed</span>
-              {ticks.length > 0 ? (
-                <span className="font-mono-game text-[10px] text-muted-foreground">
-                  {ticks.length}
-                </span>
-              ) : null}
-            </div>
+      {marketContent && !hasTickData ? (
+        <div className="space-y-2">{marketContent}</div>
+      ) : null}
 
-            {marketContent ? (
-              <div className="space-y-2">{marketContent}</div>
-            ) : (
-              <div className="space-y-2">
-                {lastConsumedTick ? (
-                  <div className="surface-inset rounded-md px-2.5 py-2">
-                    <div className="text-[10px] text-muted-foreground">Latest</div>
-                    <div className="mt-0.5 font-mono-game text-sm text-foreground">
-                      {lastConsumedTick.numericQuote.toFixed(2)}
-                    </div>
-                  </div>
-                ) : null}
+      <div className="grid gap-2 lg:grid-cols-[1fr_260px]">
+        <div className="space-y-2">
+          <section className="surface-panel rounded p-3">{playArea}</section>
+          {allTabs.length > 0 && <GameSecondaryTabs tabs={allTabs} />}
+        </div>
 
-                <LiveTickChart
-                  ticks={ticks}
-                  highlightedTicks={highlightedTicks}
-                  height={140}
-                />
-
-                <div className="surface-inset rounded-md px-2.5 py-2">
-                  <DigitExtraction tick={lastConsumedTick} triggerKey={extractionKey} />
-                </div>
-
-                {marketSummary ? (
-                  <p className="px-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                    {marketSummary}
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </section>
-        </aside>
-
-        <main className="order-1 space-y-3 xl:order-2">
-          <section className="surface-panel rounded-lg p-3">
-            {playArea}
-          </section>
-          {tabs.length ? <GameSecondaryTabs tabs={tabs} /> : null}
-        </main>
-
-        <aside className="order-2 xl:order-3">
-          <div className="xl:sticky xl:top-16">
-            <GameBetslip>{controls}</GameBetslip>
-          </div>
+        <aside className="lg:sticky lg:top-14 lg:self-start">
+          <GameBetslip>{controls}</GameBetslip>
+          {marketContent && hasTickData ? (
+            <div className="mt-2 space-y-2">{marketContent}</div>
+          ) : null}
         </aside>
       </div>
     </div>
