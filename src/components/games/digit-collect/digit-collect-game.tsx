@@ -158,7 +158,7 @@ export function DigitCollectGame() {
               key={currentMultiplier}
               initial={{ scale: 1.04, opacity: 0.2 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="mt-2 font-mono-game text-6xl font-bold text-primary"
+              className="mt-2 font-mono-game text-6xl font-bold text-emerald-400"
             >
               {currentMultiplier.toFixed(2)}x
             </motion.div>
@@ -180,7 +180,7 @@ export function DigitCollectGame() {
                     wasKnockout
                       ? 'border-destructive/40 bg-destructive/12 text-destructive'
                       : isCollected
-                        ? 'border-primary/30 bg-primary/10 text-primary'
+                        ? 'border-emerald-400/20 bg-emerald-400/8 text-emerald-400'
                         : 'border-white/6 bg-white/[0.03] text-muted-foreground'
                   }`}
                   animate={
@@ -219,7 +219,7 @@ export function DigitCollectGame() {
                           : 'The round ended before cash-out.'}
                       </p>
                     </div>
-                    <div className="font-mono-game text-lg font-semibold">
+                    <div className={`font-mono-game text-lg font-semibold ${lastResult.won ? 'text-success' : 'text-destructive'}`}>
                       {lastResult.won ? `+${lastResult.amount.toFixed(0)}` : `-${stake.toFixed(0)}`}
                     </div>
                   </div>
@@ -235,7 +235,7 @@ export function DigitCollectGame() {
             <div>
               <div className="mb-2 flex justify-between text-sm">
                 <span className="text-muted-foreground">Stake</span>
-                <span className="font-mono-game text-primary">{stake}</span>
+                <span className="font-mono-game text-foreground">{stake}</span>
               </div>
               <Slider
                 value={[stake]}
@@ -278,8 +278,8 @@ export function DigitCollectGame() {
             ) : null}
 
             {gameState === 'collecting' ? (
-              <div className="rounded-md border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
-                Cash out value: <span className="font-mono-game text-foreground">{potentialWin.toFixed(0)}</span>
+              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
+                Cash out value: <span className="font-mono-game text-emerald-400">{potentialWin.toFixed(0)}</span>
               </div>
             ) : null}
 
@@ -310,10 +310,10 @@ export function DigitCollectGame() {
               {payoutTable.map((row) => (
                 <div
                   key={row.draw}
-                  className={`grid grid-cols-4 gap-2 rounded-xl px-3 py-2 text-xs ${
+                  className={`grid grid-cols-4 gap-2 rounded-md px-3 py-2 text-xs ${
                     row.draw === drawNumber + 1
-                      ? 'border border-primary/20 bg-primary/10 text-primary'
-                      : 'border border-white/6 bg-white/[0.03] text-muted-foreground'
+                      ? 'border border-emerald-400/20 bg-emerald-400/8 text-emerald-400'
+                      : 'bg-accent text-muted-foreground'
                   }`}
                 >
                   <span>#{row.draw}</span>
@@ -333,11 +333,11 @@ export function DigitCollectGame() {
               {history.map((entry, idx) => (
                 <div
                   key={`${entry.tick.epoch}-${idx}`}
-                  className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground"
+                  className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs text-muted-foreground"
                 >
                   <span>Draw {idx + 1}</span>
                   <span className="font-mono-game text-foreground">{entry.tick.numericQuote.toFixed(2)}</span>
-                  <span className={entry.isKnockout ? 'text-destructive' : 'text-primary'}>
+                  <span className={entry.isKnockout ? 'text-destructive' : 'text-emerald-400'}>
                     Digit {entry.digit}
                   </span>
                 </div>

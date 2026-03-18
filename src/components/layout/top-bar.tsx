@@ -74,31 +74,21 @@ export function TopBar() {
 
   return (
     <motion.header
-      className="fixed top-0 right-0 z-30 border-b border-white/6 bg-background/95 backdrop-blur-sm"
+      className="fixed top-0 right-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm"
       animate={{ left: sidebarCollapsed ? 72 : 260 }}
       transition={{ duration: 0.15, ease: 'easeOut' }}
     >
-      <div className="app-container flex h-14 items-center justify-between gap-3 px-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2">
-              <span className="truncate font-display text-[15px] font-semibold tracking-tight">
-                {pageContext.title}
-              </span>
-              <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                {pageContext.game ? `${pageContext.game.category}` : 'Workspace'}
-              </span>
-            </div>
-            <div className="truncate text-[12px] text-muted-foreground">
-              {pageContext.subtitle}
-            </div>
-          </div>
+      <div className="app-container flex h-12 items-center justify-between gap-3 px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="truncate font-display text-sm font-semibold tracking-tight">
+            {pageContext.title}
+          </span>
 
           <div className="hidden items-center gap-2 xl:flex">
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border border-white/6 bg-white/[0.03] px-2.5 py-1.5 text-sm transition-colors hover:bg-white/[0.06]">
-                <Activity className="h-3 w-3 text-primary" />
-                <span className="font-mono-game text-[11px]">
+              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md bg-accent px-2 py-1 text-[11px] transition-colors hover:bg-accent/80">
+                <Activity className="h-3 w-3 text-muted-foreground" />
+                <span className="font-mono-game">
                   {selectedSymbol?.name ?? selectedIndex}
                 </span>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -111,9 +101,9 @@ export function TopBar() {
                     className="flex items-center justify-between gap-4"
                   >
                     <span>{sym.name}</span>
-                    <Badge variant="secondary" className="font-mono-game">
+                    <span className="font-mono-game text-[11px] text-muted-foreground">
                       {sym.tickFreq}
-                    </Badge>
+                    </span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -123,12 +113,12 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-1.5 rounded-md border border-white/6 bg-white/[0.03] px-2.5 py-1.5 lg:flex">
-            <span className="text-[11px] text-muted-foreground">Net</span>
+        <div className="flex items-center gap-3 text-[12px]">
+          <div className="hidden items-center gap-1.5 lg:flex">
+            <span className="text-muted-foreground">Net</span>
             <span
-              className={`font-mono-game text-[12px] tabular-nums ${
-                net >= 0 ? 'text-primary' : 'text-destructive'
+              className={`font-mono-game tabular-nums ${
+                net >= 0 ? 'text-success' : 'text-destructive'
               }`}
             >
               {net >= 0 ? '+' : ''}
@@ -136,33 +126,26 @@ export function TopBar() {
             </span>
           </div>
 
-          <div
-            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 ${
-              isLowBalance && mounted
-                ? 'border-destructive/20 bg-destructive/8'
-                : 'border-white/6 bg-white/[0.03]'
-            }`}
-          >
-            <span className="text-[11px] text-muted-foreground">Bal</span>
+          <div className="flex items-center gap-1.5">
             <span
-              className={`text-[12px] ${
-                isLowBalance && mounted ? 'text-destructive' : 'text-primary'
+              className={`font-mono-game tabular-nums ${
+                isLowBalance && mounted ? 'text-destructive' : 'text-foreground'
               }`}
             >
               {mounted ? <AnimatedBalance value={balance} /> : '—'}
             </span>
+            <span className="text-[10px] text-muted-foreground">credits</span>
           </div>
 
           <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-            <DialogTrigger className="inline-flex items-center justify-center rounded-md border border-white/6 bg-white/[0.03] p-1.5 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground">
+            <DialogTrigger className="inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground">
               <RotateCcw className="h-3.5 w-3.5" />
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Reset Balance</DialogTitle>
                 <DialogDescription>
-                  Reset demo balance to 10,000 credits. Wagering stats will be
-                  cleared. This cannot be undone.
+                  Reset demo balance to 10,000 credits. This cannot be undone.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -183,13 +166,6 @@ export function TopBar() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
-          <Badge
-            variant="outline"
-            className="hidden border-white/6 bg-white/[0.03] text-muted-foreground md:inline-flex"
-          >
-            Demo
-          </Badge>
         </div>
       </div>
     </motion.header>

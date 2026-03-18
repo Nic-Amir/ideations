@@ -19,7 +19,7 @@ export function ConnectionIndicator() {
   const config = STATUS_CONFIG[status];
 
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-md border border-white/6 bg-white/[0.03] px-2 py-1">
+    <div className="inline-flex items-center gap-1.5">
       <span
         className={`relative flex h-1.5 w-1.5 rounded-full ${config.color}`}
       >

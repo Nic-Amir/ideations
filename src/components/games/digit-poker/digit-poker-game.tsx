@@ -33,9 +33,9 @@ function PokerCard({
   return (
     <motion.button
       onClick={canHold ? onToggleHold : undefined}
-      className={`relative flex h-24 w-16 flex-col items-center justify-center rounded-xl border-2 transition-all ${
+      className={`relative flex h-24 w-16 flex-col items-center justify-center rounded-md border-2 transition-all ${
         held
-          ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(0,212,170,0.2)]'
+          ? 'border-violet-400 bg-violet-400/10 shadow-[0_0_15px_rgba(167,139,250,0.2)]'
           : 'border-border bg-card hover:border-muted-foreground/30'
       } ${canHold ? 'cursor-pointer' : 'cursor-default'}`}
       animate={isNew ? { rotateY: [90, 0], scale: [0.8, 1] } : {}}
@@ -48,7 +48,7 @@ function PokerCard({
             <motion.span
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-primary-foreground"
+              className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-violet-400 px-1.5 py-0.5 text-[9px] font-bold text-white"
             >
               HOLD
             </motion.span>
@@ -261,7 +261,7 @@ export function DigitPokerGame() {
                   {currentHandResult?.label ?? 'No hand'}
                 </span>
                 {currentHandResult && currentHandResult.multiplier > 0 ? (
-                  <span className="ml-1 text-primary">({currentHandResult.multiplier}x)</span>
+                  <span className="ml-1 text-violet-400">({currentHandResult.multiplier}x)</span>
                 ) : null}
               </>
             ) : gameState === 'drawing' ? (
@@ -289,7 +289,11 @@ export function DigitPokerGame() {
                       </p>
                     </div>
                     <div className="font-mono-game text-lg font-semibold">
-                      {result.multiplier >= 1 ? `+${lastWin?.toFixed(0)}` : '0'}
+                      {result.multiplier >= 1 ? (
+                        <span className="text-success">+{lastWin?.toFixed(0)}</span>
+                      ) : (
+                        '0'
+                      )}
                     </div>
                   </div>
                 </GameNotice>
@@ -305,7 +309,7 @@ export function DigitPokerGame() {
           <div>
             <div className="mb-2 flex justify-between text-sm">
               <span className="text-muted-foreground">Stake</span>
-              <span className="font-mono-game text-primary">{stake}</span>
+              <span className="font-mono-game text-foreground">{stake}</span>
             </div>
             <Slider
               value={[stake]}
@@ -329,7 +333,7 @@ export function DigitPokerGame() {
 
           {gameState === 'dealt' ? (
             <div className="space-y-3">
-              <div className="rounded-md border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
                 Held cards: <span className="font-mono-game text-foreground">{held.filter(Boolean).length}/5</span>
               </div>
               <Button
@@ -368,12 +372,12 @@ export function DigitPokerGame() {
               {payTable.map((row) => (
                 <div
                   key={row.rank}
-                  className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${
+                  className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
                     result?.rank === row.rank
-                      ? 'border-primary/20 bg-primary/10 text-primary'
+                      ? 'border-violet-400/20 bg-violet-400/10 text-violet-400'
                       : currentHandResult?.rank === row.rank && gameState === 'dealt'
                         ? 'border-white/10 bg-white/6 text-foreground'
-                        : 'border-white/6 bg-white/[0.03] text-muted-foreground'
+                        : 'border-transparent bg-accent text-muted-foreground'
                   }`}
                 >
                   <span>{row.label}</span>
@@ -401,17 +405,17 @@ export function DigitPokerGame() {
           label: 'Stats',
           content: (
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
                 Phase
                 <div className="mt-1 font-mono-game text-sm text-foreground">
                   {gameState === 'idle' ? 'Setup' : gameState === 'dealt' ? 'Hold / Draw' : 'Settled'}
                 </div>
               </div>
-              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
                 Held
                 <div className="mt-1 font-mono-game text-sm text-foreground">{held.filter(Boolean).length}/5</div>
               </div>
-              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
                 Current value
                 <div className="mt-1 font-mono-game text-sm text-foreground">
                   {currentHandResult ? `${(stake * currentHandResult.multiplier).toFixed(0)}` : '0'}

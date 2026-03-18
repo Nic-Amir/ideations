@@ -8,7 +8,6 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { useMounted } from '@/hooks/use-mounted';
-import { Badge } from '@/components/ui/badge';
 import { usePathname } from 'next/navigation';
 import { getPageContext } from './page-context';
 import { ConnectionIndicator } from './connection-indicator';
@@ -25,29 +24,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="pointer-events-none fixed inset-0 surface-grid opacity-15" />
+      
       <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      <header className="fixed top-0 left-0 right-0 z-30 flex h-12 items-center gap-2.5 border-b border-white/6 bg-background/95 px-3 backdrop-blur-sm md:hidden">
+      <header className="fixed top-0 left-0 right-0 z-30 flex h-11 items-center gap-2.5 border-b border-border bg-background/95 px-3 backdrop-blur-sm md:hidden">
         <MobileNav />
-        <div className="min-w-0">
-          <span className="block truncate font-display text-sm font-semibold tracking-tight">
-            {pageContext.title}
-          </span>
-          <span className="block truncate text-[10px] text-muted-foreground">
-            {pageContext.game ? `${pageContext.game.category} · ${pageContext.game.risk}` : 'Terminal'}
-          </span>
-        </div>
+        <span className="min-w-0 truncate font-display text-sm font-semibold tracking-tight">
+          {pageContext.title}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           {pageContext.usesStream ? <ConnectionIndicator /> : null}
-          <span className={`font-mono-game text-[13px] font-bold tabular-nums ${isLowBalance ? 'text-destructive' : 'text-primary'}`}>
+          <span className={`font-mono-game text-[12px] font-bold tabular-nums ${isLowBalance ? 'text-destructive' : 'text-foreground'}`}>
             {mounted ? balance.toLocaleString() : '—'}
           </span>
-          <Badge variant="outline" className="border-white/8 bg-white/[0.03] text-muted-foreground">
-            Demo
-          </Badge>
         </div>
       </header>
 
@@ -56,7 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <motion.main
-        className="min-h-screen pt-12 md:pt-14"
+        className="min-h-screen pt-11 md:pt-12"
         animate={{ marginLeft }}
         transition={{ duration: 0.15, ease: 'easeOut' }}
       >

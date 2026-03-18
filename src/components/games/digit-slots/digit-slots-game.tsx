@@ -27,7 +27,7 @@ function Reel({ digit, isSpinning }: { digit: number | null; isSpinning: boolean
         ) : (
           <span
             className={`font-mono-game text-4xl font-bold ${
-              digit === 7 ? 'text-[#7B2FBE]' : 'text-primary'
+              digit === 7 ? 'text-[#7B2FBE]' : 'text-amber-400'
             }`}
           >
             {digit ?? '?'}
@@ -45,13 +45,13 @@ function Reel({ digit, isSpinning }: { digit: number | null; isSpinning: boolean
 function SessionProgress({ completed, total }: { completed: number; total: number }) {
   const pct = Math.round((completed / total) * 100);
   return (
-    <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-full bg-accent px-3 py-1 text-xs text-muted-foreground">
       <span>
         {completed}/{total}
       </span>
       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-primary transition-all duration-300"
+          className="h-full rounded-full bg-amber-400 transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -138,7 +138,7 @@ export function DigitSlotsGame() {
           {session ? (
             <SessionProgress completed={session.completed} total={session.total} />
           ) : (
-            <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-muted-foreground">
+            <div className="rounded-full bg-accent px-3 py-1 text-xs text-muted-foreground">
               Manual
             </div>
           )}
@@ -162,7 +162,7 @@ export function DigitSlotsGame() {
                   : 'No paying line.'}
               </p>
             </div>
-            <div className="font-mono-game text-lg font-semibold">
+            <div className={`font-mono-game text-lg font-semibold ${result.multiplier > 0 ? 'text-success' : ''}`}>
               {result.multiplier > 0 ? `${(stake * result.multiplier).toFixed(0)}` : '0'}
             </div>
           </div>
@@ -202,7 +202,7 @@ export function DigitSlotsGame() {
 
       {/* Loss in session: auto-continuing indicator */}
       {phase === 'result' && !isWin && session && (
-        <div className="rounded-md border border-white/6 bg-white/[0.03] p-4 text-center">
+        <div className="rounded-md bg-accent p-4 text-center">
           <p className="text-sm text-muted-foreground">Next spin starting...</p>
         </div>
       )}
@@ -262,13 +262,13 @@ export function DigitSlotsGame() {
 
       {/* Awaiting resume (session paused after win resolution) */}
       {phase === 'awaitingResume' && session && (
-        <div className="rounded-md border border-primary/20 bg-primary/10 p-4">
+        <div className="rounded-md border border-amber-400/20 bg-amber-400/10 p-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="font-display text-base font-semibold text-primary">
+              <div className="font-display text-base font-semibold text-amber-400">
                 {session.total - session.completed} spins remaining
               </div>
-              <p className="mt-1 text-sm text-primary/80">Continue the session or stop and see your results.</p>
+              <p className="mt-1 text-sm text-amber-400/80">Continue the session or stop and see your results.</p>
             </div>
             <div className="grid grid-cols-2 gap-2 md:min-w-[260px]">
               <Button onClick={continueSession}>Continue</Button>
@@ -282,7 +282,7 @@ export function DigitSlotsGame() {
 
       {/* Session complete: summary */}
       {phase === 'sessionComplete' && session && (
-        <div className="space-y-4 rounded-md border border-white/6 bg-white/[0.03] p-5">
+        <div className="space-y-4 rounded-md bg-accent p-5">
           <div className="text-center">
             <div className="font-display text-lg font-semibold">Session Complete</div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -295,7 +295,7 @@ export function DigitSlotsGame() {
               const isPositive = pnl >= 0;
               return (
                 <div
-                  className={`rounded-xl border px-6 py-3 text-center ${
+                  className={`rounded-md border px-6 py-3 text-center ${
                     isPositive
                       ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
                       : 'border-red-400/20 bg-red-400/10 text-red-300'
@@ -329,7 +329,7 @@ export function DigitSlotsGame() {
       <div>
         <div className="mb-2 flex justify-between text-sm">
           <span className="text-muted-foreground">Stake</span>
-          <span className="font-mono-game text-primary">{stake}</span>
+          <span className="font-mono-game text-foreground">{stake}</span>
         </div>
         <Slider
           value={[stake]}
@@ -360,7 +360,7 @@ export function DigitSlotsGame() {
                   key={count}
                   onClick={() => startSession(count)}
                   disabled={stake > balance || balance <= 0}
-                  className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary disabled:pointer-events-none disabled:opacity-40"
+                  className="rounded-md border border-transparent bg-accent px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-amber-400/30 hover:bg-amber-400/10 hover:text-amber-400 disabled:pointer-events-none disabled:opacity-40"
                 >
                   {count} spins
                 </button>
@@ -394,10 +394,10 @@ export function DigitSlotsGame() {
           {payTable.map((row) => (
             <div
               key={row.outcome}
-              className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs ${
+              className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
                 result?.outcome === row.outcome
-                  ? 'border-primary/20 bg-primary/10 text-primary'
-                  : 'border-white/6 bg-white/[0.03] text-muted-foreground'
+                  ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
+                  : 'border-transparent bg-accent text-muted-foreground'
               }`}
             >
               <span>{row.label}</span>
@@ -427,19 +427,19 @@ export function DigitSlotsGame() {
       label: 'Stats',
       content: (
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+          <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
             Mode
             <div className="mt-1 font-mono-game text-sm text-foreground">
               {session ? `Session ${session.completed}/${session.total}` : 'Manual'}
             </div>
           </div>
-          <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+          <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
             Line
             <div className="mt-1 font-mono-game text-sm text-foreground">
               {reels.every((d) => d !== null) ? reels.join(' ') : '—'}
             </div>
           </div>
-          <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
+          <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
             Bank
             <div className="mt-1 font-mono-game text-sm text-foreground">{bank ? bank.toFixed(0) : '0'}</div>
           </div>

@@ -2,14 +2,13 @@ import { Separator } from '@/components/ui/separator';
 
 export default function ProvablyFairPage() {
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+    <div className="max-w-3xl mx-auto p-3 md:p-5 space-y-5">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
+        <h1 className="font-display text-xl font-semibold tracking-tight">
           Provably Fair
         </h1>
-        <p className="mt-1 text-[13px] text-muted-foreground">
-          Every outcome derived from verifiable, market-sourced data — not
-          opaque RNGs.
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          Every outcome from verifiable market data, not opaque RNGs.
         </p>
       </div>
 
@@ -22,7 +21,7 @@ export default function ProvablyFairPage() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           All games (except Volatility Plinko) use real-time tick data streamed
           from the Deriv API. Each tick contains a financial quote (e.g.,{' '}
-          <code className="font-mono-game text-primary bg-muted px-1 rounded">6432.17</code>).
+          <code className="font-mono-game text-foreground bg-muted px-1 rounded">6432.17</code>).
           The <strong>last digit</strong> of this quote becomes the atomic unit of
           randomness — in this case, <strong>7</strong>.
         </p>
@@ -95,7 +94,7 @@ export default function ProvablyFairPage() {
                   <td className="py-1.5 text-right">{surv}</td>
                   <td className="py-1.5 text-right">{cum}</td>
                   <td className="py-1.5 text-right">{fair}</td>
-                  <td className="py-1.5 text-right text-primary">{actual}</td>
+                  <td className="py-1.5 text-right text-foreground">{actual}</td>
                 </tr>
               ))}
             </tbody>
@@ -188,7 +187,7 @@ export default function ProvablyFairPage() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           Unlike the other games, Volatility Run generates synthetic price
           paths client-side using Geometric Brownian Motion (GBM) with{' '}
-          <code className="font-mono-game text-primary bg-muted px-1 rounded">crypto.getRandomValues()</code>{' '}
+          <code className="font-mono-game text-foreground bg-muted px-1 rounded">crypto.getRandomValues()</code>{' '}
           as the entropy source. The final price position (percent change from
           start) determines the payout zone.
         </p>
@@ -229,8 +228,8 @@ export default function ProvablyFairPage() {
               <tr className="border-b border-border/30">
                 <td className="py-1.5 text-muted-foreground">Max Payout</td>
                 <td className="py-1.5 text-center">25×</td>
-                <td className="py-1.5 text-center text-primary">170×</td>
-                <td className="py-1.5 text-center text-primary">1000×</td>
+                <td className="py-1.5 text-center text-foreground">170×</td>
+                <td className="py-1.5 text-center text-foreground">1000×</td>
               </tr>
               <tr>
                 <td className="py-1.5 text-muted-foreground">Target RTP</td>
@@ -256,16 +255,16 @@ export default function ProvablyFairPage() {
         </h2>
         <ul className="space-y-2 text-sm text-muted-foreground">
           <li className="flex gap-2">
-            <span className="text-primary">1.</span>
+            <span className="text-foreground">1.</span>
             Last digits from Deriv synthetic indices are uniformly distributed
             across 0–9 (P = 0.10 each).
           </li>
           <li className="flex gap-2">
-            <span className="text-primary">2.</span>
+            <span className="text-foreground">2.</span>
             Consecutive tick digits are independent (no autocorrelation).
           </li>
           <li className="flex gap-2">
-            <span className="text-primary">3.</span>
+            <span className="text-foreground">3.</span>
             Generated volatility quotes for Volatility Run produce fair
             price paths via GBM with zero drift.
           </li>
@@ -278,15 +277,14 @@ export default function ProvablyFairPage() {
 
       <Separator />
 
-      <div className="rounded-md border border-white/6 bg-card p-3">
-        <p className="text-[12px] text-muted-foreground">
-          <strong>Demo Only</strong> — No real money wagered. Proof of concept
-          for market-driven game mechanics. Data:{' '}
+      <div className="rounded-md bg-accent p-3">
+        <p className="text-[11px] text-muted-foreground">
+          <strong className="text-foreground">Demo Only</strong> — No real money wagered. Data:{' '}
           <a
             href="https://api.deriv.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary hover:underline"
+            className="text-foreground underline underline-offset-2 hover:no-underline"
           >
             Deriv API
           </a>

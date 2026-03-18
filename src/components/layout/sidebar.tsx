@@ -40,17 +40,17 @@ function NavLink({
   const inner = (
     <Link
       href={href}
-      className={`group flex items-center gap-2.5 rounded-md border px-2.5 py-2 text-sm transition-colors duration-100 ${
+      className={`group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors duration-100 ${
         isActive
-          ? 'border-primary/20 bg-primary/8 text-foreground'
-          : 'border-transparent text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
+          ? 'bg-accent text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
       } ${collapsed ? 'justify-center px-2' : ''}`}
     >
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border ${
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded ${
           isActive
-            ? 'border-primary/16 bg-primary/10 text-primary'
-            : 'border-white/6 bg-white/[0.03] text-muted-foreground group-hover:text-foreground'
+            ? 'text-foreground'
+            : 'text-muted-foreground group-hover:text-foreground'
         }`}
       >
         {icon}
@@ -93,34 +93,24 @@ export function Sidebar() {
       <div className="flex items-center justify-between px-3 py-3">
         {!sidebarCollapsed ? (
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-primary/16 bg-primary/8 text-primary">
+            <div className="flex h-7 w-7 items-center justify-center rounded text-foreground">
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
-              <span className="section-label">Ideations</span>
-              <span className="block font-display text-sm font-semibold tracking-tight">
-                Trade The Noise
+              <span className="font-display text-sm font-semibold tracking-tight">
+                Ideations
               </span>
             </div>
           </Link>
         ) : (
           <Link
             href="/"
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-md border border-primary/16 bg-primary/8 text-primary"
+            className="mx-auto flex h-7 w-7 items-center justify-center rounded text-foreground"
           >
             <Sparkles className="h-4 w-4" />
           </Link>
         )}
       </div>
-
-      {!sidebarCollapsed && (
-        <div className="px-3 pb-3">
-          <div className="surface-panel-muted rounded-md px-3 py-2">
-            <div className="section-label">Terminal</div>
-            <p className="mt-0.5 text-[12px] text-foreground">Demo market desk</p>
-          </div>
-        </div>
-      )}
 
       <Separator className="opacity-30" />
 
@@ -160,7 +150,7 @@ export function Sidebar() {
         {sidebarCollapsed ? (
           <Tooltip>
             <TooltipTrigger
-              className="flex w-full items-center justify-center rounded-md border border-transparent px-2 py-2 text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+              className="flex w-full items-center justify-center rounded-md px-2 py-2 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
               onClick={() => setSoundEnabled(!soundEnabled)}
             >
               {soundEnabled ? (
@@ -176,19 +166,17 @@ export function Sidebar() {
         ) : (
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/[0.04] hover:text-foreground"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/6 bg-white/[0.03]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center">
               {soundEnabled ? (
                 <Volume2 className="h-4 w-4" />
               ) : (
                 <VolumeX className="h-4 w-4" />
               )}
             </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium">
-                {soundEnabled ? 'Sound on' : 'Sound off'}
-              </span>
+            <span className="text-[13px] font-medium">
+              {soundEnabled ? 'Sound on' : 'Sound off'}
             </span>
           </button>
         )}
