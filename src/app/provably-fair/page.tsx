@@ -37,7 +37,7 @@ export default function ProvablyFairPage() {
   "tick": {
     "epoch": 1710300000,
     "quote": "6432.17",
-    "symbol": "R_100",
+    "symbol": "1HZ100V",
     "pip_size": 2
   }
 }

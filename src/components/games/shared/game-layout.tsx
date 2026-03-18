@@ -27,7 +27,6 @@ interface GameLayoutProps {
   controls: React.ReactNode;
   tabs?: GameTab[];
   statusLine?: React.ReactNode;
-  marketSummary?: React.ReactNode;
   marketContent?: React.ReactNode;
 }
 
@@ -112,12 +111,14 @@ export function GameSecondaryTabs({
   );
 }
 
-function MarketBar({
+function LiveMarketStrip({
   ticks,
+  highlightedTicks,
   lastConsumedTick,
   extractionKey,
 }: {
   ticks: ParsedTick[];
+  highlightedTicks: ParsedTick[];
   lastConsumedTick: ParsedTick | null;
   extractionKey: number;
 }) {
@@ -127,7 +128,6 @@ function MarketBar({
   const symbol = SUPPORTED_SYMBOLS.find((s) => s.id === selectedIndex);
 
   if (!mounted) return null;
-  if (ticks.length === 0 && !lastConsumedTick) return null;
 
   const statusDot =
     status === 'connected'
@@ -136,27 +136,42 @@ function MarketBar({
         ? 'bg-amber-400'
         : 'bg-rose-400';
 
+  const statusLabel =
+    status === 'connected'
+      ? 'Live'
+      : status === 'connecting'
+        ? 'Connecting'
+        : status === 'reconnecting'
+          ? 'Reconnecting'
+          : 'Offline';
+
   return (
-    <div className="flex items-center gap-3 rounded bg-accent px-3 py-2 font-mono-game text-[11px]">
-      <span className="flex items-center gap-1.5">
-        <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
-        <span className="text-muted-foreground">
-          {symbol?.name ?? selectedIndex}
-        </span>
-      </span>
-      {lastConsumedTick ? (
-        <>
-          <span className="text-foreground">
-            {lastConsumedTick.numericQuote.toFixed(2)}
+    <div className="relative overflow-hidden rounded">
+      <LiveTickChart
+        ticks={ticks}
+        highlightedTicks={highlightedTicks}
+        height={100}
+      />
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between px-3 pt-2">
+        <div className="flex items-center gap-1.5 rounded bg-[#0f0f11]/80 px-2 py-1 font-mono-game text-[10px] backdrop-blur-sm">
+          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+          <span className="text-muted-foreground">
+            {symbol?.name ?? selectedIndex}
           </span>
-          <DigitExtraction tick={lastConsumedTick} triggerKey={extractionKey} />
-        </>
-      ) : (
-        <span className="text-muted-foreground">Waiting for ticks...</span>
-      )}
-      <span className="ml-auto text-[9px] text-muted-foreground">
-        {ticks.length} ticks
-      </span>
+          <span className="text-muted-foreground/60">&middot;</span>
+          <span className="text-muted-foreground">{statusLabel}</span>
+          <span className="text-muted-foreground/60">&middot;</span>
+          <span className="text-muted-foreground">{ticks.length}t</span>
+        </div>
+
+        <div className="rounded bg-[#0f0f11]/80 px-2 py-1 backdrop-blur-sm">
+          <DigitExtraction
+            tick={lastConsumedTick}
+            triggerKey={extractionKey}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -170,43 +185,18 @@ export function GameLayout({
   controls,
   tabs = [],
   statusLine,
-  marketSummary,
   marketContent,
 }: GameLayoutProps) {
   const hasTickData = ticks.length > 0 || lastConsumedTick !== null;
-
-  const allTabs: GameTab[] = [
-    ...tabs,
-  ];
-
-  if (hasTickData) {
-    allTabs.push({
-      id: 'chart',
-      label: 'Chart',
-      content: (
-        <div className="space-y-2">
-          <LiveTickChart
-            ticks={ticks}
-            highlightedTicks={highlightedTicks}
-            height={180}
-          />
-          {marketSummary ? (
-            <p className="px-0.5 text-[10px] leading-relaxed text-muted-foreground">
-              {marketSummary}
-            </p>
-          ) : null}
-        </div>
-      ),
-    });
-  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-2 px-3 py-3 md:px-4">
       {statusLine}
 
       {hasTickData && (
-        <MarketBar
+        <LiveMarketStrip
           ticks={ticks}
+          highlightedTicks={highlightedTicks}
           lastConsumedTick={lastConsumedTick}
           extractionKey={extractionKey}
         />
@@ -219,7 +209,7 @@ export function GameLayout({
       <div className="grid gap-2 lg:grid-cols-[1fr_260px]">
         <div className="space-y-2">
           <section className="surface-panel rounded p-3">{playArea}</section>
-          {allTabs.length > 0 && <GameSecondaryTabs tabs={allTabs} />}
+          {tabs.length > 0 && <GameSecondaryTabs tabs={tabs} />}
         </div>
 
         <aside className="lg:sticky lg:top-14 lg:self-start">

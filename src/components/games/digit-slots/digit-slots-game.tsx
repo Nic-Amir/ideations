@@ -456,7 +456,6 @@ export function DigitSlotsGame() {
       highlightedTicks={highlightedTicks}
       lastConsumedTick={lastConsumedTick}
       extractionKey={extractionKey}
-      marketSummary="Three consecutive live digits stop the reels from left to right."
       statusLine={<GameStatusLine>{statusText}</GameStatusLine>}
       playArea={playArea}
       controls={controls}

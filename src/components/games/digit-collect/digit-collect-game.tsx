@@ -138,7 +138,6 @@ export function DigitCollectGame() {
       highlightedTicks={highlightedTicks}
       lastConsumedTick={lastConsumedTick}
       extractionKey={extractionKey}
-      marketSummary="Each draw consumes the next live tick. Duplicate digits end the run immediately."
       statusLine={
         <GameStatusLine>
           {gameState === 'idle'
@@ -336,7 +335,7 @@ export function DigitCollectGame() {
                   className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs text-muted-foreground"
                 >
                   <span>Draw {idx + 1}</span>
-                  <span className="font-mono-game text-foreground">{entry.tick.numericQuote.toFixed(2)}</span>
+                  <span className="font-mono-game text-foreground">{entry.tick.numericQuote.toFixed(entry.tick.pip_size ?? 2)}</span>
                   <span className={entry.isKnockout ? 'text-destructive' : 'text-emerald-400'}>
                     Digit {entry.digit}
                   </span>

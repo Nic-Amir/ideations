@@ -7,6 +7,15 @@ export interface DerivTick {
   pip_size: number;
 }
 
+function inferPipSize(quote: string): number {
+  const dotIdx = quote.indexOf('.');
+  return dotIdx === -1 ? 0 : quote.length - dotIdx - 1;
+}
+
+export function normalizePipSize(raw: { quote: string; pip_size?: number }): number {
+  return raw.pip_size ?? inferPipSize(raw.quote);
+}
+
 export interface ParsedTick extends DerivTick {
   lastDigit: number;
   numericQuote: number;
@@ -15,7 +24,12 @@ export interface ParsedTick extends DerivTick {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
-export type DerivSymbol = 'R_100' | 'R_50' | 'R_25' | 'R_10' | 'frxBTCUSD';
+export type DerivSymbol =
+  | '1HZ100V'
+  | '1HZ75V'
+  | '1HZ50V'
+  | '1HZ25V'
+  | '1HZ10V';
 
 export interface SymbolInfo {
   id: DerivSymbol;
@@ -25,10 +39,11 @@ export interface SymbolInfo {
 }
 
 export const SUPPORTED_SYMBOLS: SymbolInfo[] = [
-  { id: 'R_100', name: 'Volatility 100', tickFreq: '~1 sec', description: 'High volatility synthetic' },
-  { id: 'R_50', name: 'Volatility 50', tickFreq: '~1 sec', description: 'Medium volatility synthetic' },
-  { id: 'R_25', name: 'Volatility 25', tickFreq: '~1 sec', description: 'Low-medium volatility' },
-  { id: 'R_10', name: 'Volatility 10', tickFreq: '~1 sec', description: 'Low volatility synthetic' },
+  { id: '1HZ100V', name: 'Volatility 100 (1s)', tickFreq: '1 sec', description: 'High volatility, 1-second ticks' },
+  { id: '1HZ75V', name: 'Volatility 75 (1s)', tickFreq: '1 sec', description: 'Medium-high volatility, 1-second ticks' },
+  { id: '1HZ50V', name: 'Volatility 50 (1s)', tickFreq: '1 sec', description: 'Medium volatility, 1-second ticks' },
+  { id: '1HZ25V', name: 'Volatility 25 (1s)', tickFreq: '1 sec', description: 'Low-medium volatility, 1-second ticks' },
+  { id: '1HZ10V', name: 'Volatility 10 (1s)', tickFreq: '1 sec', description: 'Low volatility, 1-second ticks' },
 ];
 
 export type DigitCollectState = 'idle' | 'collecting' | 'cashed_out' | 'knocked_out';

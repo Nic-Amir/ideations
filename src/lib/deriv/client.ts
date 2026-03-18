@@ -1,6 +1,7 @@
 'use strict';
 
 import type { DerivTick, ParsedTick, ConnectionStatus } from '@/types';
+import { normalizePipSize } from '@/types';
 
 type TickHandler = (tick: ParsedTick) => void;
 type StatusHandler = (status: ConnectionStatus) => void;
@@ -107,8 +108,10 @@ export class DerivClient {
 
   private handleTick(raw: DerivTick): void {
     const quoteStr = typeof raw.quote === 'number' ? String(raw.quote) : raw.quote;
+    const pipSize = normalizePipSize({ quote: quoteStr, pip_size: raw.pip_size });
     const parsed: ParsedTick = {
       ...raw,
+      pip_size: pipSize,
       lastDigit: extractLastDigit(quoteStr),
       numericQuote: parseFloat(quoteStr),
       timestamp: new Date(raw.epoch * 1000),

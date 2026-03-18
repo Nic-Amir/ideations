@@ -11,25 +11,24 @@ interface LiveTickChartProps {
 }
 
 const CHART_COLORS = {
-  bg: '#131325',
-  grid: 'rgba(255,255,255,0.04)',
-  line: '#00D4AA',
-  lineGlow: 'rgba(0,212,170,0.3)',
-  dot: '#00D4AA',
-  dotGlow: 'rgba(0,212,170,0.6)',
-  highlight: '#FF6B35',
-  highlightGlow: 'rgba(255,107,53,0.4)',
-  text: '#8B8BA3',
-  textBright: '#F0F0F0',
-  digitBg: 'rgba(0,212,170,0.15)',
+  bg: '#0f0f11',
+  grid: 'rgba(255,255,255,0.03)',
+  line: '#a1a1aa',
+  lineFill: 'rgba(161,161,170,0.06)',
+  dot: '#e4e4e7',
+  highlight: '#f59e0b',
+  highlightFaint: 'rgba(245,158,11,0.35)',
+  digitBg: 'rgba(245,158,11,0.15)',
+  text: '#71717a',
+  textBright: '#e4e4e7',
 };
 
-const PADDING = { top: 24, right: 64, bottom: 28, left: 12 };
+const PADDING = { top: 16, right: 64, bottom: 20, left: 8 };
 
 export function LiveTickChart({
   ticks,
   highlightedTicks = [],
-  height = 200,
+  height = 100,
   className = '',
 }: LiveTickChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,17 +44,16 @@ export function LiveTickChart({
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // Background
       ctx.fillStyle = CHART_COLORS.bg;
       ctx.beginPath();
-      ctx.roundRect(0, 0, w, h, 12);
+      ctx.roundRect(0, 0, w, h, 4);
       ctx.fill();
 
       if (ticks.length < 2) {
         ctx.fillStyle = CHART_COLORS.text;
-        ctx.font = '12px monospace';
+        ctx.font = '11px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('Waiting for tick data...', w / 2, h / 2);
+        ctx.fillText('Waiting for tick data\u2026', w / 2, h / 2);
         ctx.restore();
         return;
       }
@@ -68,30 +66,29 @@ export function LiveTickChart({
       const minQ = Math.min(...quotes);
       const maxQ = Math.max(...quotes);
       const range = maxQ - minQ || 1;
-      const padding = range * 0.1;
-      const yMin = minQ - padding;
-      const yMax = maxQ + padding;
+      const pad = range * 0.1;
+      const yMin = minQ - pad;
+      const yMax = maxQ + pad;
 
-      const xScale = (i: number) => PADDING.left + (i / (displayTicks.length - 1)) * plotW;
-      const yScale = (v: number) => PADDING.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+      const xScale = (i: number) =>
+        PADDING.left + (i / (displayTicks.length - 1)) * plotW;
+      const yScale = (v: number) =>
+        PADDING.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
-      // Grid lines
+      // Grid
       ctx.strokeStyle = CHART_COLORS.grid;
       ctx.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) {
-        const y = PADDING.top + (plotH / 4) * i;
+      for (let i = 0; i <= 3; i++) {
+        const y = PADDING.top + (plotH / 3) * i;
         ctx.beginPath();
         ctx.moveTo(PADDING.left, y);
         ctx.lineTo(w - PADDING.right, y);
         ctx.stroke();
       }
 
-      // Price line with glow
-      ctx.save();
-      ctx.shadowColor = CHART_COLORS.lineGlow;
-      ctx.shadowBlur = 8;
+      // Price line
       ctx.strokeStyle = CHART_COLORS.line;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.lineJoin = 'round';
       ctx.beginPath();
       for (let i = 0; i < displayTicks.length; i++) {
@@ -101,12 +98,10 @@ export function LiveTickChart({
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
-      ctx.restore();
 
-      // Fill under the line
+      // Fill under line
       ctx.save();
-      ctx.globalAlpha = 0.08;
-      ctx.fillStyle = CHART_COLORS.line;
+      ctx.fillStyle = CHART_COLORS.lineFill;
       ctx.beginPath();
       for (let i = 0; i < displayTicks.length; i++) {
         const x = xScale(i);
@@ -128,85 +123,78 @@ export function LiveTickChart({
 
           // Vertical dashed line
           ctx.save();
-          ctx.strokeStyle = CHART_COLORS.highlight;
+          ctx.strokeStyle = CHART_COLORS.highlightFaint;
           ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.globalAlpha = 0.5;
+          ctx.setLineDash([2, 3]);
           ctx.beginPath();
           ctx.moveTo(x, PADDING.top);
           ctx.lineTo(x, PADDING.top + plotH);
           ctx.stroke();
+          ctx.setLineDash([]);
           ctx.restore();
 
-          // Glow dot
-          ctx.save();
-          ctx.shadowColor = CHART_COLORS.highlightGlow;
-          ctx.shadowBlur = 10;
+          // Dot
           ctx.fillStyle = CHART_COLORS.highlight;
           ctx.beginPath();
-          ctx.arc(x, y, 5, 0, Math.PI * 2);
+          ctx.arc(x, y, 3.5, 0, Math.PI * 2);
           ctx.fill();
-          ctx.restore();
 
           // Digit label above dot
           const digit = displayTicks[i].lastDigit;
           ctx.save();
           ctx.fillStyle = CHART_COLORS.highlight;
-          ctx.font = 'bold 11px monospace';
+          ctx.font = 'bold 10px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(String(digit), x, y - 10);
+          ctx.fillText(String(digit), x, y - 8);
           ctx.restore();
         }
       }
 
-      // Latest point glow
+      // Latest point
       const lastTick = displayTicks[displayTicks.length - 1];
       const lastX = xScale(displayTicks.length - 1);
       const lastY = yScale(lastTick.numericQuote);
 
-      ctx.save();
-      ctx.shadowColor = CHART_COLORS.dotGlow;
-      ctx.shadowBlur = 12;
       ctx.fillStyle = CHART_COLORS.dot;
       ctx.beginPath();
-      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
 
-      // Right-side labels: price + last digit
+      // Right-side price label
       ctx.save();
       ctx.fillStyle = CHART_COLORS.textBright;
-      ctx.font = 'bold 11px monospace';
+      ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'left';
-      const priceLabel = lastTick.numericQuote.toFixed(2);
-      const labelX = w - PADDING.right + 8;
-      ctx.fillText(priceLabel, labelX, lastY + 4);
+      const labelX = w - PADDING.right + 6;
+      const pipSize = lastTick.pip_size ?? 2;
+      ctx.fillText(lastTick.numericQuote.toFixed(pipSize), labelX, lastY + 4);
 
       // Last digit badge
       const digitStr = String(lastTick.lastDigit);
       ctx.fillStyle = CHART_COLORS.digitBg;
-      const badgeW = 22;
-      const badgeH = 18;
+      const badgeW = 18;
+      const badgeH = 16;
       const badgeX = labelX;
-      const badgeY = lastY + 10;
+      const badgeY = lastY + 8;
       ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
       ctx.fill();
 
-      ctx.fillStyle = CHART_COLORS.dot;
-      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = CHART_COLORS.highlight;
+      ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(digitStr, badgeX + badgeW / 2, badgeY + 13);
+      ctx.fillText(digitStr, badgeX + badgeW / 2, badgeY + 12);
       ctx.restore();
 
       // Y-axis scale labels
+      const axisPrecision = displayTicks[0]?.pip_size ?? 2;
       ctx.fillStyle = CHART_COLORS.text;
-      ctx.font = '9px monospace';
+      ctx.font = '8px monospace';
       ctx.textAlign = 'right';
-      for (let i = 0; i <= 4; i++) {
-        const val = yMin + ((yMax - yMin) / 4) * (4 - i);
-        const y = PADDING.top + (plotH / 4) * i;
-        ctx.fillText(val.toFixed(1), w - PADDING.right + 4, y + 3);
+      for (let i = 0; i <= 3; i++) {
+        const val = yMin + ((yMax - yMin) / 3) * (3 - i);
+        const y = PADDING.top + (plotH / 3) * i;
+        ctx.fillText(val.toFixed(axisPrecision), w - PADDING.right + 4, y + 3);
       }
 
       ctx.restore();
@@ -248,7 +236,7 @@ export function LiveTickChart({
 
   return (
     <div ref={containerRef} className={`w-full ${className}`}>
-      <canvas ref={canvasRef} className="block w-full rounded-xl" />
+      <canvas ref={canvasRef} className="block w-full rounded" />
     </div>
   );
 }

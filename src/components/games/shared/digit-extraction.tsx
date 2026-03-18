@@ -11,24 +11,29 @@ interface DigitExtractionProps {
 export function DigitExtraction({ tick, triggerKey }: DigitExtractionProps) {
   if (!tick) return null;
 
+  const quoteStr = tick.numericQuote.toFixed(tick.pip_size ?? 2);
   const digitStr = String(tick.lastDigit);
 
   return (
     <AnimatePresence mode="wait">
       <motion.div
         key={triggerKey}
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.8 }}
+        initial={{ opacity: 0, x: 4 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -4 }}
         transition={{ duration: 0.15 }}
-        className="inline-flex items-center gap-1"
+        className="inline-flex items-center gap-1.5 font-mono-game"
       >
-        <span className="font-mono-game text-[10px] text-muted-foreground">
-          digit
-        </span>
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-foreground/10 font-mono-game text-xs font-bold text-foreground">
+        <span className="text-[11px] text-foreground">{quoteStr}</span>
+        <span className="text-[10px] text-muted-foreground">&rarr;</span>
+        <motion.span
+          initial={{ scale: 1.3 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.2, type: 'spring', stiffness: 300 }}
+          className="inline-flex h-5 w-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-400"
+        >
           {digitStr}
-        </span>
+        </motion.span>
       </motion.div>
     </AnimatePresence>
   );

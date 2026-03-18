@@ -16,7 +16,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      selectedIndex: 'R_100',
+      selectedIndex: '1HZ100V',
       soundEnabled: true,
       reducedMotion: false,
 

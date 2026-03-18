@@ -222,7 +222,6 @@ export function DigitPokerGame() {
       highlightedTicks={highlightedTicks}
       lastConsumedTick={lastConsumedTick}
       extractionKey={extractionKey}
-      marketSummary="Five consecutive live ticks seed the hand. Replacements only consume the unheld positions."
       statusLine={
         <GameStatusLine>
           {gameState === 'idle'
