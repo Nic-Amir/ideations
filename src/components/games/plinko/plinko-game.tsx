@@ -442,7 +442,7 @@ export function PlinkoGame() {
         }
         marketContent={
           <>
-            <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
+            <div className="rounded-md border border-white/6 bg-white/[0.03] p-4">
               <div className="section-label">Simulation source</div>
               <p className="mt-2 text-sm text-foreground">
                 This module does not consume the live Deriv tick stream.
@@ -452,7 +452,7 @@ export function PlinkoGame() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-sm text-muted-foreground">
+            <div className="rounded-md border border-white/6 bg-white/[0.03] p-4 text-sm text-muted-foreground">
               <div className="section-label">Model inputs</div>
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between">
@@ -472,7 +472,7 @@ export function PlinkoGame() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-white/3 p-4 text-xs text-muted-foreground">
+            <div className="rounded-md border border-white/6 bg-white/[0.03] p-4 text-xs text-muted-foreground">
               Paths are generated locally with secure browser randomness rather than the live tick stream.
             </div>
           </>
@@ -508,7 +508,7 @@ export function PlinkoGame() {
               ) : null}
             </AnimatePresence>
 
-            <div className="rounded-[2rem] border border-white/8 bg-[linear-gradient(180deg,rgba(17,27,42,0.95),rgba(10,18,30,0.88))] p-4">
+            <div className="rounded-lg border border-white/6 bg-card p-4">
               <VolatilityChart
                 runs={runs}
                 activeRuns={activeRuns}
@@ -521,7 +521,7 @@ export function PlinkoGame() {
         }
         controls={
           <div className="space-y-4">
-            <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
+            <div className="rounded-md border border-white/6 bg-white/[0.03] p-4">
               <div className="section-label">Risk preset</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(['low', 'medium', 'high'] as PlinkoRisk[]).map((r) => {
@@ -530,10 +530,10 @@ export function PlinkoGame() {
                     <button
                       key={r}
                       onClick={() => !isAnimating && setRisk(r)}
-                      className={`rounded-2xl border px-3 py-2 text-xs transition-all ${
+                      className={`rounded-md border px-3 py-2 text-xs transition-all ${
                         risk === r
                           ? 'border-primary/20 bg-primary/10 text-primary'
-                          : 'border-white/8 bg-white/4 text-muted-foreground hover:text-foreground'
+                          : 'border-white/6 bg-white/[0.03] text-muted-foreground hover:text-foreground'
                       } ${isAnimating ? 'cursor-not-allowed opacity-50' : ''}`}
                     >
                       {r.charAt(0).toUpperCase() + r.slice(1)} ({rc.tickCount}t)
@@ -559,7 +559,7 @@ export function PlinkoGame() {
             </div>
 
             {isAnimating && (
-              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground">
                 <span>In flight</span>
                 <span className="font-mono-game text-foreground">
                   {activeRuns.length} / {MAX_CONCURRENT_RUNS}
@@ -593,7 +593,7 @@ export function PlinkoGame() {
                 {config.zones.slice(0, 5).map((zone, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-xs"
+                    className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-xs"
                   >
                     <div className="flex items-center gap-2">
                       <span
@@ -631,7 +631,7 @@ export function PlinkoGame() {
                 {history.map((run, index) => (
                   <div
                     key={`${run.payout}-${run.pctChange}-${index}`}
-                    className="flex items-center justify-between rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-xs text-muted-foreground"
+                    className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground"
                   >
                     <span>Run {history.length - index}</span>
                     <span className="font-mono-game">{run.payout}x</span>

@@ -5,80 +5,74 @@ import { motion } from 'framer-motion';
 import { GAMES } from '@/lib/games/game-registry';
 import { ArrowRight } from 'lucide-react';
 import { GameIcon } from '@/components/layout/game-icon';
-import { Badge } from '@/components/ui/badge';
 
 const container = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.08 },
+    transition: { staggerChildren: 0.04 },
   },
 };
 
 const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
+};
+
+const RISK_COLOR: Record<string, string> = {
+  High: 'text-destructive',
+  Medium: 'text-warning',
+  Low: 'text-primary',
 };
 
 export default function LobbyPage() {
   return (
-    <div className="page-gutter space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="space-y-3 px-1 pt-2"
-      >
-        <h1 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
-          Games powered by live market data
+    <div className="page-gutter space-y-5">
+      <div className="space-y-1.5 pt-1">
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">
+          Game modules
         </h1>
-        <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Pick a game below. Every outcome is derived from real-time tick
-          data — play with demo credits, fully transparent math.
+        <p className="max-w-lg text-[13px] leading-relaxed text-muted-foreground">
+          Every outcome sourced from live Deriv ticks. Demo credits, transparent math,
+          zero signup.
         </p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Badge variant="outline" className="rounded-full border-white/10 bg-white/4 px-3 py-1 text-xs text-muted-foreground">
-            Live Market Data
-          </Badge>
-          <Badge variant="outline" className="rounded-full border-white/10 bg-white/4 px-3 py-1 text-xs text-muted-foreground">
-            Demo Credits
-          </Badge>
-          <Badge variant="outline" className="rounded-full border-white/10 bg-white/4 px-3 py-1 text-xs text-muted-foreground">
-            Provably Fair
-          </Badge>
-        </div>
-      </motion.div>
+      </div>
 
       <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid gap-4 sm:grid-cols-2"
+        className="grid gap-px overflow-hidden rounded-lg border border-white/6 bg-white/[0.03] sm:grid-cols-2"
       >
         {GAMES.map((game) => (
           <motion.div key={game.slug} variants={item}>
-            <Link href={`/game/${game.slug}`}>
-              <div className="surface-panel group flex h-full flex-col rounded-[2rem] p-5 transition-transform duration-300 hover:-translate-y-1">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-                    <GameIcon iconKey={game.iconKey} className="h-6 w-6" />
+            <Link href={`/game/${game.slug}`} className="group block h-full">
+              <div className="flex h-full flex-col justify-between bg-card p-4 transition-colors duration-150 group-hover:bg-white/[0.04]">
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/8 bg-white/[0.04] text-muted-foreground group-hover:text-primary">
+                        <GameIcon iconKey={game.iconKey} className="h-4 w-4" />
+                      </span>
+                      <h2 className="font-display text-[15px] font-semibold tracking-tight">
+                        {game.name}
+                      </h2>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-primary" />
                   </div>
-                  <Badge variant="outline" className="rounded-full border-white/10 bg-white/4 px-2.5 py-0.5 text-[10px] text-muted-foreground">
-                    {game.risk} risk
-                  </Badge>
-                </div>
-
-                <div className="mt-5 flex-1">
-                  <h2 className="font-display text-xl font-semibold tracking-tight">
-                    {game.name}
-                  </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
                     {game.shortPitch}
                   </p>
                 </div>
 
-                <div className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-transform group-hover:translate-x-1">
-                  <span>Play</span>
-                  <ArrowRight className="h-4 w-4" />
+                <div className="mt-3 flex items-center gap-3 border-t border-white/[0.04] pt-3 text-[11px] text-muted-foreground">
+                  <span className="font-mono-game uppercase">{game.category}</span>
+                  <span className="text-white/10">|</span>
+                  <span className={`font-mono-game ${RISK_COLOR[game.risk] ?? 'text-muted-foreground'}`}>
+                    {game.risk}
+                  </span>
+                  <span className="text-white/10">|</span>
+                  <span className="font-mono-game">{game.sessionLength}</span>
                 </div>
               </div>
             </Link>
@@ -86,17 +80,15 @@ export default function LobbyPage() {
         ))}
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="surface-panel-muted rounded-2xl px-5 py-4 text-center text-sm text-muted-foreground"
-      >
-        All outcomes derived from live Deriv tick data.{' '}
-        <Link href="/provably-fair" className="font-medium text-primary hover:underline">
-          See how it works
-        </Link>
-      </motion.div>
+      <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary/60" />
+        <span>
+          All outcomes derived from live tick data.{' '}
+          <Link href="/provably-fair" className="font-medium text-primary hover:underline">
+            Verify the math
+          </Link>
+        </span>
+      </div>
     </div>
   );
 }

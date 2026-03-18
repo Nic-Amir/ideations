@@ -2,14 +2,14 @@ import { Separator } from '@/components/ui/separator';
 
 export default function ProvablyFairPage() {
   return (
-    <div className="max-w-3xl mx-auto p-6 md:p-8 space-y-8">
+    <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
           Provably Fair
         </h1>
-        <p className="mt-2 text-muted-foreground">
-          Every game outcome on Ideations is derived from verifiable,
-          market-sourced data — not opaque random number generators.
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Every outcome derived from verifiable, market-sourced data — not
+          opaque RNGs.
         </p>
       </div>
 
@@ -278,13 +278,10 @@ export default function ProvablyFairPage() {
 
       <Separator />
 
-      <div className="rounded-xl border border-border bg-card/50 p-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          <strong>Demo Only</strong> — No real money is wagered. This platform is
-          a proof of concept demonstrating market-driven game mechanics.
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Data source:{' '}
+      <div className="rounded-md border border-white/6 bg-card p-3">
+        <p className="text-[12px] text-muted-foreground">
+          <strong>Demo Only</strong> — No real money wagered. Proof of concept
+          for market-driven game mechanics. Data:{' '}
           <a
             href="https://api.deriv.com"
             target="_blank"
@@ -292,8 +289,7 @@ export default function ProvablyFairPage() {
             className="text-primary hover:underline"
           >
             Deriv API
-          </a>{' '}
-          — Free WebSocket access to real-time synthetic index tick data.
+          </a>
         </p>
       </div>
     </div>

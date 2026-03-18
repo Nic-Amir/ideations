@@ -329,7 +329,7 @@ export function DigitPokerGame() {
 
           {gameState === 'dealt' ? (
             <div className="space-y-3">
-              <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
                 Held cards: <span className="font-mono-game text-foreground">{held.filter(Boolean).length}/5</span>
               </div>
               <Button
@@ -373,7 +373,7 @@ export function DigitPokerGame() {
                       ? 'border-primary/20 bg-primary/10 text-primary'
                       : currentHandResult?.rank === row.rank && gameState === 'dealt'
                         ? 'border-white/10 bg-white/6 text-foreground'
-                        : 'border-white/8 bg-white/4 text-muted-foreground'
+                        : 'border-white/6 bg-white/[0.03] text-muted-foreground'
                   }`}
                 >
                   <span>{row.label}</span>
@@ -401,17 +401,17 @@ export function DigitPokerGame() {
           label: 'Stats',
           content: (
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
                 Phase
                 <div className="mt-1 font-mono-game text-sm text-foreground">
                   {gameState === 'idle' ? 'Setup' : gameState === 'dealt' ? 'Hold / Draw' : 'Settled'}
                 </div>
               </div>
-              <div className="rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
                 Held
                 <div className="mt-1 font-mono-game text-sm text-foreground">{held.filter(Boolean).length}/5</div>
               </div>
-              <div className="rounded-xl border border-white/8 bg-white/4 px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
                 Current value
                 <div className="mt-1 font-mono-game text-sm text-foreground">
                   {currentHandResult ? `${(stake * currentHandResult.multiplier).toFixed(0)}` : '0'}

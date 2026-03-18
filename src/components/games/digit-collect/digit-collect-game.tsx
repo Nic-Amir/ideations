@@ -158,7 +158,7 @@ export function DigitCollectGame() {
               key={currentMultiplier}
               initial={{ scale: 1.04, opacity: 0.2 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="mt-2 font-mono-game text-6xl font-bold text-primary text-glow-green"
+              className="mt-2 font-mono-game text-6xl font-bold text-primary"
             >
               {currentMultiplier.toFixed(2)}x
             </motion.div>
@@ -176,12 +176,12 @@ export function DigitCollectGame() {
               return (
                 <motion.div
                   key={i}
-                  className={`flex h-20 items-center justify-center rounded-2xl border text-2xl font-mono-game font-bold transition-all ${
+                  className={`flex h-20 items-center justify-center rounded-md border text-2xl font-mono-game font-bold transition-all ${
                     wasKnockout
                       ? 'border-destructive/40 bg-destructive/12 text-destructive'
                       : isCollected
                         ? 'border-primary/30 bg-primary/10 text-primary'
-                        : 'border-white/8 bg-white/4 text-muted-foreground'
+                        : 'border-white/6 bg-white/[0.03] text-muted-foreground'
                   }`}
                   animate={
                     wasKnockout
@@ -278,7 +278,7 @@ export function DigitCollectGame() {
             ) : null}
 
             {gameState === 'collecting' ? (
-              <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-3 text-xs text-muted-foreground">
+              <div className="rounded-md border border-white/6 bg-white/[0.03] px-3 py-3 text-xs text-muted-foreground">
                 Cash out value: <span className="font-mono-game text-foreground">{potentialWin.toFixed(0)}</span>
               </div>
             ) : null}
@@ -313,7 +313,7 @@ export function DigitCollectGame() {
                   className={`grid grid-cols-4 gap-2 rounded-xl px-3 py-2 text-xs ${
                     row.draw === drawNumber + 1
                       ? 'border border-primary/20 bg-primary/10 text-primary'
-                      : 'border border-white/8 bg-white/4 text-muted-foreground'
+                      : 'border border-white/6 bg-white/[0.03] text-muted-foreground'
                   }`}
                 >
                   <span>#{row.draw}</span>
@@ -333,7 +333,7 @@ export function DigitCollectGame() {
               {history.map((entry, idx) => (
                 <div
                   key={`${entry.tick.epoch}-${idx}`}
-                  className="flex items-center justify-between rounded-xl border border-white/8 bg-white/4 px-3 py-2 text-xs text-muted-foreground"
+                  className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-xs text-muted-foreground"
                 >
                   <span>Draw {idx + 1}</span>
                   <span className="font-mono-game text-foreground">{entry.tick.numericQuote.toFixed(2)}</span>

@@ -19,17 +19,17 @@ export function ConnectionIndicator() {
   const config = STATUS_CONFIG[status];
 
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/4 px-3 py-1.5">
+    <div className="inline-flex items-center gap-1.5 rounded-md border border-white/6 bg-white/[0.03] px-2 py-1">
       <span
-        className={`relative flex h-2.5 w-2.5 rounded-full ${config.color}`}
+        className={`relative flex h-1.5 w-1.5 rounded-full ${config.color}`}
       >
         {(status === 'connected' || status === 'reconnecting') && (
           <span
-            className={`absolute inline-flex h-full w-full animate-ping rounded-full ${config.color} opacity-50`}
+            className={`absolute inline-flex h-full w-full animate-ping rounded-full ${config.color} opacity-40`}
           />
         )}
       </span>
-      <span className={`text-[11px] font-medium ${config.tone}`}>{config.label}</span>
+      <span className={`text-[10px] font-medium ${config.tone}`}>{config.label}</span>
     </div>
   );
 }

@@ -46,7 +46,7 @@ export function GameNotice({
             : 'border-white/8 bg-white/4 text-foreground';
 
   return (
-    <div className={cn('rounded-2xl border px-4 py-3 text-sm', toneClass)}>
+    <div className={cn('rounded-md border px-3 py-2.5 text-sm', toneClass)}>
       {children}
     </div>
   );
@@ -62,7 +62,7 @@ export function GameStatusLine({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-white/8 bg-white/4 px-4 py-3 text-sm text-muted-foreground',
+        'rounded-md border border-white/6 bg-white/[0.03] px-3 py-2.5 text-sm text-muted-foreground',
         className
       )}
     >
@@ -81,13 +81,13 @@ export function GameBetslip({
   children: React.ReactNode;
 }) {
   return (
-    <section className="surface-panel rounded-3xl p-5">
-      <div className="mb-4">
+    <section className="surface-panel rounded-lg p-4">
+      <div className="mb-3">
         <div className="section-label">Controls</div>
-        <h2 className="mt-1 font-display text-lg font-semibold tracking-tight">
+        <h2 className="mt-1 font-display text-[15px] font-semibold tracking-tight">
           {title}
         </h2>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
           {description}
         </p>
       </div>
@@ -110,17 +110,17 @@ export function GameSecondaryTabs({
   const selectedTab = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 
   return (
-    <section className={cn('surface-panel rounded-3xl p-4 md:p-5', className)}>
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+    <section className={cn('surface-panel rounded-lg p-3 md:p-4', className)}>
+      <div className="mb-3 flex gap-1 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'rounded-2xl border px-3 py-2 text-xs font-medium transition-colors',
+              'rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
               selectedTab.id === tab.id
-                ? 'border-primary/20 bg-primary/10 text-primary'
-                : 'border-white/8 bg-white/4 text-muted-foreground hover:text-foreground'
+                ? 'border-primary/16 bg-primary/8 text-primary'
+                : 'border-white/6 bg-white/[0.03] text-muted-foreground hover:text-foreground'
             )}
           >
             {tab.label}
@@ -145,32 +145,32 @@ export function GameLayout({
   marketContent,
 }: GameLayoutProps) {
   return (
-    <div className="page-gutter space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[264px_minmax(0,1fr)_292px]">
+    <div className="page-gutter space-y-3">
+      <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)_268px]">
         <aside className="order-3 xl:order-1">
-          <section className="surface-panel rounded-3xl p-4 xl:sticky xl:top-24">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <section className="surface-panel rounded-lg p-3 xl:sticky xl:top-18">
+            <div className="mb-3 flex items-center justify-between gap-2">
               <div>
                 <div className="section-label">Market feed</div>
-                <h2 className="mt-1 font-display text-lg font-semibold tracking-tight">
+                <h2 className="mt-0.5 font-display text-[15px] font-semibold tracking-tight">
                   Live rail
                 </h2>
               </div>
               {ticks.length > 0 ? (
-                <div className="rounded-full border border-white/8 bg-white/4 px-2.5 py-1 font-mono-game text-[11px] text-muted-foreground">
-                  {ticks.length} ticks
+                <div className="rounded-md border border-white/6 bg-white/[0.03] px-2 py-0.5 font-mono-game text-[10px] text-muted-foreground">
+                  {ticks.length}
                 </div>
               ) : null}
             </div>
 
             {marketContent ? (
-              <div className="space-y-3">{marketContent}</div>
+              <div className="space-y-2">{marketContent}</div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {lastConsumedTick ? (
-                  <div className="rounded-2xl border border-white/8 bg-white/4 px-3 py-2.5">
+                  <div className="rounded-md border border-white/6 bg-white/[0.03] px-2.5 py-2">
                     <div className="section-label">Latest quote</div>
-                    <div className="mt-1 font-mono-game text-sm text-primary">
+                    <div className="mt-0.5 font-mono-game text-sm text-primary">
                       {lastConsumedTick.numericQuote.toFixed(2)}
                     </div>
                   </div>
@@ -179,15 +179,15 @@ export function GameLayout({
                 <LiveTickChart
                   ticks={ticks}
                   highlightedTicks={highlightedTicks}
-                  height={176}
+                  height={160}
                 />
 
-                <div className="rounded-2xl border border-white/8 bg-white/3 px-3 py-2.5">
+                <div className="rounded-md border border-white/6 bg-white/[0.03] px-2.5 py-2">
                   <DigitExtraction tick={lastConsumedTick} triggerKey={extractionKey} />
                 </div>
 
                 {marketSummary ? (
-                  <div className="rounded-2xl border border-white/8 bg-white/3 px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+                  <div className="rounded-md border border-white/6 bg-white/[0.03] px-2.5 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
                     {marketSummary}
                   </div>
                 ) : null}
@@ -196,16 +196,16 @@ export function GameLayout({
           </section>
         </aside>
 
-        <main className="order-1 space-y-4 xl:order-2">
+        <main className="order-1 space-y-3 xl:order-2">
           {statusLine}
-          <section className="surface-panel rounded-3xl p-4 md:p-5">
+          <section className="surface-panel rounded-lg p-3 md:p-4">
             {playArea}
           </section>
           {tabs.length ? <GameSecondaryTabs tabs={tabs} /> : null}
         </main>
 
         <aside className="order-2 xl:order-3">
-          <div className="xl:sticky xl:top-24">
+          <div className="xl:sticky xl:top-18">
             <GameBetslip>{controls}</GameBetslip>
           </div>
         </aside>
