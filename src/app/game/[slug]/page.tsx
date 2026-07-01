@@ -2,8 +2,9 @@
 
 import { use } from 'react';
 import dynamic from 'next/dynamic';
-import { getGameBySlug } from '@/lib/games/game-registry';
+import { getGameBySlug, isGameLive } from '@/lib/games/game-registry';
 import { notFound } from 'next/navigation';
+import { Spinner } from '@trading-game/design-intelligence-layer';
 
 const DigitCollectGame = dynamic(
   () =>
@@ -37,11 +38,8 @@ const PlinkoGame = dynamic(
 
 function GameLoading() {
   return (
-    <div className="flex h-[60vh] items-center justify-center">
-      <div className="flex flex-col items-center gap-2">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-foreground border-t-transparent" />
-        <p className="font-mono-game text-[10px] text-muted-foreground">Loading module</p>
-      </div>
+    <div className="fixed inset-0 flex items-center justify-center bg-prominent">
+      <Spinner />
     </div>
   );
 }
@@ -61,7 +59,7 @@ export default function GamePage({
   const { slug } = use(params);
 
   const game = getGameBySlug(slug);
-  if (!game) notFound();
+  if (!game || !isGameLive(slug)) notFound();
 
   const GameComponent = GAME_COMPONENTS[slug];
   if (!GameComponent) notFound();

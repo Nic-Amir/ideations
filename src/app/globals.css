@@ -1,149 +1,34 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
+@import "@trading-game/design-intelligence-layer/styles";
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@source "../node_modules/@trading-game/design-intelligence-layer/dist";
 
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-dm-sans);
-  --font-mono: var(--font-jetbrains-mono);
-  --font-display: var(--font-outfit);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-
-  --color-game-emerald: #34d399;
-  --color-game-violet: #a78bfa;
-  --color-game-amber: #fbbf24;
-  --color-game-cyan: #22d3ee;
-
-  --color-panel: var(--panel);
-  --color-panel-elevated: var(--panel-elevated);
-  --color-panel-muted: var(--panel-muted);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-info: var(--info);
+/* Safe area padding for mobile */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
 }
 
-:root {
-  --background: #09090b;
-  --foreground: #e4e4e7;
-  --card: #18181b;
-  --card-foreground: #e4e4e7;
-  --popover: #18181b;
-  --popover-foreground: #fafafa;
-  --primary: #f4f4f5;
-  --primary-foreground: #09090b;
-  --secondary: #27272a;
-  --secondary-foreground: #d4d4d8;
-  --muted: #18181b;
-  --muted-foreground: #71717a;
-  --accent: #27272a;
-  --accent-foreground: #e4e4e7;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.06);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #a1a1aa;
-  --chart-1: #22c55e;
-  --chart-2: #3b82f6;
-  --chart-3: #a78bfa;
-  --chart-4: #f59e0b;
-  --chart-5: #71717a;
-  --radius: 0.25rem;
-  --sidebar: #09090b;
-  --sidebar-foreground: #e4e4e7;
-  --sidebar-primary: #f4f4f5;
-  --sidebar-primary-foreground: #09090b;
-  --sidebar-accent: #18181b;
-  --sidebar-accent-foreground: #e4e4e7;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: #a1a1aa;
-  --panel: #0f0f11;
-  --panel-elevated: #141416;
-  --panel-muted: #111113;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --info: #3b82f6;
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-    min-height: 100vh;
-  }
-  html {
-    @apply font-sans;
-  }
-  ::selection {
-    background: rgba(244, 244, 245, 0.14);
-    color: #fafafa;
-  }
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-@layer utilities {
-  .font-display {
-    font-family: var(--font-outfit), sans-serif;
-  }
-  .font-mono-game {
-    font-family: var(--font-jetbrains-mono), monospace;
-  }
-  .surface-panel {
-    background: var(--panel-elevated);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .surface-panel-muted {
-    background: var(--panel-muted);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-  }
-  .surface-inset {
-    background: var(--panel);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-  }
-  .section-label {
-    @apply text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground;
-  }
-  .app-container {
-    @apply mx-auto w-full max-w-[1600px];
-  }
-  .page-gutter {
-    @apply px-3 py-3 md:px-5 md:py-4 xl:px-6;
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--on-subtle);
 }

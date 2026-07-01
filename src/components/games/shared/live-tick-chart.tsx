@@ -1,65 +1,71 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
+import { resolveTheme, withAlpha } from '@/lib/canvas-theme';
 import type { ParsedTick } from '@/types';
 
 interface LiveTickChartProps {
   ticks: ParsedTick[];
   highlightedTicks?: ParsedTick[];
-  height?: number;
   className?: string;
 }
 
-const CHART_COLORS = {
-  bg: '#0f0f11',
-  grid: 'rgba(255,255,255,0.03)',
-  line: '#a1a1aa',
-  lineFill: 'rgba(161,161,170,0.06)',
-  dot: '#e4e4e7',
-  highlight: '#f59e0b',
-  highlightFaint: 'rgba(245,158,11,0.35)',
-  digitBg: 'rgba(245,158,11,0.15)',
-  text: '#71717a',
-  textBright: '#e4e4e7',
-};
-
-const PADDING = { top: 16, right: 64, bottom: 20, left: 8 };
+function getPaddingRight(containerWidth: number): number {
+  return containerWidth < 320 ? 48 : containerWidth < 400 ? 56 : 64;
+}
 
 export function LiveTickChart({
   ticks,
   highlightedTicks = [],
-  height = 100,
   className = '',
 }: LiveTickChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const widthRef = useRef(600);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(56);
 
   const highlightEpochs = new Set(highlightedTicks.map((t) => t.epoch));
 
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      const theme = resolveTheme();
+      const padRight = getPaddingRight(w);
+      const padding = { top: 8, right: padRight, bottom: 8, left: 4 };
+
+      const colors = {
+        bg: theme.subtle,
+        grid: withAlpha(theme.borderSubtle, 0.5),
+        line: theme.textSecondary,
+        lineFill: withAlpha(theme.primary, 0.08),
+        dot: theme.textPrimary,
+        highlight: theme.warning,
+        highlightFaint: withAlpha(theme.warning, 0.35),
+        digitBg: withAlpha(theme.warning, 0.15),
+        text: theme.textSecondary,
+        textBright: theme.textPrimary,
+      };
+
       const dpr = window.devicePixelRatio || 1;
       ctx.clearRect(0, 0, w * dpr, h * dpr);
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      ctx.fillStyle = CHART_COLORS.bg;
+      ctx.fillStyle = colors.bg;
       ctx.beginPath();
       ctx.roundRect(0, 0, w, h, 4);
       ctx.fill();
 
       if (ticks.length < 2) {
-        ctx.fillStyle = CHART_COLORS.text;
-        ctx.font = '11px monospace';
+        ctx.fillStyle = colors.text;
+        ctx.font = `11px ${theme.fontFamily}`;
         ctx.textAlign = 'center';
         ctx.fillText('Waiting for tick data\u2026', w / 2, h / 2);
         ctx.restore();
         return;
       }
 
-      const plotW = w - PADDING.left - PADDING.right;
-      const plotH = h - PADDING.top - PADDING.bottom;
+      const plotW = w - padding.left - padding.right;
+      const plotH = h - padding.top - padding.bottom;
       const displayTicks = ticks.slice(-60);
 
       const quotes = displayTicks.map((t) => t.numericQuote);
@@ -71,23 +77,21 @@ export function LiveTickChart({
       const yMax = maxQ + pad;
 
       const xScale = (i: number) =>
-        PADDING.left + (i / (displayTicks.length - 1)) * plotW;
+        padding.left + (i / (displayTicks.length - 1)) * plotW;
       const yScale = (v: number) =>
-        PADDING.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+        padding.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
-      // Grid
-      ctx.strokeStyle = CHART_COLORS.grid;
+      ctx.strokeStyle = colors.grid;
       ctx.lineWidth = 1;
-      for (let i = 0; i <= 3; i++) {
-        const y = PADDING.top + (plotH / 3) * i;
+      for (let i = 0; i <= 2; i++) {
+        const y = padding.top + (plotH / 2) * i;
         ctx.beginPath();
-        ctx.moveTo(PADDING.left, y);
-        ctx.lineTo(w - PADDING.right, y);
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(w - padding.right, y);
         ctx.stroke();
       }
 
-      // Price line
-      ctx.strokeStyle = CHART_COLORS.line;
+      ctx.strokeStyle = colors.line;
       ctx.lineWidth = 1.5;
       ctx.lineJoin = 'round';
       ctx.beginPath();
@@ -99,9 +103,8 @@ export function LiveTickChart({
       }
       ctx.stroke();
 
-      // Fill under line
       ctx.save();
-      ctx.fillStyle = CHART_COLORS.lineFill;
+      ctx.fillStyle = colors.lineFill;
       ctx.beginPath();
       for (let i = 0; i < displayTicks.length; i++) {
         const x = xScale(i);
@@ -109,134 +112,90 @@ export function LiveTickChart({
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-      ctx.lineTo(xScale(displayTicks.length - 1), PADDING.top + plotH);
-      ctx.lineTo(xScale(0), PADDING.top + plotH);
+      ctx.lineTo(xScale(displayTicks.length - 1), padding.top + plotH);
+      ctx.lineTo(xScale(0), padding.top + plotH);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
 
-      // Highlighted ticks (consumed by game)
       for (let i = 0; i < displayTicks.length; i++) {
         if (highlightEpochs.has(displayTicks[i].epoch)) {
           const x = xScale(i);
           const y = yScale(displayTicks[i].numericQuote);
-
-          // Vertical dashed line
-          ctx.save();
-          ctx.strokeStyle = CHART_COLORS.highlightFaint;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 3]);
+          ctx.fillStyle = colors.highlight;
           ctx.beginPath();
-          ctx.moveTo(x, PADDING.top);
-          ctx.lineTo(x, PADDING.top + plotH);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.restore();
-
-          // Dot
-          ctx.fillStyle = CHART_COLORS.highlight;
-          ctx.beginPath();
-          ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
           ctx.fill();
-
-          // Digit label above dot
-          const digit = displayTicks[i].lastDigit;
-          ctx.save();
-          ctx.fillStyle = CHART_COLORS.highlight;
-          ctx.font = 'bold 10px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(String(digit), x, y - 8);
-          ctx.restore();
         }
       }
 
-      // Latest point
       const lastTick = displayTicks[displayTicks.length - 1];
       const lastX = xScale(displayTicks.length - 1);
       const lastY = yScale(lastTick.numericQuote);
 
-      ctx.fillStyle = CHART_COLORS.dot;
+      ctx.fillStyle = colors.dot;
       ctx.beginPath();
       ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
       ctx.fill();
 
-      // Right-side price label
       ctx.save();
-      ctx.fillStyle = CHART_COLORS.textBright;
-      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = colors.textBright;
+      ctx.font = `bold 10px ${theme.fontFamily}`;
       ctx.textAlign = 'left';
-      const labelX = w - PADDING.right + 6;
+      const labelX = w - padding.right + 4;
       const pipSize = lastTick.pip_size ?? 2;
-      ctx.fillText(lastTick.numericQuote.toFixed(pipSize), labelX, lastY + 4);
+      ctx.fillText(lastTick.numericQuote.toFixed(pipSize), labelX, lastY);
 
-      // Last digit badge
-      const digitStr = String(lastTick.lastDigit);
-      ctx.fillStyle = CHART_COLORS.digitBg;
-      const badgeW = 18;
-      const badgeH = 16;
-      const badgeX = labelX;
-      const badgeY = lastY + 8;
-      ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
-      ctx.fill();
-
-      ctx.fillStyle = CHART_COLORS.highlight;
-      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = colors.highlight;
+      ctx.font = `bold 10px ${theme.fontFamily}`;
       ctx.textAlign = 'center';
-      ctx.fillText(digitStr, badgeX + badgeW / 2, badgeY + 12);
+      ctx.fillText(String(lastTick.lastDigit), labelX + 9, lastY + 14);
       ctx.restore();
-
-      // Y-axis scale labels
-      const axisPrecision = displayTicks[0]?.pip_size ?? 2;
-      ctx.fillStyle = CHART_COLORS.text;
-      ctx.font = '8px monospace';
-      ctx.textAlign = 'right';
-      for (let i = 0; i <= 3; i++) {
-        const val = yMin + ((yMax - yMin) / 3) * (3 - i);
-        const y = PADDING.top + (plotH / 3) * i;
-        ctx.fillText(val.toFixed(axisPrecision), w - PADDING.right + 4, y + 3);
-      }
 
       ctx.restore();
     },
-    [ticks, highlightEpochs]
+    [ticks, highlightEpochs],
   );
 
   useEffect(() => {
-    const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!container) return;
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        widthRef.current = entry.contentRect.width;
+        setContainerWidth(entry.contentRect.width);
+        setContainerHeight(entry.contentRect.height);
       }
     });
     ro.observe(container);
-    widthRef.current = container.clientWidth;
+    setContainerWidth(container.clientWidth);
+    setContainerHeight(container.clientHeight);
 
     return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || containerWidth <= 0 || containerHeight <= 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const w = widthRef.current;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = w * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${height}px`;
+    canvas.width = containerWidth * dpr;
+    canvas.height = containerHeight * dpr;
+    canvas.style.width = `${containerWidth}px`;
+    canvas.style.height = `${containerHeight}px`;
 
-    draw(ctx, w, height);
-  }, [ticks, height, draw]);
+    draw(ctx, containerWidth, containerHeight);
+  }, [ticks, containerWidth, containerHeight, draw]);
 
   return (
-    <div ref={containerRef} className={`w-full ${className}`}>
-      <canvas ref={canvasRef} className="block w-full rounded" />
+    <div
+      ref={containerRef}
+      className={`w-full ${className}`}
+      style={{ height: 'clamp(48px, 9dvh, 72px)' }}
+    >
+      <canvas ref={canvasRef} className="block w-full h-full rounded-lg" />
     </div>
   );
 }

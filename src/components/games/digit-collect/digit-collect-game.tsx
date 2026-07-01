@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { Button, Spinner } from '@trading-game/design-intelligence-layer';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
+import { useIsLandscape } from '@/hooks/use-landscape';
 import {
   getActualMultiplier,
   getKnockoutProbability,
@@ -12,13 +14,12 @@ import {
   getPayoutTable,
 } from '@/lib/games/digit-collect';
 import type { DigitCollectState, ParsedTick } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import {
-  GameLayout,
-  GameNotice,
-  GameStatusLine,
-} from '@/components/games/shared/game-layout';
+import { GameShell } from '@/components/games/shared/game-shell';
+import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
+import { MiniMarketStrip } from '@/components/games/shared/mini-market-strip';
+import { StakeDock } from '@/components/games/shared/stake-dock';
+import { ResultOverlay } from '@/components/games/shared/result-overlay';
+import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 
 interface DrawnDigit {
   digit: number;
@@ -31,6 +32,7 @@ export function DigitCollectGame() {
   const { balance, placeBet, addWinnings } = useBalanceStore();
   const { ticks } = useTickStream(selectedIndex);
   const getNextTick = useNextTick(selectedIndex);
+  const isLandscape = useIsLandscape();
 
   const [gameState, setGameState] = useState<DigitCollectState>('idle');
   const [stake, setStake] = useState(100);
@@ -47,6 +49,12 @@ export function DigitCollectGame() {
   const gameActive = useRef(false);
 
   const payoutTable = getPayoutTable();
+  const nextKnockoutProb = getKnockoutProbability(drawNumber + 1);
+  const potentialWin = stake * currentMultiplier;
+  const maxStake = Math.max(10, Math.min(balance, 5000));
+  const showResultOverlay =
+    lastResult !== null &&
+    (gameState === 'cashed_out' || gameState === 'knocked_out');
 
   const startGame = useCallback(() => {
     if (!placeBet(stake)) return;
@@ -128,236 +136,226 @@ export function DigitCollectGame() {
     gameActive.current = false;
   }, []);
 
-  const nextKnockoutProb = getKnockoutProbability(drawNumber + 1);
-  const potentialWin = stake * currentMultiplier;
-  const maxStake = Math.max(10, Math.min(balance, 5000));
+  const infoSections: GameInfoSection[] = [
+    {
+      id: 'payouts',
+      label: 'Payouts',
+      content: (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-2 text-xs font-medium uppercase tracking-wide text-on-subtle">
+            <span>Draw</span>
+            <span>Alive</span>
+            <span>Risk</span>
+            <span className="text-right">Payout</span>
+          </div>
+          {payoutTable.map((row) => (
+            <div
+              key={row.draw}
+              className={`grid grid-cols-4 gap-2 rounded-lg px-3 py-2 text-xs ${
+                row.draw === drawNumber + 1
+                  ? 'border border-semantic-win/20 bg-semantic-win/10 text-semantic-win'
+                  : 'bg-subtle text-on-subtle'
+              }`}
+            >
+              <span>#{row.draw}</span>
+              <span className="font-display tabular-nums">{(row.survivalProb * 100).toFixed(0)}%</span>
+              <span className="font-display tabular-nums">{(row.knockoutProb * 100).toFixed(0)}%</span>
+              <span className="text-right font-display tabular-nums">{row.actualMultiplier.toFixed(2)}x</span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'history',
+      label: 'History',
+      content: history.length ? (
+        <div className="space-y-2">
+          {history.map((entry, idx) => (
+            <div
+              key={`${entry.tick.epoch}-${idx}`}
+              className="flex items-center justify-between rounded-lg bg-subtle px-3 py-2 text-xs text-on-subtle"
+            >
+              <span>Draw {idx + 1}</span>
+              <span className="font-display tabular-nums text-on-prominent">
+                {entry.tick.numericQuote.toFixed(entry.tick.pip_size ?? 2)}
+              </span>
+              <span className={entry.isKnockout ? 'text-semantic-loss' : 'text-semantic-win'}>
+                Digit {entry.digit}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-on-subtle">No draws yet.</p>
+      ),
+    },
+    {
+      id: 'rules',
+      label: 'Rules',
+      content: (
+        <div className="space-y-2 text-sm text-on-subtle">
+          <p>Each draw consumes the next live tick and extracts its last digit.</p>
+          <p>Only unique digits grow your multiplier. A duplicate ends the round instantly.</p>
+          <p>You can cash out at any point before the next draw resolves.</p>
+        </div>
+      ),
+    },
+  ];
+
+  const marketReady = ticks.length > 0 || lastConsumedTick !== null;
 
   return (
-    <GameLayout
-      ticks={ticks}
-      highlightedTicks={highlightedTicks}
-      lastConsumedTick={lastConsumedTick}
-      extractionKey={extractionKey}
-      statusLine={
-        <GameStatusLine>
-          {gameState === 'idle'
-            ? 'Set your stake and start a fresh run.'
-            : gameState === 'collecting'
-              ? `Collected ${collected.size}/10 digits. Next duplicate risk is ${(nextKnockoutProb * 100).toFixed(0)}%.`
-              : gameState === 'cashed_out'
-                ? `Run closed for ${lastResult?.amount.toFixed(0) ?? potentialWin.toFixed(0)} credits.`
-                : 'The round ended on a duplicate digit.'}
-        </GameStatusLine>
-      }
-      playArea={
-        <div className="space-y-5">
-          <div className="text-center">
-            <div className="section-label">Current multiplier</div>
-            <motion.div
-              key={currentMultiplier}
-              initial={{ scale: 1.04, opacity: 0.2 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="mt-2 font-mono-game text-6xl font-bold text-emerald-400"
-            >
-              {currentMultiplier.toFixed(2)}x
-            </motion.div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {collected.size}/10 collected • next duplicate risk {(nextKnockoutProb * 100).toFixed(0)}%
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-5">
-            {Array.from({ length: 10 }, (_, i) => {
-              const isCollected = collected.has(i);
-              const lastDrawn = history.length > 0 && history[history.length - 1].digit === i;
-              const wasKnockout = lastDrawn && history[history.length - 1].isKnockout;
-
-              return (
-                <motion.div
-                  key={i}
-                  className={`flex h-20 items-center justify-center rounded-md border text-2xl font-mono-game font-bold transition-all ${
-                    wasKnockout
-                      ? 'border-destructive/40 bg-destructive/12 text-destructive'
-                      : isCollected
-                        ? 'border-emerald-400/20 bg-emerald-400/8 text-emerald-400'
-                        : 'border-white/6 bg-white/[0.03] text-muted-foreground'
-                  }`}
-                  animate={
-                    wasKnockout
-                      ? { x: [0, -6, 6, -6, 6, 0] }
-                      : lastDrawn && isCollected
-                        ? { scale: [1, 1.08, 1] }
-                        : {}
-                  }
-                  transition={{ duration: 0.35 }}
-                >
-                  {i}
-                </motion.div>
-              );
-            })}
-          </div>
-
-          {error ? <GameNotice tone="danger">{error}</GameNotice> : null}
-
-          <AnimatePresence>
-            {lastResult ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <GameNotice tone={lastResult.won ? 'success' : 'danger'}>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-medium">
-                        {lastResult.won ? 'Position closed successfully' : 'Duplicate digit hit'}
-                      </p>
-                      <p className="mt-1 text-xs opacity-80">
-                        {lastResult.won
-                          ? `Collected ${lastResult.amount.toFixed(0)} credits from the run.`
-                          : 'The round ended before cash-out.'}
-                      </p>
-                    </div>
-                    <div className={`font-mono-game text-lg font-semibold ${lastResult.won ? 'text-success' : 'text-destructive'}`}>
-                      {lastResult.won ? `+${lastResult.amount.toFixed(0)}` : `-${stake.toFixed(0)}`}
-                    </div>
-                  </div>
-                </GameNotice>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      }
-      controls={
-        <div className="space-y-4">
-          <div className="space-y-3">
-            <div>
-              <div className="mb-2 flex justify-between text-sm">
-                <span className="text-muted-foreground">Stake</span>
-                <span className="font-mono-game text-foreground">{stake}</span>
-              </div>
-              <Slider
-                value={[stake]}
-                onValueChange={(v) => setStake(Array.isArray(v) ? v[0] : v)}
-                min={10}
-                max={maxStake}
-                step={10}
-                disabled={gameState !== 'idle'}
-              />
-            </div>
-
-            {gameState === 'idle' ? (
-              <Button
-                onClick={startGame}
-                className="h-12 w-full text-base font-semibold"
-                disabled={stake > balance || balance <= 0}
-              >
-                Start round
-              </Button>
-            ) : null}
-
-            {gameState === 'collecting' ? (
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  onClick={drawNext}
-                  className="h-12 text-sm font-semibold"
-                  disabled={isDrawing}
-                >
-                  {isDrawing ? 'Waiting...' : 'Draw next'}
-                </Button>
-                <Button
-                  onClick={cashOut}
-                  variant="secondary"
-                  className="h-12 text-sm font-semibold"
-                  disabled={drawNumber === 0 || isDrawing}
-                >
-                  Cash out
-                </Button>
-              </div>
-            ) : null}
-
-            {gameState === 'collecting' ? (
-              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
-                Cash out value: <span className="font-mono-game text-emerald-400">{potentialWin.toFixed(0)}</span>
-              </div>
-            ) : null}
-
-            {(gameState === 'cashed_out' || gameState === 'knocked_out') ? (
-              <Button
-                onClick={reset}
-                variant="outline"
-                className="h-12 w-full text-sm font-semibold"
-              >
-                Play again
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      }
-      tabs={[
-        {
-          id: 'payouts',
-          label: 'Payouts',
-          content: (
-            <div className="space-y-2">
-              <div className="grid grid-cols-4 gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                <span>Draw</span>
-                <span>Alive</span>
-                <span>Risk</span>
-                <span className="text-right">Payout</span>
-              </div>
-              {payoutTable.map((row) => (
-                <div
-                  key={row.draw}
-                  className={`grid grid-cols-4 gap-2 rounded-md px-3 py-2 text-xs ${
-                    row.draw === drawNumber + 1
-                      ? 'border border-emerald-400/20 bg-emerald-400/8 text-emerald-400'
-                      : 'bg-accent text-muted-foreground'
-                  }`}
-                >
-                  <span>#{row.draw}</span>
-                  <span className="font-mono-game">{(row.survivalProb * 100).toFixed(0)}%</span>
-                  <span className="font-mono-game">{(row.knockoutProb * 100).toFixed(0)}%</span>
-                  <span className="text-right font-mono-game">{row.actualMultiplier.toFixed(2)}x</span>
-                </div>
-              ))}
-            </div>
-          ),
-        },
-        {
-          id: 'history',
-          label: 'History',
-          content: history.length ? (
-            <div className="space-y-2">
-              {history.map((entry, idx) => (
-                <div
-                  key={`${entry.tick.epoch}-${idx}`}
-                  className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs text-muted-foreground"
-                >
-                  <span>Draw {idx + 1}</span>
-                  <span className="font-mono-game text-foreground">{entry.tick.numericQuote.toFixed(entry.tick.pip_size ?? 2)}</span>
-                  <span className={entry.isKnockout ? 'text-destructive' : 'text-emerald-400'}>
-                    Digit {entry.digit}
-                  </span>
-                </div>
-              ))}
-            </div>
+    <GameShell infoSections={infoSections}>
+      <GameViewport
+        market={
+          marketReady ? (
+            <MiniMarketStrip
+              ticks={ticks}
+              highlightedTicks={highlightedTicks}
+              lastConsumedTick={lastConsumedTick}
+              extractionKey={extractionKey}
+            />
           ) : (
-            <div className="text-sm text-muted-foreground">No draws yet.</div>
-          ),
-        },
-        {
-          id: 'rules',
-          label: 'Rules',
-          content: (
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Each draw consumes the next live tick and extracts its last digit.</p>
-              <p>Only unique digits grow your multiplier. A duplicate ends the round instantly.</p>
-              <p>You can cash out at any point before the next draw resolves.</p>
+            <div className="shrink-0 flex items-center justify-center py-6 border-b border-border-subtle">
+              <Spinner />
             </div>
-          ),
-        },
-      ]}
-    />
+          )
+        }
+        play={
+          <div className="flex flex-col flex-1 min-h-0 px-4 py-3">
+            <div className="text-center shrink-0 mb-3">
+              <p className="body-xs text-on-subtle uppercase">Multiplier</p>
+              <motion.p
+                key={currentMultiplier}
+                initial={{ scale: 1.04, opacity: 0.5 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className={`font-display font-bold text-semantic-win tabular-nums ${
+                  isLandscape ? 'text-3xl' : 'text-5xl'
+                }`}
+              >
+                {currentMultiplier.toFixed(2)}x
+              </motion.p>
+              {!isLandscape ? (
+                <p className="mt-1 text-xs text-on-subtle">
+                  {collected.size}/10 • risk {(nextKnockoutProb * 100).toFixed(0)}%
+                </p>
+              ) : null}
+            </div>
+
+            <div
+              className="flex-1 min-h-0 grid grid-cols-5 gap-1 sm:gap-2 content-center mx-auto w-full max-w-[320px]"
+              style={{ gap: 'clamp(4px, 2vw, 10px)' }}
+            >
+              {Array.from({ length: 10 }, (_, i) => {
+                const isCollected = collected.has(i);
+                const lastDrawn = history.length > 0 && history[history.length - 1].digit === i;
+                const wasKnockout = lastDrawn && history[history.length - 1].isKnockout;
+
+                return (
+                  <motion.div
+                    key={i}
+                    whileTap={{ scale: 0.97 }}
+                    className={`flex aspect-square items-center justify-center rounded-lg border text-lg sm:text-2xl font-display font-bold tabular-nums ${
+                      wasKnockout
+                        ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
+                        : isCollected
+                          ? 'border-semantic-win/20 bg-semantic-win/10 text-semantic-win'
+                          : 'border-border-subtle bg-subtle text-on-subtle'
+                    }`}
+                    animate={
+                      wasKnockout
+                        ? { x: [0, -4, 4, -4, 4, 0] }
+                        : lastDrawn && isCollected
+                          ? { scale: [1, 1.06, 1] }
+                          : {}
+                    }
+                  >
+                    {i}
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {error ? (
+              <div className="shrink-0 mt-2">
+                <GameNotice tone="danger">{error}</GameNotice>
+              </div>
+            ) : null}
+          </div>
+        }
+        dock={
+          <StakeDock
+            stake={stake}
+            max={maxStake}
+            balance={balance}
+            onStakeChange={setStake}
+            stakeDisabled={gameState !== 'idle'}
+            showSlider={gameState === 'idle'}
+            footer={
+              gameState === 'collecting' ? (
+                <>
+                  Cash out:{' '}
+                  <span className="font-display font-semibold text-semantic-win tabular-nums">
+                    {potentialWin.toFixed(0)}
+                  </span>{' '}
+                  credits
+                </>
+              ) : undefined
+            }
+            actions={
+              <>
+                {gameState === 'idle' ? (
+                  <Button
+                    variant="primary"
+                    className="w-full min-h-[44px]"
+                    disabled={stake > balance || balance <= 0}
+                    onClick={startGame}
+                  >
+                    Start round
+                  </Button>
+                ) : null}
+                {gameState === 'collecting' ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="primary"
+                      className="min-h-[44px]"
+                      disabled={isDrawing}
+                      aria-busy={isDrawing}
+                      onClick={drawNext}
+                    >
+                      {isDrawing ? 'Waiting…' : 'Draw next'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="min-h-[44px]"
+                      disabled={drawNumber === 0 || isDrawing}
+                      onClick={cashOut}
+                    >
+                      Cash out
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            }
+          />
+        }
+      />
+
+      <ResultOverlay
+        open={showResultOverlay}
+        won={lastResult?.won ?? false}
+        title={lastResult?.won ? 'Run closed' : 'Duplicate digit'}
+        subtitle={
+          lastResult?.won
+            ? 'You collected your multiplier payout.'
+            : 'The round ended before cash-out.'
+        }
+        amount={lastResult?.won ? lastResult.amount : stake}
+        amountLabel="credits"
+        onDismiss={reset}
+        primaryAction={{ label: 'Play again', onClick: reset }}
+      />
+    </GameShell>
   );
 }

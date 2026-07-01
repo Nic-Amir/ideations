@@ -103,7 +103,6 @@ export interface GameInfo {
   mechanics: string;
   marketSource: string;
   status: 'Live' | 'Preview';
-  accent: 'emerald' | 'violet' | 'amber' | 'cyan';
   iconKey: GameIconKey;
   comingSoon?: boolean;
 }

@@ -1,39 +1,95 @@
-import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
+import {
+  Button,
+  Card,
+  CardContent,
+  Separator,
+} from '@trading-game/design-intelligence-layer';
+import {
+  getRiskConfig,
+  computeAnalyticalRTP,
+  computeSigmaEff,
+  getZoneProbabilities,
+} from '@/lib/games/plinko';
+import type { PlinkoRisk } from '@/types';
+
+function formatSigmaRange(minSigma: number, maxSigma: number): string {
+  if (minSigma === 0) return `|Z| < ${maxSigma}σ`;
+  if (maxSigma === Infinity) return `|Z| ≥ ${minSigma}σ`;
+  return `${minSigma}σ – ${maxSigma}σ`;
+}
+
+function PlinkoZoneTable({ risk }: { risk: PlinkoRisk }) {
+  const config = getRiskConfig(risk);
+  const sigmaEff = computeSigmaEff(config.sigma, config.tickCount);
+  const analytical = computeAnalyticalRTP(risk);
+  return (
+    <Card className="border-0 bg-subtle">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-medium text-on-prominent capitalize">{risk} risk</p>
+          <p className="text-xs text-on-subtle">
+            {config.tickCount} ticks · σ_eff = {sigmaEff.toFixed(4)} · target RTP{' '}
+            {(config.targetRTP * 100).toFixed(0)}% · analytical ~{(analytical * 100).toFixed(1)}%
+          </p>
+        </div>
+        <div className="space-y-1">
+          {config.zones.map((zone) => (
+            <div key={zone.label} className="flex justify-between gap-2 text-xs text-on-subtle">
+              <span>{zone.label}</span>
+              <span className="font-display tabular-nums">{formatSigmaRange(zone.minSigma, zone.maxSigma)}</span>
+              <span className="font-display tabular-nums text-on-prominent">{zone.payout}×</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function ProvablyFairPage() {
+  const zoneProbs = getZoneProbabilities();
   return (
-    <div className="max-w-3xl mx-auto p-3 md:p-5 space-y-5">
-      <div>
-        <h1 className="font-display text-xl font-semibold tracking-tight">
-          Provably Fair
-        </h1>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          Every outcome from verifiable market data, not opaque RNGs.
-        </p>
+    <div className="mx-auto max-w-3xl px-layout-margin-inline py-6 space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="heading-h2 font-display text-on-prominent">
+            Provably Fair
+          </h1>
+          <p className="body-sm text-on-subtle mt-1">
+            Every outcome from verifiable market data, not opaque RNGs.
+          </p>
+        </div>
+        <Button variant="tertiary" size="sm" asChild>
+          <Link href="/">Back</Link>
+        </Button>
       </div>
 
       <Separator />
 
       <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
+        <h2 className="heading-h3 font-display text-on-prominent">
           How Entropy Works
         </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="body-sm text-on-subtle leading-relaxed">
           All games (except Volatility Plinko) use real-time tick data streamed
           from the Deriv API. Each tick contains a financial quote (e.g.,{' '}
-          <code className="font-mono-game text-foreground bg-muted px-1 rounded">6432.17</code>).
-          The <strong>last digit</strong> of this quote becomes the atomic unit of
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            6432.17
+          </code>
+          ). The <strong>last digit</strong> of this quote becomes the atomic unit of
           randomness — in this case, <strong>7</strong>.
         </p>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="body-sm text-on-subtle leading-relaxed">
           Deriv synthetic indices (Volatility 10, 25, 50, 100) produce ticks
           approximately once per second. Each tick is timestamped (epoch) and
           auditable. The last digit is uniformly distributed across 0–9, with
           each digit having a 10% probability.
         </p>
-        <div className="rounded-lg bg-muted/50 p-4 font-mono-game text-xs">
-          <p className="text-muted-foreground mb-2">Example tick response:</p>
-          <pre className="text-foreground whitespace-pre-wrap">{`{
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 font-display text-xs">
+            <p className="text-on-subtle mb-2">Example tick response:</p>
+            <pre className="text-on-prominent whitespace-pre-wrap">{`{
   "tick": {
     "epoch": 1710300000,
     "quote": "6432.17",
@@ -42,33 +98,36 @@ export default function ProvablyFairPage() {
   }
 }
 // Last digit extracted: 7`}</pre>
-        </div>
+          </CardContent>
+        </Card>
       </section>
 
       <Separator />
 
       <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
-          Game 1: Digit Collect
+        <h2 className="heading-h3 font-display text-on-prominent">
+          Game 1: Digit Sync
         </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="body-sm text-on-subtle leading-relaxed">
           A crash/chicken-out game. Each draw reveals the last digit of the next
           live tick. Collect unique digits (0–9) to increase your multiplier.
           If a duplicate appears, you&apos;re knocked out.
         </p>
-        <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
-          <p className="font-medium">Key Formulas</p>
-          <div className="font-mono-game text-xs space-y-1 text-muted-foreground">
-            <p>P(survive draw n) = (10 − (n−1)) / 10</p>
-            <p>P(survive all n draws) = 10! / ((10−n)! × 10^n)</p>
-            <p>Fair multiplier at draw n = 1 / P(survive all n)</p>
-            <p>Actual multiplier = Fair × 0.97 (3% house edge)</p>
-          </div>
-        </div>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 body-sm">
+            <p className="font-medium text-on-prominent">Key Formulas</p>
+            <div className="font-display text-xs space-y-1 text-on-subtle">
+              <p>P(survive draw n) = (10 − (n−1)) / 10</p>
+              <p>P(survive all n draws) = 10! / ((10−n)! × 10^n)</p>
+              <p>Fair multiplier at draw n = 1 / P(survive all n)</p>
+              <p>Actual multiplier = Fair × 0.97 (3% house edge)</p>
+            </div>
+          </CardContent>
+        </Card>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border text-muted-foreground">
+              <tr className="border-b border-border-subtle text-on-subtle">
                 <th className="py-2 text-left font-medium">Draw</th>
                 <th className="py-2 text-right font-medium">Survival</th>
                 <th className="py-2 text-right font-medium">Cumulative</th>
@@ -76,7 +135,7 @@ export default function ProvablyFairPage() {
                 <th className="py-2 text-right font-medium">Actual (97%)</th>
               </tr>
             </thead>
-            <tbody className="font-mono-game">
+            <tbody className="font-display tabular-nums">
               {[
                 [1, '100%', '100.0%', '1.00×', '0.97×'],
                 [2, '90%', '90.0%', '1.11×', '1.08×'],
@@ -89,12 +148,12 @@ export default function ProvablyFairPage() {
                 [9, '20%', '0.4%', '275.51×', '267.24×'],
                 [10, '10%', '0.04%', '2755.10×', '2672.44×'],
               ].map(([draw, surv, cum, fair, actual]) => (
-                <tr key={String(draw)} className="border-b border-border/30">
+                <tr key={String(draw)} className="border-b border-border-subtle/50">
                   <td className="py-1.5">{draw}</td>
                   <td className="py-1.5 text-right">{surv}</td>
                   <td className="py-1.5 text-right">{cum}</td>
                   <td className="py-1.5 text-right">{fair}</td>
-                  <td className="py-1.5 text-right text-foreground">{actual}</td>
+                  <td className="py-1.5 text-right text-on-prominent">{actual}</td>
                 </tr>
               ))}
             </tbody>
@@ -105,191 +164,144 @@ export default function ProvablyFairPage() {
       <Separator />
 
       <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
+        <h2 className="heading-h3 font-display text-on-prominent">
           Game 2: Digit Poker
         </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="body-sm text-on-subtle leading-relaxed">
           Video poker with digits 0–9 instead of cards. 5 digits dealt from
           live ticks. Hold any cards, draw replacements. Two Pair or better
           returns a profit.
         </p>
-        <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
-          <p className="font-medium">Pay Table</p>
-          <div className="space-y-1">
-            {[
-              ['Five of a Kind', '77777', '40×'],
-              ['Four of a Kind', '33383', '9×'],
-              ['Full House', '44422', '1.8×'],
-              ['Straight', '89012', '1.5×'],
-              ['Three of a Kind', '55563', '1.2×'],
-              ['Two Pair', '33448', '1.1×'],
-              ['One Pair', '33567', '0×'],
-              ['High Card', '13579', '0×'],
-            ].map(([hand, example, payout]) => (
-              <div key={hand} className="flex justify-between text-xs text-muted-foreground">
-                <span>{hand} <span className="font-mono-game text-foreground/50">({example})</span></span>
-                <span className="font-mono-game">{payout}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          With only 10 digit values, matching hands occur far more often than in
-          standard poker. The top-end payouts are compressed to compensate, while
-          every hand from Two Pair upward returns a profit. Calibrated to ~96.6%
-          RTP with optimal hold strategy via exact brute-force computation over
-          all 100,000 possible hands and 32 hold patterns.
-        </p>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 body-sm">
+            <p className="font-medium text-on-prominent">Pay Table</p>
+            <div className="space-y-1">
+              {[
+                ['Five of a Kind', '77777', '40×'],
+                ['Four of a Kind', '33383', '9×'],
+                ['Full House', '44422', '1.8×'],
+                ['Straight', '89012', '1.5×'],
+                ['Three of a Kind', '55563', '1.2×'],
+                ['Two Pair', '33448', '1.1×'],
+                ['One Pair', '33567', '0×'],
+                ['High Card', '13579', '0×'],
+              ].map(([hand, example, payout]) => (
+                <div key={hand} className="flex justify-between text-xs text-on-subtle">
+                  <span>
+                    {hand}{' '}
+                    <span className="font-display text-on-prominent/50">
+                      ({example})
+                    </span>
+                  </span>
+                  <span className="font-display tabular-nums">{payout}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       <Separator />
 
       <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
+        <h2 className="heading-h3 font-display text-on-prominent">
           Game 3: Digit Slots
         </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="body-sm text-on-subtle leading-relaxed">
           3-reel slot machine. Each reel stopped by a live tick&apos;s last digit.
-          Calibrated pay table targeting ~95.5% RTP (verified via brute-force
-          enumeration over all 1,000 possible outcomes).
+          Calibrated pay table targeting ~95.5% RTP.
         </p>
-        <div className="rounded-lg bg-muted/50 p-4 space-y-1 text-xs">
-          {[
-            ['777 (Jackpot)', '0.10%', '100×'],
-            ['Triple (non-7)', '0.90%', '15×'],
-            ['Sequential', '6.00%', '3×'],
-            ['Pair', '27.00%', '2×'],
-            ['No Match', '66.00%', '0×'],
-          ].map(([combo, prob, payout]) => (
-            <div key={combo} className="flex justify-between text-muted-foreground">
-              <span>{combo}</span>
-              <div className="flex gap-6">
-                <span className="font-mono-game w-16 text-right">{prob}</span>
-                <span className="font-mono-game w-10 text-right">{payout}</span>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-1 text-xs">
+            {[
+              ['777 (Jackpot)', '0.10%', '100×'],
+              ['Triple (non-7)', '0.90%', '15×'],
+              ['Sequential', '6.00%', '3×'],
+              ['Pair', '27.00%', '2×'],
+              ['No Match', '66.00%', '0×'],
+            ].map(([combo, prob, payout]) => (
+              <div key={combo} className="flex justify-between text-on-subtle">
+                <span>{combo}</span>
+                <div className="flex gap-6">
+                  <span className="font-display tabular-nums w-16 text-right">{prob}</span>
+                  <span className="font-display tabular-nums w-10 text-right">{payout}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Sequential detects any ordering of 3 consecutive digits mod 10
-          (e.g., 3-1-2 or 0-9-8). Gamble feature: after any win, risk your
-          winnings on the next tick digit. 0–4 = lose, 5–9 = double. Fair
-          50/50 gamble (up to 5 rounds).
-        </p>
+            ))}
+          </CardContent>
+        </Card>
       </section>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
-          Game 4: Volatility Run
+      <section id="volatility-plinko" className="space-y-4 scroll-mt-6">
+        <h2 className="heading-h3 font-display text-on-prominent">
+          Game 4: Volatility Plinko
         </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Unlike the other games, Volatility Run generates synthetic price
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Unlike the other games, Volatility Plinko generates synthetic price
           paths client-side using Geometric Brownian Motion (GBM) with{' '}
-          <code className="font-mono-game text-foreground bg-muted px-1 rounded">crypto.getRandomValues()</code>{' '}
-          as the entropy source. The final price position (percent change from
-          start) determines the payout zone.
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            crypto.getRandomValues()
+          </code>{' '}
+          as the entropy source. Settlement uses the terminal log-return Z-score
+          against σ-barriers — not the decorative digits shown on the chart.
         </p>
-        <div className="rounded-lg bg-muted/50 p-4 font-mono-game text-xs text-muted-foreground">
-          <p>S(t+1) = S(t) × exp((μ − σ²/2)Δt + σ√(Δt) × Z)</p>
-          <p className="mt-1">μ = 0 (no drift), σ = risk-dependent, Z = Box-Muller normal</p>
-          <p className="mt-1">Payout = f(|percentChange|) — symmetric zones around 0%</p>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 font-display text-xs text-on-subtle space-y-2">
+            <p>S(t+1) = S(t) × exp((μ − σ²/2)Δt + σ√(Δt) × Z)</p>
+            <p>μ = 0, Δt = 0.01 per tick, Z ~ N(0,1) via Box-Muller</p>
+            <p>
+              σ_eff = σ × tickCount / 100 — std dev of total log return over the path
+            </p>
+            <p>zScore = ln(S_T / S_0) / σ_eff → payout zone</p>
+            <p className="text-on-prominent/80">
+              The per-step drift term −(σ²/2)Δt biases log returns slightly negative vs
+              the symmetric normal zone model. Payouts are calibrated to empirical
+              Monte Carlo RTP, not the analytical formula alone.
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 body-sm">
+            <p className="font-medium text-on-prominent">Zone probabilities (Z ~ N(0,1))</p>
+            <div className="grid gap-1 text-xs text-on-subtle sm:grid-cols-2">
+              <p>Center |Z| &lt; 1: {(zoneProbs.center * 100).toFixed(2)}%</p>
+              <p>Inner 1–2σ (each side): {(zoneProbs.inner * 100).toFixed(2)}%</p>
+              <p>Mid 2–3σ (each side): {(zoneProbs.mid * 100).toFixed(2)}%</p>
+              <p>Outer 3–4σ (each side): {(zoneProbs.outer * 100).toFixed(3)}%</p>
+              <p>Extreme ≥4σ (each side): {(zoneProbs.extreme * 100).toFixed(4)}%</p>
+            </div>
+            <p className="text-xs text-on-subtle pt-1">
+              A payout ≥ 1× returns your stake or more. Center bands (0.2–0.5×) are
+              partial returns — net losses after the full stake is deducted.
+            </p>
+          </CardContent>
+        </Card>
+        <div className="space-y-3">
+          <PlinkoZoneTable risk="low" />
+          <PlinkoZoneTable risk="medium" />
+          <PlinkoZoneTable risk="high" />
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th className="py-2 text-left font-medium">Parameter</th>
-                <th className="py-2 text-center font-medium">Low</th>
-                <th className="py-2 text-center font-medium">Medium</th>
-                <th className="py-2 text-center font-medium">High</th>
-              </tr>
-            </thead>
-            <tbody className="font-mono-game">
-              <tr className="border-b border-border/30">
-                <td className="py-1.5 text-muted-foreground">Tick Count</td>
-                <td className="py-1.5 text-center">8</td>
-                <td className="py-1.5 text-center">12</td>
-                <td className="py-1.5 text-center">16</td>
-              </tr>
-              <tr className="border-b border-border/30">
-                <td className="py-1.5 text-muted-foreground">Sigma</td>
-                <td className="py-1.5 text-center">0.15</td>
-                <td className="py-1.5 text-center">0.35</td>
-                <td className="py-1.5 text-center">0.60</td>
-              </tr>
-              <tr className="border-b border-border/30">
-                <td className="py-1.5 text-muted-foreground">Center Payout</td>
-                <td className="py-1.5 text-center">0.5×</td>
-                <td className="py-1.5 text-center">0.3×</td>
-                <td className="py-1.5 text-center">0.2×</td>
-              </tr>
-              <tr className="border-b border-border/30">
-                <td className="py-1.5 text-muted-foreground">Max Payout</td>
-                <td className="py-1.5 text-center">25×</td>
-                <td className="py-1.5 text-center text-foreground">170×</td>
-                <td className="py-1.5 text-center text-foreground">1000×</td>
-              </tr>
-              <tr>
-                <td className="py-1.5 text-muted-foreground">Target RTP</td>
-                <td className="py-1.5 text-center">97%</td>
-                <td className="py-1.5 text-center">96%</td>
-                <td className="py-1.5 text-center">95%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Tick count per risk level controls variance — more ticks allow
-          larger price moves. Zone barriers at ±1σ, ±2σ, ±3σ, ±4σ of
-          effective volatility.
-        </p>
       </section>
 
       <Separator />
 
-      <section className="space-y-4">
-        <h2 className="font-display text-xl font-semibold">
-          Foundational Assumptions
-        </h2>
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          <li className="flex gap-2">
-            <span className="text-foreground">1.</span>
-            Last digits from Deriv synthetic indices are uniformly distributed
-            across 0–9 (P = 0.10 each).
-          </li>
-          <li className="flex gap-2">
-            <span className="text-foreground">2.</span>
-            Consecutive tick digits are independent (no autocorrelation).
-          </li>
-          <li className="flex gap-2">
-            <span className="text-foreground">3.</span>
-            Generated volatility quotes for Volatility Run produce fair
-            price paths via GBM with zero drift.
-          </li>
-        </ul>
-        <p className="text-xs text-muted-foreground italic">
-          Validation: Chi-squared goodness-of-fit test on 10,000+ ticks confirms
-          uniformity. All game math is validated via Monte Carlo simulation.
-        </p>
-      </section>
-
-      <Separator />
-
-      <div className="rounded-md bg-accent p-3">
-        <p className="text-[11px] text-muted-foreground">
-          <strong className="text-foreground">Demo Only</strong> — No real money wagered. Data:{' '}
-          <a
-            href="https://api.deriv.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground underline underline-offset-2 hover:no-underline"
-          >
-            Deriv API
-          </a>
-        </p>
-      </div>
+      <Card className="border-0 bg-subtle">
+        <CardContent className="p-3">
+          <p className="body-xs text-on-subtle">
+            <strong className="text-on-prominent">Demo Only</strong> — No real money wagered. Data:{' '}
+            <a
+              href="https://api.deriv.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 hover:no-underline"
+            >
+              Deriv API
+            </a>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

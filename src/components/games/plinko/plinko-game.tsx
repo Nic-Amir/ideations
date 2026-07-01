@@ -1,38 +1,173 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useBalanceStore } from '@/stores/balance-store';
+import { useRef, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import {
   getRiskConfig,
-  generateVolatilityRun,
   getBarrierPriceLevels,
+  getMaxPayout,
+  isNetWin,
   type VolatilityRun,
 } from '@/lib/games/plinko';
 import type { PlinkoRisk } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
+import { Button } from '@trading-game/design-intelligence-layer';
+import { GameShell } from '@/components/games/shared/game-shell';
+import { GameViewport } from '@/components/games/shared/game-layout';
+import { StakeDock } from '@/components/games/shared/stake-dock';
 import {
-  GameLayout,
-  GameNotice,
-  GameStatusLine,
-} from '@/components/games/shared/game-layout';
+  ResultOverlay,
+  getResultTierFromPayout,
+} from '@/components/games/shared/result-overlay';
+import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
+import { useIsLandscape } from '@/hooks/use-landscape';
+import {
+  getPlinkoChartColors,
+  getChartPadding,
+  getPayoutStripWidth,
+} from '@/components/games/plinko/plinko-chart-colors';
+import {
+  useVolatilityPlinko,
+  MAX_CONCURRENT_RUNS,
+  SESSION_OPTIONS,
+  START_PRICE,
+  type RunDisplay,
+  type ZoneFlash,
+} from '@/hooks/use-volatility-plinko';
 
-const CHART_PADDING = { top: 20, right: 80, bottom: 32, left: 56 };
-const START_PRICE = 1000;
-const MAX_CONCURRENT_RUNS = 5;
+// ---------------------------------------------------------------------------
+// Session progress
+// ---------------------------------------------------------------------------
 
-interface RunDisplay {
-  id: number;
-  run: VolatilityRun;
-  animProgress: number;
-  startedAt: number;
-  stake: number;
+function SessionProgress({ completed, total }: { completed: number; total: number }) {
+  const pct = Math.round((completed / total) * 100);
+  return (
+    <div className="flex items-center gap-3 rounded-full bg-subtle px-3 py-1.5 text-xs text-on-subtle">
+      <span className="font-display tabular-nums">
+        {completed}/{total}
+      </span>
+      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-border-subtle">
+        <div
+          className="h-full rounded-full bg-primary transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Chart
+// Risk preset cards
 // ---------------------------------------------------------------------------
+
+function RiskPresetCards({
+  risk,
+  onSelect,
+  disabled,
+}: {
+  risk: PlinkoRisk;
+  onSelect: (r: PlinkoRisk) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Risk preset"
+      className="flex gap-2 px-4 pt-2 overflow-x-auto snap-x snap-mandatory"
+    >
+      {(['low', 'medium', 'high'] as PlinkoRisk[]).map((r) => {
+        const rc = getRiskConfig(r);
+        const selected = risk === r;
+        const zoneColors = rc.zones.slice(0, 5).map((z) => z.color);
+        return (
+          <button
+            key={r}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => onSelect(r)}
+            className={cn(
+              'min-h-[44px] min-w-[108px] shrink-0 snap-start rounded-lg border p-2.5 text-left transition-colors',
+              selected
+                ? 'border-primary/30 bg-primary/10 text-primary'
+                : 'border-border-subtle bg-subtle text-on-subtle',
+              disabled && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <div className="text-xs font-display font-bold capitalize">{r}</div>
+            <div className="mt-1 flex gap-0.5">
+              {zoneColors.map((c, i) => (
+                <span key={i} className="h-1 flex-1 rounded-full" style={{ backgroundColor: c }} />
+              ))}
+            </div>
+            <div className="mt-1.5 space-y-0.5 text-[10px] opacity-90">
+              <div>{rc.tickCount} ticks · {(rc.targetRTP * 100).toFixed(0)}% RTP</div>
+              <div className="font-display tabular-nums">Up to {getMaxPayout(r)}×</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function getPathColors(payout: number, faded: boolean) {
+  const colors = getPlinkoChartColors();
+  const netWin = payout >= 1;
+  const bigWin = payout > 5;
+  if (bigWin || netWin) {
+    return {
+      stroke: faded ? colors.pathUpFaint : colors.pathUp,
+      glow: colors.pathUpGlow,
+    };
+  }
+  return {
+    stroke: faded ? colors.pathDownFaint : colors.pathDown,
+    glow: colors.pathDownGlow,
+  };
+}
+
+function formatSigmaRange(zone: ReturnType<typeof getRiskConfig>['zones'][0]): string {
+  if (zone.minSigma === 0) return `|Z| < ${zone.maxSigma}σ`;
+  if (zone.maxSigma === Infinity) return `|Z| ≥ ${zone.minSigma}σ`;
+  return `${zone.minSigma}σ – ${zone.maxSigma}σ`;
+}
+
+// ---------------------------------------------------------------------------
+// Chart helpers
+// ---------------------------------------------------------------------------
+
+function getZoneBandBounds(
+  zoneIndex: number,
+  zones: ReturnType<typeof getRiskConfig>['zones'],
+  barrierLevels: ReturnType<typeof getBarrierPriceLevels>,
+  yScale: (v: number) => number,
+  yMin: number,
+  yMax: number,
+) {
+  const zone = zones[zoneIndex];
+  if (!zone) return null;
+
+  const minK = zone.minSigma;
+  const maxK = Math.min(zone.maxSigma, 5);
+  const isPositive = zoneIndex <= 4;
+
+  if (isPositive) {
+    const upperBarrierMin = barrierLevels.find((b) => b.sigma === minK);
+    const upperBarrierMax = barrierLevels.find((b) => b.sigma === maxK);
+    const posTop = upperBarrierMax ? yScale(upperBarrierMax.price) : yScale(yMax);
+    const posBot = upperBarrierMin ? yScale(upperBarrierMin.price) : yScale(START_PRICE);
+    if (posBot > posTop) return { top: posTop, bottom: posBot, zone };
+  } else {
+    const lowerBarrierMin = barrierLevels.find((b) => b.sigma === -minK);
+    const lowerBarrierMax = barrierLevels.find((b) => b.sigma === -maxK);
+    const negTop = lowerBarrierMin ? yScale(lowerBarrierMin.price) : yScale(START_PRICE);
+    const negBot = lowerBarrierMax ? yScale(lowerBarrierMax.price) : yScale(yMin);
+    if (negBot > negTop) return { top: negTop, bottom: negBot, zone };
+  }
+  return null;
+}
 
 function VolatilityChart({
   runs,
@@ -40,17 +175,23 @@ function VolatilityChart({
   risk,
   width,
   height,
+  zoneFlashes,
+  isEmpty,
 }: {
   runs: RunDisplay[];
   activeRuns: RunDisplay[];
   risk: PlinkoRisk;
   width: number;
   height: number;
+  zoneFlashes: ZoneFlash[];
+  isEmpty: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const config = getRiskConfig(risk);
   const zones = config.zones;
   const barrierLevels = getBarrierPriceLevels(risk, START_PRICE);
+  const stripWidth = getPayoutStripWidth(width);
+  const padding = getChartPadding(stripWidth + 16);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -65,15 +206,16 @@ function VolatilityChart({
     canvas.style.height = `${height}px`;
     ctx.scale(dpr, dpr);
 
-    ctx.fillStyle = '#131325';
+    const colors = getPlinkoChartColors();
+
+    ctx.fillStyle = colors.bg;
     ctx.beginPath();
     ctx.roundRect(0, 0, width, height, 12);
     ctx.fill();
 
-    const plotW = width - CHART_PADDING.left - CHART_PADDING.right;
-    const plotH = height - CHART_PADDING.top - CHART_PADDING.bottom;
+    const plotW = width - padding.left - padding.right;
+    const plotH = height - padding.top - padding.bottom;
 
-    // Y range: all completed runs + all active run quotes + barrier levels
     const activeRunIds = new Set(activeRuns.map((r) => r.id));
     let allQuotes: number[] = [START_PRICE];
     for (const r of runs) allQuotes = allQuotes.concat(r.run.quotes);
@@ -89,184 +231,169 @@ function VolatilityChart({
     const yMax = maxV + pad;
 
     const xScale = (i: number, totalTicks: number) =>
-      CHART_PADDING.left + (i / totalTicks) * plotW;
+      padding.left + (i / totalTicks) * plotW;
     const yScale = (v: number) =>
-      CHART_PADDING.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+      padding.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
-    // Grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 5; i++) {
-      const y = CHART_PADDING.top + (plotH / 5) * i;
-      ctx.beginPath();
-      ctx.moveTo(CHART_PADDING.left, y);
-      ctx.lineTo(width - CHART_PADDING.right, y);
-      ctx.stroke();
-    }
-
-    // Start price reference line
-    const startY = yScale(START_PRICE);
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.setLineDash([4, 4]);
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(CHART_PADDING.left, startY);
-    ctx.lineTo(width - CHART_PADDING.right, startY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Barrier lines and zone bands
-    const bandWidth = 64;
-    const bandX = width - CHART_PADDING.right + 4;
+    const bandWidth = stripWidth;
+    const bandX = width - padding.right + 4;
     const uniqueZones = zones.slice(0, 5);
 
-    for (const zone of uniqueZones) {
-      const minK = zone.minSigma;
-      const maxK = Math.min(zone.maxSigma, 5);
+    const drawZoneBands = () => {
+      for (const zone of uniqueZones) {
+        const minK = zone.minSigma;
+        const maxK = Math.min(zone.maxSigma, 5);
+        const upperBarrierMin = barrierLevels.find((b) => b.sigma === minK);
+        const upperBarrierMax = barrierLevels.find((b) => b.sigma === maxK);
+        const posTop = upperBarrierMax ? yScale(upperBarrierMax.price) : yScale(yMax);
+        const posBot = upperBarrierMin ? yScale(upperBarrierMin.price) : yScale(START_PRICE);
 
-      const upperBarrierMin = barrierLevels.find((b) => b.sigma === minK);
-      const upperBarrierMax = barrierLevels.find((b) => b.sigma === maxK);
-
-      const posTop = upperBarrierMax ? yScale(upperBarrierMax.price) : yScale(yMax);
-      const posBot = upperBarrierMin ? yScale(upperBarrierMin.price) : yScale(START_PRICE);
-
-      if (posBot > posTop) {
-        ctx.fillStyle = zone.color + '10';
-        ctx.fillRect(CHART_PADDING.left, posTop, plotW, posBot - posTop);
-        ctx.fillStyle = zone.color + '18';
-        ctx.fillRect(bandX, posTop, bandWidth, posBot - posTop);
-        ctx.fillStyle = zone.color;
-        ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText(`${zone.payout}×`, bandX + 4, (posTop + posBot) / 2 + 3);
-      }
-
-      if (zone.label !== 'Center') {
-        const lowerBarrierMin = barrierLevels.find((b) => b.sigma === -minK);
-        const lowerBarrierMax = barrierLevels.find((b) => b.sigma === -maxK);
-
-        const negTop = lowerBarrierMin ? yScale(lowerBarrierMin.price) : yScale(START_PRICE);
-        const negBot = lowerBarrierMax ? yScale(lowerBarrierMax.price) : yScale(yMin);
-
-        if (negBot > negTop) {
-          ctx.fillStyle = zone.color + '10';
-          ctx.fillRect(CHART_PADDING.left, negTop, plotW, negBot - negTop);
-          ctx.fillStyle = zone.color + '18';
-          ctx.fillRect(bandX, negTop, bandWidth, negBot - negTop);
+        if (posBot > posTop) {
+          ctx.fillStyle = zone.color + (isEmpty ? '14' : '10');
+          ctx.fillRect(padding.left, posTop, plotW, posBot - posTop);
+          ctx.fillStyle = zone.color + (isEmpty ? '22' : '18');
+          ctx.fillRect(bandX, posTop, bandWidth, posBot - posTop);
           ctx.fillStyle = zone.color;
           ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'left';
-          ctx.fillText(`${zone.payout}×`, bandX + 4, (negTop + negBot) / 2 + 3);
+          ctx.fillText(`${zone.payout}×`, bandX + 4, (posTop + posBot) / 2 + 3);
+        }
+
+        if (zone.label !== 'Center') {
+          const lowerBarrierMin = barrierLevels.find((b) => b.sigma === -minK);
+          const lowerBarrierMax = barrierLevels.find((b) => b.sigma === -maxK);
+          const negTop = lowerBarrierMin ? yScale(lowerBarrierMin.price) : yScale(START_PRICE);
+          const negBot = lowerBarrierMax ? yScale(lowerBarrierMax.price) : yScale(yMin);
+
+          if (negBot > negTop) {
+            ctx.fillStyle = zone.color + (isEmpty ? '14' : '10');
+            ctx.fillRect(padding.left, negTop, plotW, negBot - negTop);
+            ctx.fillStyle = zone.color + (isEmpty ? '22' : '18');
+            ctx.fillRect(bandX, negTop, bandWidth, negBot - negTop);
+            ctx.fillStyle = zone.color;
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${zone.payout}×`, bandX + 4, (negTop + negBot) / 2 + 3);
+          }
         }
       }
+
+      for (const barrier of barrierLevels) {
+        const absK = Math.abs(barrier.sigma);
+        const zone = uniqueZones.find((z) => z.minSigma === absK || z.maxSigma === absK);
+        const bColor = zone?.color ?? '#555';
+        const by = yScale(barrier.price);
+        ctx.strokeStyle = bColor + (isEmpty ? '70' : '50');
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, by);
+        ctx.lineTo(width - padding.right, by);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    };
+
+    // Grid
+    ctx.strokeStyle = colors.grid;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = padding.top + (plotH / 5) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
     }
 
-    // Draw barrier lines
-    for (const barrier of barrierLevels) {
-      const absK = Math.abs(barrier.sigma);
-      const zone = uniqueZones.find(
-        (z) => z.minSigma === absK || z.maxSigma === absK,
-      );
-      const bColor = zone?.color ?? '#555';
-      const by = yScale(barrier.price);
-      ctx.strokeStyle = bColor + '50';
-      ctx.setLineDash([3, 3]);
-      ctx.lineWidth = 0.8;
+    if (isEmpty) {
+      const startY = yScale(START_PRICE);
+      ctx.strokeStyle = colors.startLine;
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(CHART_PADDING.left, by);
-      ctx.lineTo(width - CHART_PADDING.right, by);
+      ctx.moveTo(padding.left, startY);
+      ctx.lineTo(width - padding.right, startY);
       ctx.stroke();
       ctx.setLineDash([]);
+      drawZoneBands();
+      ctx.fillStyle = colors.emptyPrompt;
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Generate a path to see volatility in motion', width / 2, height / 2);
+      ctx.font = '11px sans-serif';
+      ctx.fillText(`${config.tickCount} ticks · ${risk} risk`, width / 2, height / 2 + 18);
+      return;
+    }
 
-      ctx.fillStyle = '#8B8BA3';
+    // Start price line
+    const startY = yScale(START_PRICE);
+    ctx.strokeStyle = colors.startLine;
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, startY);
+    ctx.lineTo(width - padding.right, startY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const now = performance.now();
+
+    drawZoneBands();
+
+    // Zone flash highlights
+    for (const flash of zoneFlashes) {
+      if (flash.until <= now) continue;
+      const alpha = Math.min(1, (flash.until - now) / 600);
+      const bounds = getZoneBandBounds(flash.zoneIndex, zones, barrierLevels, yScale, yMin, yMax);
+      if (!bounds) continue;
+      ctx.fillStyle = bounds.zone.color + Math.round(alpha * 80).toString(16).padStart(2, '0');
+      ctx.fillRect(bandX, bounds.top, bandWidth, bounds.bottom - bounds.top);
+      ctx.fillStyle = bounds.zone.color;
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(
+        `${bounds.zone.label} · ${bounds.zone.payout}×`,
+        bandX + 2,
+        (bounds.top + bounds.bottom) / 2 + 3,
+      );
+    }
+
+    // Barrier labels (lines drawn in drawZoneBands for empty; duplicate labels here when active)
+    for (const barrier of barrierLevels) {
+      const by = yScale(barrier.price);
+      ctx.fillStyle = colors.textMuted;
       ctx.font = '8px monospace';
       ctx.textAlign = 'right';
       ctx.fillText(
         `${barrier.sigma > 0 ? '+' : ''}${barrier.sigma}σ`,
-        CHART_PADDING.left - 4,
+        padding.left - 4,
         by + 3,
       );
     }
 
-    // Y-axis labels
-    ctx.fillStyle = '#8B8BA3';
+    // Y-axis
+    ctx.fillStyle = colors.textMuted;
     ctx.font = '9px monospace';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 5; i++) {
       const val = yMin + ((yMax - yMin) / 5) * (5 - i);
-      const y = CHART_PADDING.top + (plotH / 5) * i;
-      ctx.fillText(val.toFixed(1), CHART_PADDING.left - 6, y + 3);
+      const y = padding.top + (plotH / 5) * i;
+      ctx.fillText(val.toFixed(1), padding.left - 6, y + 3);
     }
 
-    // Completed runs (faded) — skip any that are currently active
+    // Completed runs
     for (const r of runs) {
       if (activeRunIds.has(r.id)) continue;
-      const quotes = r.run.quotes;
-      const total = quotes.length - 1;
-      ctx.strokeStyle = r.run.isPositive
-        ? 'rgba(0,212,170,0.15)'
-        : 'rgba(255,59,92,0.15)';
-      ctx.lineWidth = 1.5;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (let i = 0; i < quotes.length; i++) {
-        const x = xScale(i, total);
-        const y = yScale(quotes[i]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
+      drawPath(ctx, r.run, xScale, yScale, true);
     }
 
-    // Active runs — each drawn bright with a trailing dot
+    // Active runs
     for (const activeRun of activeRuns) {
-      const quotes = activeRun.run.quotes;
-      const total = quotes.length - 1;
-      const visibleCount = Math.max(1, Math.floor(activeRun.animProgress * quotes.length));
-      const color = activeRun.run.isPositive ? '#00D4AA' : '#FF3B5C';
-
-      ctx.save();
-      ctx.shadowColor = color + '60';
-      ctx.shadowBlur = 12;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (let i = 0; i < visibleCount && i < quotes.length; i++) {
-        const x = xScale(i, total);
-        const y = yScale(quotes[i]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      ctx.restore();
-
-      const lastIdx = Math.min(visibleCount - 1, quotes.length - 1);
-      const ex = xScale(lastIdx, total);
-      const ey = yScale(quotes[lastIdx]);
-
-      ctx.save();
-      ctx.shadowColor = color + '80';
-      ctx.shadowBlur = 16;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(ex, ey, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      if (activeRun.animProgress >= 1) {
-        ctx.fillStyle = color;
-        ctx.font = 'bold 11px monospace';
-        ctx.textAlign = 'left';
-        const pctStr = (activeRun.run.percentChange * 100).toFixed(2);
-        const sign = activeRun.run.percentChange >= 0 ? '+' : '';
-        ctx.fillText(`${sign}${pctStr}%`, ex + 10, ey - 4);
-        ctx.fillText(`${activeRun.run.payout}×`, ex + 10, ey + 10);
-      }
+      drawActivePath(ctx, activeRun, xScale, yScale, zones, barrierLevels, yScale, yMin, yMax, bandX, bandWidth);
     }
 
-    // X-axis tick labels
-    ctx.fillStyle = '#8B8BA3';
+    // X-axis
+    ctx.fillStyle = colors.textMuted;
     ctx.font = '9px monospace';
     ctx.textAlign = 'center';
     const sampleLen =
@@ -276,18 +403,140 @@ function VolatilityChart({
     const totalTicks = sampleLen - 1;
     const step = Math.max(1, Math.floor(totalTicks / 5));
     for (let i = 0; i <= totalTicks; i += step) {
-      const x = xScale(i, totalTicks);
-      ctx.fillText(String(i), x, height - 10);
+      ctx.fillText(String(i), xScale(i, totalTicks), height - 10);
     }
-  }, [runs, activeRuns, risk, width, height, zones, barrierLevels, config.tickCount]);
+  }, [runs, activeRuns, risk, width, height, zones, barrierLevels, config.tickCount, zoneFlashes, isEmpty, padding, stripWidth]);
 
   return (
     <canvas
       ref={canvasRef}
       className="block rounded-md"
       style={{ width, height }}
+      aria-label="Volatility path chart"
     />
   );
+}
+
+function drawPath(
+  ctx: CanvasRenderingContext2D,
+  run: VolatilityRun,
+  xScale: (i: number, total: number) => number,
+  yScale: (v: number) => number,
+  faded: boolean,
+) {
+  const quotes = run.quotes;
+  const total = quotes.length - 1;
+  const pathColors = getPathColors(run.payout, faded);
+  ctx.strokeStyle = pathColors.stroke;
+  ctx.lineWidth = faded ? 1.5 : 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < quotes.length; i++) {
+    const x = xScale(i, total);
+    const y = yScale(quotes[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+function drawActivePath(
+  ctx: CanvasRenderingContext2D,
+  activeRun: RunDisplay,
+  xScale: (i: number, total: number) => number,
+  yScale: (v: number) => number,
+  zones: ReturnType<typeof getRiskConfig>['zones'],
+  barrierLevels: ReturnType<typeof getBarrierPriceLevels>,
+  yScaleFn: (v: number) => number,
+  yMin: number,
+  yMax: number,
+  bandX: number,
+  bandWidth: number,
+) {
+  const quotes = activeRun.run.quotes;
+  const digits = activeRun.run.digits;
+  const total = quotes.length - 1;
+  const visibleCount = Math.max(1, activeRun.visibleTickIndex + 1);
+  const colorPayout =
+    activeRun.animProgress >= 1
+      ? activeRun.run.payout
+      : activeRun.run.isPositive
+        ? 1.5
+        : 0.5;
+  const pathColors = getPathColors(colorPayout, false);
+  const color = pathColors.stroke;
+  const glow = pathColors.glow;
+
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < visibleCount && i < quotes.length; i++) {
+    const x = xScale(i, total);
+    const y = yScale(quotes[i]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  const lastIdx = Math.min(visibleCount - 1, quotes.length - 1);
+  const ex = xScale(lastIdx, total);
+  const ey = yScale(quotes[lastIdx]);
+  const pulse = 5 + Math.sin(performance.now() / 80) * 1.5;
+
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 16;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(ex, ey, pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Digit badge at current tick
+  if (lastIdx > 0 && digits[lastIdx - 1] !== undefined) {
+    const colors = getPlinkoChartColors();
+    const digit = digits[lastIdx - 1];
+    const badgeX = ex + 8;
+    const badgeY = ey - 14;
+    ctx.fillStyle = colors.digitBadgeBg;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, 18, 16, 3);
+    ctx.fill();
+    ctx.fillStyle = colors.digitBadgeText;
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(digit), badgeX + 9, badgeY + 12);
+  }
+
+  // Settled: zone highlight + labels
+  if (activeRun.animProgress >= 1) {
+    const bounds = getZoneBandBounds(
+      activeRun.run.zoneIndex,
+      zones,
+      barrierLevels,
+      yScaleFn,
+      yMin,
+      yMax,
+    );
+    if (bounds) {
+      ctx.strokeStyle = bounds.zone.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bandX - 2, bounds.top - 1, bandWidth + 4, bounds.bottom - bounds.top + 2);
+    }
+
+    ctx.fillStyle = color;
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    const pctStr = (activeRun.run.percentChange * 100).toFixed(2);
+    const sign = activeRun.run.percentChange >= 0 ? '+' : '';
+    ctx.fillText(`${sign}${pctStr}%`, ex + 10, ey - 4);
+    ctx.fillText(`${activeRun.run.payout}×`, ex + 10, ey + 10);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -295,371 +544,312 @@ function VolatilityChart({
 // ---------------------------------------------------------------------------
 
 export function PlinkoGame() {
-  const { balance, placeBet, addWinnings } = useBalanceStore();
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartSize, setChartSize] = useState({ width: 320, height: 240 });
+  const isLandscape = useIsLandscape();
 
-  const [risk, setRisk] = useState<PlinkoRisk>('medium');
-  const [stake, setStake] = useState(100);
-  const [runs, setRuns] = useState<RunDisplay[]>([]);
-  const [activeRuns, setActiveRuns] = useState<RunDisplay[]>([]);
-  const [lastResult, setLastResult] = useState<{
-    payout: number;
-    amount: number;
-    pctChange: number;
-    zScore: number;
-  } | null>(null);
-  const [history, setHistory] = useState<
-    Array<{ payout: number; pctChange: number }>
-  >([]);
-  const runIdRef = useRef(0);
-  const animFrameRef = useRef<number>(0);
-  const activeRunsRef = useRef<RunDisplay[]>([]);
-  const configRef = useRef(getRiskConfig(risk));
-  const addWinningsRef = useRef(addWinnings);
-  const [chartWidth, setChartWidth] = useState(560);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const {
+    risk,
+    setRisk,
+    stake,
+    setStake,
+    runs,
+    activeRuns,
+    lastResult,
+    history,
+    session,
+    sessionSummary,
+    zoneFlashes,
+    chartPulse,
+    liveAnnouncement,
+    config,
+    balance,
+    maxStake,
+    isAnimating,
+    canGenerate,
+    generate,
+    startSession,
+    stopSession,
+    dismissSessionSummary,
+  } = useVolatilityPlinko();
 
-  // Keep refs in sync
-  useEffect(() => { activeRunsRef.current = activeRuns; }, [activeRuns]);
-  useEffect(() => { configRef.current = getRiskConfig(risk); }, [risk]);
-  useEffect(() => { addWinningsRef.current = addWinnings; }, [addWinnings]);
+  const isEmpty = runs.length === 0 && activeRuns.length === 0;
+  const sessionActive = session?.running ?? false;
+  const [showResult, setShowResult] = useState(false);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
 
-  // Resize observer for chart width
   useEffect(() => {
-    const el = containerRef.current;
+    if (!lastResult) return;
+    const megaWin = lastResult.payout > 50;
+    if (sessionActive && !megaWin) return;
+    setShowResult(true);
+  }, [lastResult, sessionActive]);
+
+  useEffect(() => {
+    if (sessionSummary) setShowSessionSummary(true);
+  }, [sessionSummary]);
+
+  useEffect(() => {
+    const el = chartContainerRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      for (const e of entries)
-        setChartWidth(Math.min(e.contentRect.width - 24, 700));
+      for (const e of entries) {
+        const w = Math.floor(e.contentRect.width);
+        const h = Math.floor(e.contentRect.height);
+        if (w > 0 && h > 0) setChartSize({ width: w, height: h });
+      }
     });
     ro.observe(el);
-    setChartWidth(Math.min(el.clientWidth - 24, 700));
     return () => ro.disconnect();
   }, []);
 
-  // Single animation loop — started/stopped based on activeRuns
-  useEffect(() => {
-    if (activeRuns.length === 0) {
-      cancelAnimationFrame(animFrameRef.current);
-      return;
-    }
+  const generateLabel =
+    activeRuns.length >= MAX_CONCURRENT_RUNS
+      ? 'Max paths in flight'
+      : activeRuns.length > 0
+        ? 'Generate another'
+        : 'Generate path';
 
-    const duration = configRef.current.tickCount * 80 + 400;
+  const pathNetPL =
+    lastResult && showResult ? lastResult.amount - lastResult.stake : 0;
 
-    function tick() {
-      const now = performance.now();
-      const current = activeRunsRef.current;
-
-      const nextActive: RunDisplay[] = [];
-      const justCompleted: RunDisplay[] = [];
-
-      for (const r of current) {
-        const elapsed = now - r.startedAt;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        if (eased >= 1) {
-          justCompleted.push({ ...r, animProgress: 1 });
-        } else {
-          nextActive.push({ ...r, animProgress: eased });
-        }
-      }
-
-      // Credit winnings and move completed runs to history
-      if (justCompleted.length > 0) {
-        for (const r of justCompleted) {
-          const winAmount = r.stake * r.run.payout;
-          if (winAmount > 0) addWinningsRef.current(winAmount);
-        }
-
-        const latestCompleted = justCompleted[justCompleted.length - 1];
-        setLastResult({
-          payout: latestCompleted.run.payout,
-          amount: latestCompleted.stake * latestCompleted.run.payout,
-          pctChange: latestCompleted.run.percentChange,
-          zScore: latestCompleted.run.zScore,
-        });
-        setHistory((prev) => [
-          ...justCompleted.map((r) => ({
-            payout: r.run.payout,
-            pctChange: r.run.percentChange,
-          })),
-          ...prev,
-        ].slice(0, 20));
-        setRuns((prev) => [
-          ...prev.slice(-(10 - justCompleted.length)),
-          ...justCompleted,
-        ]);
-      }
-
-      setActiveRuns(nextActive);
-      activeRunsRef.current = nextActive;
-
-      if (nextActive.length > 0) {
-        animFrameRef.current = requestAnimationFrame(tick);
-      }
-    }
-
-    animFrameRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  // Only re-run when active runs transitions from empty to non-empty
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRuns.length === 0 ? 0 : 1]);
-
-  const config = getRiskConfig(risk);
-  const maxStake = Math.max(10, Math.min(balance, 5000));
-  const isAnimating = activeRuns.length > 0;
-
-  const generate = useCallback(() => {
-    if (!placeBet(stake)) return;
-
-    const run = generateVolatilityRun(risk);
-    const id = runIdRef.current++;
-    const display: RunDisplay = {
-      id,
-      run,
-      animProgress: 0,
-      startedAt: performance.now(),
-      stake,
-    };
-
-    setActiveRuns((prev) => [...prev, display]);
-  }, [risk, stake, placeBet]);
-
-  return (
-    <div ref={containerRef}>
-      <GameLayout
-        ticks={[]}
-        highlightedTicks={[]}
-        lastConsumedTick={null}
-        extractionKey={0}
-        statusLine={
-          <GameStatusLine>
-            {isAnimating
-              ? `${activeRuns.length} path${activeRuns.length > 1 ? 's' : ''} in flight.`
-              : lastResult
-                ? `${lastResult.payout}x settlement on a ${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move.`
-                : `Pick a risk preset and generate a ${config.tickCount}-tick run.`}
-          </GameStatusLine>
-        }
-        marketContent={
-          <>
-            <div className="rounded-md bg-accent p-4">
-              <div className="section-label">Simulation source</div>
-              <p className="mt-2 text-sm text-foreground">
-                This module does not consume the live Deriv tick stream.
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                It generates a client-side geometric Brownian motion path using secure browser entropy and then settles on the terminal move zone.
-              </p>
+  const infoSections: GameInfoSection[] = [
+    {
+      id: 'about',
+      label: 'About',
+      content: (
+        <div className="space-y-2 text-sm text-on-subtle">
+          <p className="rounded-lg border border-border-subtle bg-subtle px-3 py-2 text-xs">
+            <strong className="text-on-prominent">Simulation</strong> — paths use client-side
+            GBM with <code className="text-on-prominent">crypto.getRandomValues()</code>, not the
+            live tick stream. Chart digits are visual only and do not affect payout.
+          </p>
+          <p>Settlement is based on the terminal move&apos;s sigma zone.</p>
+          <Link
+            href="/provably-fair#volatility-plinko"
+            className="inline-block text-xs text-primary hover:underline"
+          >
+            View full math &amp; payout model →
+          </Link>
+        </div>
+      ),
+    },
+    {
+      id: 'payouts',
+      label: 'Payouts',
+      content: (
+        <div className="space-y-2">
+          {config.zones.map((zone, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: zone.color }}
+                />
+                <span className="text-on-subtle truncate">{zone.label}</span>
+              </div>
+              <span className="text-on-subtle shrink-0 tabular-nums">{formatSigmaRange(zone)}</span>
+              <span
+                className="font-display tabular-nums font-medium shrink-0"
+                style={{ color: zone.color }}
+              >
+                {zone.payout}×
+              </span>
             </div>
-
-            <div className="rounded-md bg-accent p-4 text-sm text-muted-foreground">
-              <div className="section-label">Model inputs</div>
-              <div className="mt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span>Sigma profile</span>
-                  <span className="font-mono-game text-foreground">{risk}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Tick count</span>
-                  <span className="font-mono-game text-foreground">{config.tickCount}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Target RTP</span>
-                  <span className="font-mono-game text-foreground">
-                    {(config.targetRTP * 100).toFixed(0)}%
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'history',
+      label: 'History',
+      content: (
+        <div className="space-y-2">
+          {history.length ? (
+            history.map((entry, index) => {
+              const net = entry.winAmount - entry.stake;
+              const won = isNetWin(entry.payout);
+              return (
+                <div
+                  key={`${entry.payout}-${index}`}
+                  className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
+                >
+                  <span className="text-on-subtle truncate">{entry.zoneLabel}</span>
+                  <span className="font-display tabular-nums">{entry.payout}×</span>
+                  <span
+                    className={cn(
+                      'font-display tabular-nums',
+                      won ? 'text-semantic-win' : 'text-semantic-loss',
+                    )}
+                  >
+                    {net >= 0 ? '+' : ''}
+                    {net.toFixed(0)}
                   </span>
                 </div>
-              </div>
-            </div>
+              );
+            })
+          ) : (
+            <p className="text-sm text-on-subtle">No paths generated yet.</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'rules',
+      label: 'Rules',
+      content: (
+        <div className="space-y-2 text-sm text-on-subtle">
+          <p>Select risk, set stake, generate a synthetic price path.</p>
+          <p>Run up to {MAX_CONCURRENT_RUNS} paths at once. Session mode queues batches.</p>
+        </div>
+      ),
+    },
+  ];
 
-            <div className="rounded-md bg-accent p-4 text-xs text-muted-foreground">
-              Paths are generated locally with secure browser randomness rather than the live tick stream.
-            </div>
-          </>
-        }
-        playArea={
-          <div className="space-y-5">
-            <AnimatePresence>
-              {lastResult ? (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <GameNotice tone={lastResult.payout >= 1 ? 'success' : 'default'}>
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-display text-lg font-semibold">
-                          {lastResult.payout}x settlement
-                        </p>
-                        <p className="mt-1 text-xs opacity-80">
-                          {lastResult.pctChange >= 0 ? '+' : ''}
-                          {(lastResult.pctChange * 100).toFixed(2)}% move · Z=
-                          {lastResult.zScore >= 0 ? '+' : ''}
-                          {lastResult.zScore.toFixed(2)}
-                        </p>
-                      </div>
-                      <div className={`font-mono-game text-lg font-semibold ${lastResult.amount > 0 ? 'text-success' : ''}`}>
-                        {lastResult.amount > 0 ? `+${lastResult.amount.toFixed(0)}` : '0'}
-                      </div>
-                    </div>
-                  </GameNotice>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
+  return (
+    <GameShell infoSections={infoSections} showSymbolPicker={false}>
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveAnnouncement}
+      </div>
 
-            <div className="rounded-lg border border-white/6 bg-card p-4">
+      <GameViewport
+        play={
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="shrink-0 mx-3 mt-2 flex justify-center">
+              <span className="rounded-full bg-subtle px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-on-subtle">
+                Simulation · client-side GBM
+              </span>
+            </div>
+            <div
+              ref={chartContainerRef}
+              className={cn(
+                'flex-1 min-h-0 mx-3 my-2 rounded-lg border border-border-subtle bg-subtle overflow-hidden transition-transform duration-300',
+                chartPulse && 'scale-[1.01]',
+              )}
+            >
               <VolatilityChart
                 runs={runs}
                 activeRuns={activeRuns}
                 risk={risk}
-                width={chartWidth}
-                height={360}
+                width={chartSize.width}
+                height={chartSize.height}
+                zoneFlashes={zoneFlashes}
+                isEmpty={isEmpty}
               />
             </div>
           </div>
         }
-        controls={
-          <div className="space-y-4">
-            <div className="rounded-md bg-accent p-4">
-              <div className="section-label">Risk preset</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(['low', 'medium', 'high'] as PlinkoRisk[]).map((r) => {
-                  const rc = getRiskConfig(r);
-                  return (
-                    <button
-                      key={r}
-                      onClick={() => !isAnimating && setRisk(r)}
-                      className={`rounded-md border px-3 py-2 text-xs transition-all ${
-                        risk === r
-                          ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-400'
-                          : 'border-transparent bg-accent text-muted-foreground hover:text-foreground'
-                      } ${isAnimating ? 'cursor-not-allowed opacity-50' : ''}`}
-                    >
-                      {r.charAt(0).toUpperCase() + r.slice(1)} ({rc.tickCount}t)
-                    </button>
-                  );
-                })}
+        dock={
+          <>
+            <RiskPresetCards
+              risk={risk}
+              onSelect={setRisk}
+              disabled={isAnimating || sessionActive}
+            />
+            {sessionActive && session ? (
+              <div className="px-4 pt-2">
+                <SessionProgress completed={session.completed} total={session.total} />
               </div>
-            </div>
-
-            <div>
-              <div className="mb-2 flex justify-between text-sm">
-                <span className="text-muted-foreground">Stake</span>
-                <span className="font-mono-game text-foreground">{stake}</span>
-              </div>
-              <Slider
-                value={[stake]}
-                onValueChange={(v) => setStake(Array.isArray(v) ? v[0] : v)}
-                min={10}
-                max={maxStake}
-                step={10}
-                disabled={isAnimating}
-              />
-            </div>
-
-            {isAnimating && (
-              <div className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs text-muted-foreground">
-                <span>In flight</span>
-                <span className="font-mono-game text-foreground">
-                  {activeRuns.length} / {MAX_CONCURRENT_RUNS}
-                </span>
-              </div>
-            )}
-
-            <Button
-              onClick={generate}
-              className="h-12 w-full text-base font-semibold"
-              disabled={
-                stake > balance ||
-                balance <= 0 ||
-                activeRuns.length >= MAX_CONCURRENT_RUNS
+            ) : null}
+            <StakeDock
+              stake={stake}
+              max={maxStake}
+              balance={balance}
+              onStakeChange={setStake}
+              stakeDisabled={isAnimating || sessionActive}
+              showSlider={!sessionActive}
+              footer={
+                isAnimating
+                  ? `${activeRuns.length}/${MAX_CONCURRENT_RUNS} paths in flight`
+                  : !isLandscape
+                    ? `${config.tickCount} ticks · ${(config.targetRTP * 100).toFixed(0)}% RTP · sessions from ${(SESSION_OPTIONS[0] * stake).toLocaleString()} credits`
+                    : `${config.tickCount} ticks · ${(config.targetRTP * 100).toFixed(0)}% RTP`
               }
-            >
-              {activeRuns.length >= MAX_CONCURRENT_RUNS
-                ? 'Max paths in flight'
-                : activeRuns.length > 0
-                  ? 'Drop another ball'
-                  : 'Generate run'}
-            </Button>
-          </div>
+              actions={
+                <>
+                  {sessionActive ? (
+                    <Button variant="secondary" className="w-full min-h-[44px]" onClick={stopSession}>
+                      Stop session
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      className="w-full min-h-[44px]"
+                      disabled={!canGenerate}
+                      aria-busy={isAnimating}
+                      onClick={generate}
+                    >
+                      {generateLabel}
+                    </Button>
+                  )}
+                  {!sessionActive && (
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {SESSION_OPTIONS.map((n) => (
+                        <Button
+                          key={n}
+                          variant="secondary"
+                          size="sm"
+                          className="min-h-[44px] flex-1"
+                          disabled={!canGenerate || isAnimating}
+                          onClick={() => startSession(n)}
+                          title={`${n} paths × ${stake} = ${(n * stake).toLocaleString()} credits`}
+                        >
+                          {n} paths
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              }
+            />
+          </>
         }
-        tabs={[
-          {
-            id: 'payouts',
-            label: 'Payouts',
-            content: (
-              <div className="space-y-2">
-                {config.zones.slice(0, 5).map((zone, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: zone.color }}
-                      />
-                      <span className="text-muted-foreground">{zone.label}</span>
-                    </div>
-                    <div className="flex gap-3 text-muted-foreground">
-                      <span className="font-mono-game">
-                        {zone.minSigma === 0 ? '<' : ''}
-                        {zone.minSigma === 0 ? zone.maxSigma : zone.minSigma}sigma
-                        {zone.maxSigma !== Infinity && zone.minSigma !== 0
-                          ? `-${zone.maxSigma}sigma`
-                          : ''}
-                        {zone.maxSigma === Infinity ? '+' : ''}
-                      </span>
-                      <span
-                        className="font-mono-game font-medium"
-                        style={{ color: zone.color }}
-                      >
-                        {zone.payout}x
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-          {
-            id: 'history',
-            label: 'History',
-            content: history.length ? (
-              <div className="space-y-2">
-                {history.map((run, index) => (
-                  <div
-                    key={`${run.payout}-${run.pctChange}-${index}`}
-                    className="flex items-center justify-between rounded-md bg-accent px-3 py-2 text-xs text-muted-foreground"
-                  >
-                    <span>Run {history.length - index}</span>
-                    <span className="font-mono-game">{run.payout}x</span>
-                    <span className="font-mono-game">
-                      {run.pctChange >= 0 ? '+' : ''}
-                      {(run.pctChange * 100).toFixed(2)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">No runs generated yet.</div>
-            ),
-          },
-          {
-            id: 'rules',
-            label: 'Rules',
-            content: (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>Select a risk preset, set your stake, and generate a synthetic price path.</p>
-                <p>The terminal move lands in a payout zone based on its sigma distance from the start.</p>
-                <p>Higher risk presets widen the tails and enable larger payouts.</p>
-                <p>You can drop up to {MAX_CONCURRENT_RUNS} balls at the same time — each costs one stake.</p>
-              </div>
-            ),
-          },
-        ]}
       />
-    </div>
+
+      <ResultOverlay
+        open={showResult && !!lastResult}
+        won={isNetWin(lastResult?.payout ?? 0)}
+        tier={getResultTierFromPayout(lastResult?.payout ?? 0)}
+        title={lastResult ? `${lastResult.payout}× · ${lastResult.zoneLabel}` : ''}
+        subtitle={
+          lastResult
+            ? `${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move`
+            : undefined
+        }
+        amount={lastResult ? Math.abs(pathNetPL) : undefined}
+        amountLabel={pathNetPL >= 0 ? 'net' : 'lost'}
+        autoDismissMs={
+          sessionActive || (lastResult?.payout ?? 0) > 50 ? 0 : 1500
+        }
+        onDismiss={() => setShowResult(false)}
+      />
+
+      <ResultOverlay
+        open={showSessionSummary && !!sessionSummary}
+        won={(sessionSummary?.netPL ?? 0) >= 0}
+        title="Session complete"
+        subtitle={
+          sessionSummary
+            ? `${sessionSummary.completed} paths · Best ${sessionSummary.bestPayout}× · ${sessionSummary.wins} wins`
+            : undefined
+        }
+        amount={sessionSummary?.netPL}
+        amountLabel="net"
+        onDismiss={() => {
+          setShowSessionSummary(false);
+          dismissSessionSummary();
+        }}
+        primaryAction={{
+          label: 'Continue',
+          onClick: () => {
+            setShowSessionSummary(false);
+            dismissSessionSummary();
+          },
+        }}
+      />
+    </GameShell>
   );
 }

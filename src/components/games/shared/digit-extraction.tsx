@@ -22,15 +22,15 @@ export function DigitExtraction({ tick, triggerKey }: DigitExtractionProps) {
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: -4 }}
         transition={{ duration: 0.15 }}
-        className="inline-flex items-center gap-1.5 font-mono-game"
+        className="inline-flex items-center gap-1.5 font-display tabular-nums"
       >
-        <span className="text-[11px] text-foreground">{quoteStr}</span>
-        <span className="text-[10px] text-muted-foreground">&rarr;</span>
+        <span className="text-xs text-on-prominent">{quoteStr}</span>
+        <span className="text-xs text-on-subtle">&rarr;</span>
         <motion.span
           initial={{ scale: 1.3 }}
           animate={{ scale: 1 }}
           transition={{ duration: 0.2, type: 'spring', stiffness: 300 }}
-          className="inline-flex h-5 w-5 items-center justify-center rounded bg-amber-500/15 text-[11px] font-bold text-amber-400"
+          className="inline-flex h-5 w-5 items-center justify-center rounded bg-semantic-warning/10 text-xs font-bold text-semantic-warning"
         >
           {digitStr}
         </motion.span>

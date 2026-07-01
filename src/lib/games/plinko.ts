@@ -20,9 +20,15 @@ export interface RiskConfig {
 /**
  * European multi-barrier option zones.
  * Barriers at ±1σ, ±2σ, ±3σ, ±4σ of effective volatility.
- * Zone probabilities are fixed from the standard normal CDF:
+ * Zone probabilities assume Z ~ N(0,1) for analytical RTP (see getZoneProbabilities).
+ *
+ * GBM drift gap: each step applies drift -(σ²/2)Δt with μ=0, so the terminal
+ * log-return mean is slightly negative vs the symmetric normal model. Empirical
+ * RTP is validated by Monte Carlo; payouts are calibrated to simulated RTP.
+ *
+ * Zone probabilities (standard normal CDF):
  *   Center  (|Z| < 1): 68.27%
- *   Inner   (1-2):     27.18%
+ *   Inner   (1-2):     27.18%  (13.59% per side)
  *   Mid     (2-3):      4.28%
  *   Outer   (3-4):      0.26%
  *   Extreme (>4):       0.006%
@@ -47,6 +53,7 @@ function buildBarrierZones(payouts: {
   ];
 }
 
+/** Payout ladder per risk — calibrated via Monte Carlo to targetRTP. */
 const RISK_CONFIGS: Record<PlinkoRisk, RiskConfig> = {
   low: {
     tickCount: 8,
@@ -58,15 +65,99 @@ const RISK_CONFIGS: Record<PlinkoRisk, RiskConfig> = {
     tickCount: 12,
     sigma: 0.35,
     targetRTP: 0.96,
-    zones: buildBarrierZones({ center: 0.3, inner: 1.5, mid: 5, outer: 50, extreme: 170 }),
+    zones: buildBarrierZones({ center: 0.29, inner: 1.5, mid: 5, outer: 50, extreme: 170 }),
   },
   high: {
     tickCount: 16,
     sigma: 0.60,
     targetRTP: 0.95,
-    zones: buildBarrierZones({ center: 0.2, inner: 1.3, mid: 4.5, outer: 80, extreme: 1000 }),
+    zones: buildBarrierZones({ center: 0.034, inner: 2, mid: 5, outer: 50, extreme: 1000 }),
   },
 };
+
+export type ZoneBand = 'center' | 'inner' | 'mid' | 'outer' | 'extreme';
+
+export interface ZoneBandProbabilities {
+  center: number;
+  inner: number;
+  mid: number;
+  outer: number;
+  extreme: number;
+}
+
+/** Standard normal CDF (Abramowitz & Stegun). */
+export function normalCDF(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp(-(x * x) / 2);
+  const p =
+    d *
+    t *
+    (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - p : p;
+}
+
+/** Per-side band probabilities under Z ~ N(0,1). */
+export function getZoneProbabilities(): ZoneBandProbabilities {
+  return {
+    center: 2 * normalCDF(1) - 1,
+    inner: normalCDF(2) - normalCDF(1),
+    mid: normalCDF(3) - normalCDF(2),
+    outer: normalCDF(4) - normalCDF(3),
+    extreme: 1 - normalCDF(4),
+  };
+}
+
+/** Analytical RTP assuming symmetric Z ~ N(0,1) zone hits. */
+export function computeAnalyticalRTP(risk: PlinkoRisk): number {
+  const config = RISK_CONFIGS[risk];
+  const probs = getZoneProbabilities();
+  const center = config.zones[4].payout;
+  const inner = config.zones[3].payout;
+  const mid = config.zones[2].payout;
+  const outer = config.zones[1].payout;
+  const extreme = config.zones[0].payout;
+  return (
+    probs.center * center +
+    2 * (probs.inner * inner + probs.mid * mid + probs.outer * outer + probs.extreme * extreme)
+  );
+}
+
+/** Monte Carlo RTP using the live GBM engine (includes drift). */
+export function computeSimulatedRTP(risk: PlinkoRisk, n: number): number {
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    total += generateVolatilityRun(risk).payout;
+  }
+  return total / n;
+}
+
+/** Net win: payout multiplier covers the stake (>= 1×). */
+export function isNetWin(payout: number): boolean {
+  return payout >= 1;
+}
+
+/** Assert center < inner < mid < outer < extreme for a risk preset. */
+export function isMonotonicLadder(risk: PlinkoRisk): boolean {
+  const z = RISK_CONFIGS[risk].zones;
+  const center = z[4].payout;
+  const inner = z[3].payout;
+  const mid = z[2].payout;
+  const outer = z[1].payout;
+  const extreme = z[0].payout;
+  return center < inner && inner < mid && mid < outer && outer < extreme;
+}
+
+export function getZoneLabel(risk: PlinkoRisk, zoneIndex: number): string {
+  return RISK_CONFIGS[risk].zones[zoneIndex]?.label ?? 'Center';
+}
+
+export function getZoneColor(risk: PlinkoRisk, zoneIndex: number): string {
+  return RISK_CONFIGS[risk].zones[zoneIndex]?.color ?? '#7B8794';
+}
+
+export function getMaxPayout(risk: PlinkoRisk): number {
+  return RISK_CONFIGS[risk].zones[0].payout;
+}
 
 export function getRiskConfig(risk: PlinkoRisk): RiskConfig {
   return RISK_CONFIGS[risk];

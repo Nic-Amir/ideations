@@ -1,35 +1,11 @@
-import type { Metadata } from "next";
-import { Outfit, DM_Sans, JetBrains_Mono } from "next/font/google";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { DerivProvider } from "@/lib/deriv/provider";
-import { NavBar } from "@/components/nav/nav-bar";
-import "./globals.css";
-
-const outfit = Outfit({
-  variable: "--font-outfit",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
+import type { Metadata } from 'next';
+import { Providers } from '@/components/providers';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Ideations — Market-Driven Digit Gaming",
+  title: 'Ideations — Market-Driven Digit Gaming',
   description:
-    "Every game is powered by real market data. Trade on digits with provably fair, market-sourced entropy.",
+    'Every game is powered by real market data. Trade on digits with provably fair, market-sourced entropy.',
 };
 
 export default function RootLayout({
@@ -38,18 +14,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${outfit.variable} ${dmSans.variable} ${jetbrainsMono.variable} font-sans antialiased`}
-      >
-        <DerivProvider>
-          <TooltipProvider>
-            <NavBar />
-            <main className="min-h-screen pt-11 pb-16 md:pb-0">
-              {children}
-            </main>
-          </TooltipProvider>
-        </DerivProvider>
+    <html lang="en">
+      <body className="bg-prominent text-on-prominent font-body antialiased">
+        <Providers>
+          <main className="min-h-screen">{children}</main>
+        </Providers>
       </body>
     </html>
   );

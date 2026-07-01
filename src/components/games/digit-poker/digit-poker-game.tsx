@@ -1,19 +1,19 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
 import { evaluateHand, getPayTable } from '@/lib/games/digit-poker';
 import type { DigitPokerState, HandResult, ParsedTick } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import {
-  GameLayout,
-  GameNotice,
-  GameStatusLine,
-} from '@/components/games/shared/game-layout';
+import { Button, Spinner } from '@trading-game/design-intelligence-layer';
+import { GameShell } from '@/components/games/shared/game-shell';
+import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
+import { MiniMarketStrip } from '@/components/games/shared/mini-market-strip';
+import { StakeDock } from '@/components/games/shared/stake-dock';
+import { ResultOverlay } from '@/components/games/shared/result-overlay';
+import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 
 function PokerCard({
   digit,
@@ -33,29 +33,30 @@ function PokerCard({
   return (
     <motion.button
       onClick={canHold ? onToggleHold : undefined}
-      className={`relative flex h-24 w-16 flex-col items-center justify-center rounded-md border-2 transition-all ${
+      className={`relative flex flex-col items-center justify-center rounded-md border-2 transition-all w-[clamp(3rem,18vw,4rem)] h-[clamp(4.5rem,28vw,6rem)] min-h-[44px] ${
         held
-          ? 'border-violet-400 bg-violet-400/10 shadow-[0_0_15px_rgba(167,139,250,0.2)]'
-          : 'border-border bg-card hover:border-muted-foreground/30'
+          ? 'border-primary bg-primary/10'
+          : 'border-border-subtle bg-card hover:border-border-prominent'
       } ${canHold ? 'cursor-pointer' : 'cursor-default'}`}
+      whileTap={canHold ? { scale: 0.97 } : undefined}
       animate={isNew ? { rotateY: [90, 0], scale: [0.8, 1] } : {}}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
       {revealed && digit !== null ? (
         <>
-          <span className="font-mono-game text-2xl font-bold">{digit}</span>
+          <span className="font-display text-2xl font-bold tabular-nums">{digit}</span>
           {held ? (
             <motion.span
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-violet-400 px-1.5 py-0.5 text-[9px] font-bold text-white"
+              className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold text-on-prominent-static-inverse"
             >
               HOLD
             </motion.span>
           ) : null}
         </>
       ) : (
-        <span className="text-xl text-muted-foreground">?</span>
+        <span className="text-xl text-on-subtle">?</span>
       )}
     </motion.button>
   );
@@ -215,32 +216,96 @@ export function DigitPokerGame() {
 
   const currentHandResult = hand.every((d) => d !== null) ? evaluateHand(hand as number[]) : null;
   const maxStake = Math.max(10, Math.min(balance, 5000));
+  const marketReady = ticks.length > 0 || lastConsumedTick !== null;
+
+  const infoSections: GameInfoSection[] = [
+    {
+      id: 'payouts',
+      label: 'Payouts',
+      content: (
+        <div className="space-y-2">
+          {payTable.map((row) => (
+            <div
+              key={row.rank}
+              className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
+                result?.rank === row.rank
+                  ? 'border-primary/20 bg-primary/10 text-primary'
+                  : currentHandResult?.rank === row.rank && gameState === 'dealt'
+                    ? 'border-border-prominent bg-subtle text-on-prominent'
+                    : 'border-transparent bg-subtle text-on-subtle'
+              }`}
+            >
+              <span>{row.label}</span>
+              <span className="font-display tabular-nums">
+                {row.multiplier > 0 ? `${row.multiplier}x` : 'No payout'}
+              </span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'rules',
+      label: 'Rules',
+      content: (
+        <div className="space-y-2 text-sm text-on-subtle">
+          <p>Deal five digits from consecutive live ticks.</p>
+          <p>Hold the positions you want to keep, then redraw the rest once.</p>
+          <p>Two Pair or better qualifies for a payout.</p>
+        </div>
+      ),
+    },
+    {
+      id: 'stats',
+      label: 'Stats',
+      content: (
+        <div className="grid gap-3 grid-cols-3">
+          <div className="rounded-md bg-subtle px-3 py-3 text-xs text-on-subtle">
+            Phase
+            <div className="mt-1 font-display tabular-nums text-sm text-on-prominent">
+              {gameState === 'idle' ? 'Setup' : gameState === 'dealt' ? 'Hold / Draw' : 'Settled'}
+            </div>
+          </div>
+          <div className="rounded-md bg-subtle px-3 py-3 text-xs text-on-subtle">
+            Held
+            <div className="mt-1 font-display tabular-nums text-sm text-on-prominent">
+              {held.filter(Boolean).length}/5
+            </div>
+          </div>
+          <div className="rounded-md bg-subtle px-3 py-3 text-xs text-on-subtle">
+            Value
+            <div className="mt-1 font-display tabular-nums text-sm text-on-prominent">
+              {currentHandResult ? `${(stake * currentHandResult.multiplier).toFixed(0)}` : '0'}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <GameLayout
-      ticks={ticks}
-      highlightedTicks={highlightedTicks}
-      lastConsumedTick={lastConsumedTick}
-      extractionKey={extractionKey}
-      statusLine={
-        <GameStatusLine>
-          {gameState === 'idle'
-            ? 'Deal the opening hand.'
-            : gameState === 'dealt'
-              ? `Hold ${held.filter(Boolean).length} cards, then draw the rest.`
-              : gameState === 'drawing'
-                ? 'Receiving live ticks and populating the hand...'
-              : result
-                ? `${result.label} settled${result.multiplier > 0 ? ` for ${lastWin?.toFixed(0)} credits.` : '.'}`
-                : 'Round settled.'}
-        </GameStatusLine>
-      }
-      playArea={
-        <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-5">
-            {hand.map((digit, idx) => (
-              <div key={idx} className="flex justify-center">
+    <GameShell infoSections={infoSections}>
+      <GameViewport
+        market={
+          marketReady ? (
+            <MiniMarketStrip
+              ticks={ticks}
+              highlightedTicks={highlightedTicks}
+              lastConsumedTick={lastConsumedTick}
+              extractionKey={extractionKey}
+            />
+          ) : (
+            <div className="shrink-0 flex items-center justify-center py-6 border-b border-border-subtle">
+              <Spinner />
+            </div>
+          )
+        }
+        play={
+          <div className="flex flex-col flex-1 min-h-0 items-center justify-center px-4 py-3 gap-4">
+            <div className="flex justify-center gap-2 w-full max-w-md">
+              {hand.map((digit, idx) => (
                 <PokerCard
+                  key={idx}
                   digit={digit}
                   held={held[idx]}
                   revealed={gameState !== 'idle'}
@@ -248,182 +313,96 @@ export function DigitPokerGame() {
                   canHold={gameState === 'dealt'}
                   isNew={isNewCards[idx]}
                 />
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center text-sm text-muted-foreground">
-            {gameState === 'dealt' ? (
-              <>
-                Current hand:{' '}
-                <span className="font-medium text-foreground">
-                  {currentHandResult?.label ?? 'No hand'}
-                </span>
-                {currentHandResult && currentHandResult.multiplier > 0 ? (
-                  <span className="ml-1 text-violet-400">({currentHandResult.multiplier}x)</span>
-                ) : null}
-              </>
-            ) : gameState === 'drawing' ? (
-              'New cards appear one tick at a time as the feed arrives.'
-            ) : (
-              'Tap any dealt card to hold it before drawing replacements.'
-            )}
-          </div>
-
-          <AnimatePresence>
-            {result ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <GameNotice tone={result.multiplier >= 1 ? 'success' : 'default'}>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-display text-lg font-semibold">{result.label}</p>
-                      <p className="mt-1 text-xs opacity-80">
-                        {result.multiplier >= 1
-                          ? `Settled for ${lastWin?.toFixed(0)} credits at ${result.multiplier}x.`
-                          : 'Two Pair or better is required to return a payout.'}
-                      </p>
-                    </div>
-                    <div className="font-mono-game text-lg font-semibold">
-                      {result.multiplier >= 1 ? (
-                        <span className="text-success">+{lastWin?.toFixed(0)}</span>
-                      ) : (
-                        '0'
-                      )}
-                    </div>
-                  </div>
-                </GameNotice>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
-          {error ? <GameNotice tone="danger">{error}</GameNotice> : null}
-        </div>
-      }
-      controls={
-        <div className="space-y-4">
-          <div>
-            <div className="mb-2 flex justify-between text-sm">
-              <span className="text-muted-foreground">Stake</span>
-              <span className="font-mono-game text-foreground">{stake}</span>
-            </div>
-            <Slider
-              value={[stake]}
-              onValueChange={(v) => setStake(Array.isArray(v) ? v[0] : v)}
-              min={10}
-              max={maxStake}
-              step={10}
-              disabled={gameState !== 'idle'}
-            />
-          </div>
-
-          {gameState === 'idle' ? (
-            <Button
-              onClick={deal}
-              className="h-12 w-full text-base font-semibold"
-              disabled={stake > balance || balance <= 0 || isDealing}
-            >
-              {isDealing ? 'Dealing...' : 'Deal hand'}
-            </Button>
-          ) : null}
-
-          {gameState === 'dealt' ? (
-            <div className="space-y-3">
-              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
-                Held cards: <span className="font-mono-game text-foreground">{held.filter(Boolean).length}/5</span>
-              </div>
-              <Button
-                onClick={draw}
-                className="h-12 w-full text-base font-semibold"
-                disabled={isDealing}
-              >
-                {isDealing ? 'Drawing...' : held.every((h) => h) ? 'Stand pat' : 'Draw cards'}
-              </Button>
-            </div>
-          ) : null}
-
-          {gameState === 'drawing' ? (
-            <Button className="h-12 w-full text-base font-semibold" disabled>
-              Receiving ticks...
-            </Button>
-          ) : null}
-
-          {gameState === 'evaluated' ? (
-            <Button
-              onClick={reset}
-              variant="outline"
-              className="h-12 w-full text-sm font-semibold"
-            >
-              Deal again
-            </Button>
-          ) : null}
-        </div>
-      }
-      tabs={[
-        {
-          id: 'payouts',
-          label: 'Payouts',
-          content: (
-            <div className="space-y-2">
-              {payTable.map((row) => (
-                <div
-                  key={row.rank}
-                  className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs ${
-                    result?.rank === row.rank
-                      ? 'border-violet-400/20 bg-violet-400/10 text-violet-400'
-                      : currentHandResult?.rank === row.rank && gameState === 'dealt'
-                        ? 'border-white/10 bg-white/6 text-foreground'
-                        : 'border-transparent bg-accent text-muted-foreground'
-                  }`}
-                >
-                  <span>{row.label}</span>
-                  <span className="font-mono-game">
-                    {row.multiplier > 0 ? `${row.multiplier}x` : 'No payout'}
-                  </span>
-                </div>
               ))}
             </div>
-          ),
-        },
-        {
-          id: 'rules',
-          label: 'Rules',
-          content: (
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Deal five digits from consecutive live ticks.</p>
-              <p>Hold the positions you want to keep, then redraw the rest once.</p>
-              <p>Two Pair or better qualifies for a payout.</p>
-            </div>
-          ),
-        },
-        {
-          id: 'stats',
-          label: 'Stats',
-          content: (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
-                Phase
-                <div className="mt-1 font-mono-game text-sm text-foreground">
-                  {gameState === 'idle' ? 'Setup' : gameState === 'dealt' ? 'Hold / Draw' : 'Settled'}
-                </div>
-              </div>
-              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
-                Held
-                <div className="mt-1 font-mono-game text-sm text-foreground">{held.filter(Boolean).length}/5</div>
-              </div>
-              <div className="rounded-md bg-accent px-3 py-3 text-xs text-muted-foreground">
-                Current value
-                <div className="mt-1 font-mono-game text-sm text-foreground">
-                  {currentHandResult ? `${(stake * currentHandResult.multiplier).toFixed(0)}` : '0'}
-                </div>
-              </div>
-            </div>
-          ),
-        },
-      ]}
-    />
+
+            <p className="text-center text-sm text-on-subtle max-w-xs">
+              {gameState === 'dealt' ? (
+                <>
+                  {currentHandResult?.label ?? 'No hand'}
+                  {currentHandResult && currentHandResult.multiplier > 0 ? (
+                    <span className="ml-1 text-primary">({currentHandResult.multiplier}x)</span>
+                  ) : null}
+                  {' · '}
+                  Hold {held.filter(Boolean).length}/5
+                </>
+              ) : gameState === 'drawing' ? (
+                'Cards fill one tick at a time…'
+              ) : gameState === 'idle' ? (
+                'Tap dealt cards to hold before drawing.'
+              ) : null}
+            </p>
+
+            {error ? <GameNotice tone="danger">{error}</GameNotice> : null}
+          </div>
+        }
+        dock={
+          <StakeDock
+            stake={stake}
+            max={maxStake}
+            balance={balance}
+            onStakeChange={setStake}
+            stakeDisabled={gameState !== 'idle'}
+            showSlider={gameState === 'idle'}
+            footer={
+              gameState === 'dealt'
+                ? `Held ${held.filter(Boolean).length}/5 — tap cards to toggle`
+                : undefined
+            }
+            actions={
+              <>
+                {gameState === 'idle' ? (
+                  <Button
+                    variant="primary"
+                    className="w-full min-h-[44px]"
+                    disabled={stake > balance || balance <= 0 || isDealing}
+                    aria-busy={isDealing}
+                    onClick={deal}
+                  >
+                    {isDealing ? 'Dealing…' : 'Deal hand'}
+                  </Button>
+                ) : null}
+                {gameState === 'dealt' ? (
+                  <Button
+                    variant="primary"
+                    className="w-full min-h-[44px]"
+                    disabled={isDealing}
+                    aria-busy={isDealing}
+                    onClick={draw}
+                  >
+                    {isDealing ? 'Drawing…' : held.every((h) => h) ? 'Stand pat' : 'Draw cards'}
+                  </Button>
+                ) : null}
+                {gameState === 'drawing' ? (
+                  <Button variant="primary" className="w-full min-h-[44px]" disabled aria-busy>
+                    Receiving ticks…
+                  </Button>
+                ) : null}
+                {gameState === 'evaluated' ? (
+                  <Button variant="primary" className="w-full min-h-[44px]" onClick={reset}>
+                    Deal again
+                  </Button>
+                ) : null}
+              </>
+            }
+          />
+        }
+      />
+
+      <ResultOverlay
+        open={gameState === 'evaluated' && result !== null}
+        won={(result?.multiplier ?? 0) >= 1}
+        title={result?.label ?? ''}
+        subtitle={
+          result && result.multiplier >= 1
+            ? `${result.multiplier}x payout`
+            : 'Two Pair or better required.'
+        }
+        amount={result && result.multiplier >= 1 ? lastWin ?? 0 : stake}
+        amountLabel="credits"
+        onDismiss={reset}
+        primaryAction={{ label: 'Deal again', onClick: reset }}
+      />
+    </GameShell>
   );
 }

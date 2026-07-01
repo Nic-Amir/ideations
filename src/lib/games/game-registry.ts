@@ -5,8 +5,8 @@ import type { GameInfo } from '@/types';
 export const GAMES: GameInfo[] = [
   {
     slug: 'digit-collect',
-    name: 'Digit Collect',
-    shortName: 'Collect',
+    name: 'Digit Sync',
+    shortName: 'Sync',
     description: 'Collect unique digits from live ticks and decide when to lock in your multiplier before a duplicate digit knocks you out.',
     shortPitch: 'Push a rising multiplier by collecting unique live-market digits.',
     category: 'Survival',
@@ -15,7 +15,6 @@ export const GAMES: GameInfo[] = [
     mechanics: 'Draw unique digits, monitor knockout risk, cash out on your timing.',
     marketSource: 'Deriv live ticks',
     status: 'Live',
-    accent: 'emerald',
     iconKey: 'digit-collect',
   },
   {
@@ -29,8 +28,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '45-120 sec',
     mechanics: 'Deal five digits, hold strong positions, and optimize the redraw.',
     marketSource: 'Deriv live ticks',
-    status: 'Live',
-    accent: 'violet',
+    status: 'Preview',
     iconKey: 'digit-poker',
   },
   {
@@ -44,14 +42,13 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-45 sec',
     mechanics: 'Spin three live digits, evaluate the line, then collect or gamble.',
     marketSource: 'Deriv live ticks',
-    status: 'Live',
-    accent: 'amber',
+    status: 'Preview',
     iconKey: 'digit-slots',
   },
   {
     slug: 'volatility-plinko',
-    name: 'Volatility Run',
-    shortName: 'Vol Run',
+    name: 'Volatility Plinko',
+    shortName: 'Plinko',
     description: 'Generate a simulated volatility path, watch the trajectory unfold, and get paid based on where the final move lands.',
     shortPitch: 'A price-path simulator with asymmetric payout bands and risk presets.',
     category: 'Simulation',
@@ -60,11 +57,16 @@ export const GAMES: GameInfo[] = [
     mechanics: 'Choose risk, generate a run, and settle on the terminal move zone.',
     marketSource: 'Client-side simulation',
     status: 'Live',
-    accent: 'cyan',
     iconKey: 'volatility-run',
   },
 ];
 
+export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');
+
 export function getGameBySlug(slug: string) {
   return GAMES.find((game) => game.slug === slug);
+}
+
+export function isGameLive(slug: string) {
+  return LIVE_GAMES.some((game) => game.slug === slug);
 }

@@ -7,7 +7,15 @@ import {
   computeSigmaEff,
   getBarrierPriceLevels,
   resolveZone,
-  type BarrierZone,
+  getZoneLabel,
+  getZoneColor,
+  getMaxPayout,
+  getZoneProbabilities,
+  computeAnalyticalRTP,
+  computeSimulatedRTP,
+  isNetWin,
+  isMonotonicLadder,
+  normalCDF,
 } from '../plinko';
 import type { PlinkoRisk } from '@/types';
 
@@ -36,6 +44,13 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
     expect(getRiskConfig('low').tickCount).toBe(8);
     expect(getRiskConfig('medium').tickCount).toBe(12);
     expect(getRiskConfig('high').tickCount).toBe(16);
+  });
+
+  test('zone label and color helpers resolve from zone index', () => {
+    expect(getZoneLabel('medium', 0)).toBe('Extreme +');
+    expect(getZoneLabel('medium', 4)).toBe('Center');
+    expect(getZoneColor('medium', 0)).toBe('#FF3B5C');
+    expect(getMaxPayout('high')).toBe(1000);
   });
 
   test('GBM quote generates a positive number', () => {
@@ -168,47 +183,85 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
     expect(avgHigh).toBeGreaterThan(avgLow);
   });
 
-  describe('Monte Carlo RTP validation', () => {
-    function simulateRTP(risk: PlinkoRisk, n: number): number {
-      let totalPayout = 0;
-      for (let i = 0; i < n; i++) {
-        totalPayout += generateVolatilityRun(risk).payout;
-      }
-      return totalPayout / n;
+  test('zone probabilities sum to ~1', () => {
+    const p = getZoneProbabilities();
+    const total = p.center + 2 * (p.inner + p.mid + p.outer + p.extreme);
+    expect(total).toBeCloseTo(1, 2);
+  });
+
+  test('normalCDF is symmetric around 0.5', () => {
+    expect(normalCDF(0)).toBeCloseTo(0.5, 2);
+    expect(normalCDF(1) + normalCDF(-1)).toBeCloseTo(1, 2);
+  });
+
+  test('analytical RTP is positive and below max payout', () => {
+    for (const risk of ['low', 'medium', 'high'] as PlinkoRisk[]) {
+      const rtp = computeAnalyticalRTP(risk);
+      expect(rtp).toBeGreaterThan(0.5);
+      expect(rtp).toBeLessThan(getMaxPayout(risk));
     }
+  });
 
+  test('payout ladder is monotonic per risk', () => {
+    expect(isMonotonicLadder('low')).toBe(true);
+    expect(isMonotonicLadder('medium')).toBe(true);
+    expect(isMonotonicLadder('high')).toBe(true);
+  });
+
+  test('isNetWin uses payout >= 1', () => {
+    expect(isNetWin(0.5)).toBe(false);
+    expect(isNetWin(1)).toBe(true);
+    expect(isNetWin(25)).toBe(true);
+  });
+
+  test('high risk inner payout exceeds mid ordering fix', () => {
+    const zones = getRiskConfig('high').zones;
+    expect(zones[4].payout).toBeLessThan(zones[3].payout);
+    expect(zones[3].payout).toBeLessThan(zones[2].payout);
+    expect(zones[2].payout).toBeLessThan(zones[1].payout);
+    expect(zones[1].payout).toBeLessThan(zones[0].payout);
+  });
+
+  describe('Monte Carlo RTP validation', () => {
     test(
-      'low risk RTP is within ±1% of 97%',
+      'low risk RTP is within ±0.75% of 97%',
       () => {
-        const rtp = simulateRTP('low', 100_000);
-        expect(rtp).toBeGreaterThan(0.96);
-        expect(rtp).toBeLessThan(0.98);
+        const rtp = computeSimulatedRTP('low', 100_000);
+        expect(rtp).toBeGreaterThan(0.9625);
+        expect(rtp).toBeLessThan(0.9775);
       },
       60_000,
     );
 
     test(
-      'medium risk RTP is within ±2% of 96%',
+      'medium risk RTP is within ±1% of 96%',
       () => {
-        const rtp = simulateRTP('medium', 100_000);
-        expect(rtp).toBeGreaterThan(0.94);
-        expect(rtp).toBeLessThan(0.98);
+        const rtp = computeSimulatedRTP('medium', 100_000);
+        expect(rtp).toBeGreaterThan(0.95);
+        expect(rtp).toBeLessThan(0.97);
       },
       60_000,
     );
 
-    // High risk has a 1000x extreme payout at ~0.006% probability.
-    // Var(payout) ≈ 80, so std(mean) ≈ 0.013 for 500K sims.
-    // Bounds are set wide (±8σ) to prevent flaky tests while
-    // still catching gross miscalibration (e.g., 4000% RTP).
+    // 1000× extreme tail creates high variance; 500K sims with ±3% band.
     test(
-      'high risk RTP is within ±8% of 95%',
+      'high risk RTP is within ±3% of 95%',
       () => {
-        const rtp = simulateRTP('high', 500_000);
-        expect(rtp).toBeGreaterThan(0.87);
-        expect(rtp).toBeLessThan(1.04);
+        const rtp = computeSimulatedRTP('high', 500_000);
+        expect(rtp).toBeGreaterThan(0.92);
+        expect(rtp).toBeLessThan(0.98);
       },
       120_000,
+    );
+
+    test(
+      'simulated RTP is within 3% of analytical for low risk',
+      () => {
+        const analytical = computeAnalyticalRTP('low');
+        const simulated = computeSimulatedRTP('low', 50_000);
+        expect(Math.abs(simulated - analytical)).toBeLessThan(0.03);
+      },
+      60_000,
     );
   });
 });
