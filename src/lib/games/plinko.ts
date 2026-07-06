@@ -1,91 +1,72 @@
 'use strict';
 
-import type { PlinkoRisk } from '@/types';
+import type { PlinkoModeId, PlinkoConfig, BarrierZone } from '@/lib/games/plinko-modes';
+import {
+  DEFAULT_PLINKO_MODE,
+  getPlinkoMode,
+  isNearMissForMode,
+  resolveZoneForMode,
+  STRIPE_CORE_INDEX,
+} from '@/lib/games/plinko-modes';
 
-export interface BarrierZone {
-  label: string;
-  minSigma: number;
-  maxSigma: number;
-  payout: number;
-  color: string;
+export type { BarrierZone, PlinkoConfig, PlinkoModeId, PlinkoModeDefinition, PlinkoChartStyle } from '@/lib/games/plinko-modes';
+export {
+  PLINKO_MODES,
+  PLINKO_MODE_IDS,
+  DEFAULT_PLINKO_MODE,
+  getPlinkoMode,
+  resolveZoneForMode,
+  isNearMissForMode,
+  SPLIT_CORE_INDEX,
+  STRIPE_CORE_INDEX,
+  buildStripeZones,
+} from '@/lib/games/plinko-modes';
+
+/** Wall-clock path reveal — smooth interpolation over full quote series. */
+export const PLINKO_PATH_ANIM_MS = 1500;
+export const PLINKO_SETTLE_MS = 500;
+export const PLINKO_START_PRICE = 10000;
+export const PLINKO_REFERENCE_TICK_COUNT = 60;
+export const PLINKO_GBM_HORIZON = 0.6;
+
+export const CORE_ZONE_INDEX = 5;
+
+export function getPlinkoStepDt(tickCount: number = getPlinkoConfig().tickCount): number {
+  return PLINKO_GBM_HORIZON / tickCount;
 }
 
-export interface RiskConfig {
-  tickCount: number;
-  sigma: number;
-  targetRTP: number;
-  zones: BarrierZone[];
+export function getPlinkoScaledSigma(
+  sigma: number = getPlinkoConfig().sigma,
+  tickCount: number = getPlinkoConfig().tickCount,
+): number {
+  return sigma / Math.sqrt(tickCount / PLINKO_REFERENCE_TICK_COUNT);
 }
 
-/**
- * European multi-barrier option zones.
- * Barriers at ±1σ, ±2σ, ±3σ, ±4σ of effective volatility.
- * Zone probabilities assume Z ~ N(0,1) for analytical RTP (see getZoneProbabilities).
- *
- * GBM drift gap: each step applies drift -(σ²/2)Δt with μ=0, so the terminal
- * log-return mean is slightly negative vs the symmetric normal model. Empirical
- * RTP is validated by Monte Carlo; payouts are calibrated to simulated RTP.
- *
- * Zone probabilities (standard normal CDF):
- *   Center  (|Z| < 1): 68.27%
- *   Inner   (1-2):     27.18%  (13.59% per side)
- *   Mid     (2-3):      4.28%
- *   Outer   (3-4):      0.26%
- *   Extreme (>4):       0.006%
- */
-function buildBarrierZones(payouts: {
-  center: number;
-  inner: number;
-  mid: number;
-  outer: number;
-  extreme: number;
-}): BarrierZone[] {
-  return [
-    { label: 'Extreme +', minSigma: 4, maxSigma: Infinity, payout: payouts.extreme, color: '#FF3B5C' },
-    { label: 'Outer +',   minSigma: 3, maxSigma: 4,        payout: payouts.outer,   color: '#FF6B35' },
-    { label: 'Mid +',     minSigma: 2, maxSigma: 3,        payout: payouts.mid,     color: '#FFB347' },
-    { label: 'Inner +',   minSigma: 1, maxSigma: 2,        payout: payouts.inner,   color: '#00D4AA' },
-    { label: 'Center',    minSigma: 0, maxSigma: 1,        payout: payouts.center,  color: '#7B8794' },
-    { label: 'Inner -',   minSigma: 1, maxSigma: 2,        payout: payouts.inner,   color: '#00D4AA' },
-    { label: 'Mid -',     minSigma: 2, maxSigma: 3,        payout: payouts.mid,     color: '#FFB347' },
-    { label: 'Outer -',   minSigma: 3, maxSigma: 4,        payout: payouts.outer,   color: '#FF6B35' },
-    { label: 'Extreme -', minSigma: 4, maxSigma: Infinity, payout: payouts.extreme, color: '#FF3B5C' },
-  ];
+export function getPlinkoAnimTickMs(tickCount: number = getPlinkoConfig().tickCount): number {
+  return PLINKO_PATH_ANIM_MS / tickCount;
 }
 
-/** Payout ladder per risk — calibrated via Monte Carlo to targetRTP. */
-const RISK_CONFIGS: Record<PlinkoRisk, RiskConfig> = {
-  low: {
-    tickCount: 8,
-    sigma: 0.15,
-    targetRTP: 0.97,
-    zones: buildBarrierZones({ center: 0.5, inner: 1.75, mid: 3, outer: 10, extreme: 25 }),
-  },
-  medium: {
-    tickCount: 12,
-    sigma: 0.35,
-    targetRTP: 0.96,
-    zones: buildBarrierZones({ center: 0.29, inner: 1.5, mid: 5, outer: 50, extreme: 170 }),
-  },
-  high: {
-    tickCount: 16,
-    sigma: 0.60,
-    targetRTP: 0.95,
-    zones: buildBarrierZones({ center: 0.034, inner: 2, mid: 5, outer: 50, extreme: 1000 }),
-  },
-};
+export function getPlinkoConfig(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): PlinkoConfig {
+  return getPlinkoMode(modeId).config;
+}
 
-export type ZoneBand = 'center' | 'inner' | 'mid' | 'outer' | 'extreme';
+export function getZoneCount(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): number {
+  return getPlinkoConfig(modeId).zones.length;
+}
+
+export const ZONE_COUNT = 11;
+
+export type ZoneBand = 'core' | 'micro' | 'inner' | 'mid' | 'outer' | 'extreme';
 
 export interface ZoneBandProbabilities {
-  center: number;
+  core: number;
+  micro: number;
   inner: number;
   mid: number;
   outer: number;
   extreme: number;
 }
 
-/** Standard normal CDF (Abramowitz & Stegun). */
 export function normalCDF(x: number): number {
   const t = 1 / (1 + 0.2316419 * Math.abs(x));
   const d = 0.3989423 * Math.exp(-(x * x) / 2);
@@ -96,10 +77,10 @@ export function normalCDF(x: number): number {
   return x > 0 ? 1 - p : p;
 }
 
-/** Per-side band probabilities under Z ~ N(0,1). */
 export function getZoneProbabilities(): ZoneBandProbabilities {
   return {
-    center: 2 * normalCDF(1) - 1,
+    core: 2 * normalCDF(0.5) - 1,
+    micro: normalCDF(1) - normalCDF(0.5),
     inner: normalCDF(2) - normalCDF(1),
     mid: normalCDF(3) - normalCDF(2),
     outer: normalCDF(4) - normalCDF(3),
@@ -107,193 +88,185 @@ export function getZoneProbabilities(): ZoneBandProbabilities {
   };
 }
 
-/** Analytical RTP assuming symmetric Z ~ N(0,1) zone hits. */
-export function computeAnalyticalRTP(risk: PlinkoRisk): number {
-  const config = RISK_CONFIGS[risk];
+export function computeNetWinRate(modeId: PlinkoModeId = 'split'): number {
   const probs = getZoneProbabilities();
-  const center = config.zones[4].payout;
-  const inner = config.zones[3].payout;
-  const mid = config.zones[2].payout;
-  const outer = config.zones[1].payout;
-  const extreme = config.zones[0].payout;
+  const z = getPlinkoConfig(modeId).zones;
+  let rate = 0;
+  for (const zone of z) {
+    if (zone.payout < 1) continue;
+    if (zone.displayGroup === 'core') rate += probs.core;
+    else if (zone.displayGroup === 'micro') rate += probs.micro;
+    else if (zone.displayGroup === 'inner') rate += probs.inner;
+    else if (zone.displayGroup === 'mid') rate += probs.mid;
+    else if (zone.displayGroup === 'outer') rate += probs.outer;
+    else if (zone.displayGroup === 'extreme') rate += probs.extreme;
+  }
+  return Math.min(rate, 1);
+}
+
+export function computeAnalyticalRTP(modeId: PlinkoModeId = 'split'): number {
+  const probs = getZoneProbabilities();
+  const zones = getPlinkoConfig(modeId).zones;
+  const coreIdx = modeId === 'balanced' ? STRIPE_CORE_INDEX : CORE_ZONE_INDEX;
+  const core = zones[coreIdx].payout;
+  const micro = zones[coreIdx - 1].payout;
+  const inner = zones[coreIdx - 2].payout;
+  const mid = zones[coreIdx - 3].payout;
+  const outer = zones[coreIdx - 4].payout;
+  const extreme = zones[coreIdx - 5].payout;
   return (
-    probs.center * center +
+    probs.core * core +
+    2 * probs.micro * micro +
     2 * (probs.inner * inner + probs.mid * mid + probs.outer * outer + probs.extreme * extreme)
   );
 }
 
-/** Monte Carlo RTP using the live GBM engine (includes drift). */
-export function computeSimulatedRTP(risk: PlinkoRisk, n: number): number {
-  let total = 0;
-  for (let i = 0; i < n; i++) {
-    total += generateVolatilityRun(risk).payout;
-  }
-  return total / n;
-}
-
-/** Net win: payout multiplier covers the stake (>= 1×). */
 export function isNetWin(payout: number): boolean {
   return payout >= 1;
 }
 
-// ---------------------------------------------------------------------------
-// Target mode — pick a zone, payout priced from hit probability.
-// Modeled on Box-O band pricing: multiplier = (1 / pHit) × (1 − margin), capped.
-// Payouts are risk-independent because zones are defined in Z-score space.
-// ---------------------------------------------------------------------------
-
-export const TARGET_MARGIN = 0.05;
-export const TARGET_PAYOUT_CAP = 1000;
-
-/**
- * Probability that the terminal Z lands in a specific zone index.
- * Center (index 4) spans both sides (|Z| < 1); all other zones are
- * single-sided sigma bands.
- */
-export function getZoneHitProbability(zoneIndex: number): number {
-  const p = getZoneProbabilities();
-  switch (zoneIndex) {
-    case 4:
-      return p.center;
-    case 3:
-    case 5:
-      return p.inner;
-    case 2:
-    case 6:
-      return p.mid;
-    case 1:
-    case 7:
-      return p.outer;
-    case 0:
-    case 8:
-      return p.extreme;
-    default:
-      return 0;
-  }
+export function isNearMiss(
+  zoneIndex: number,
+  zScore: number,
+  modeId: PlinkoModeId = DEFAULT_PLINKO_MODE,
+): boolean {
+  return isNearMissForMode(modeId, zoneIndex, zScore);
 }
 
-/** Locked multiplier for a target-zone bet. */
-export function getTargetPayout(zoneIndex: number): number {
-  const prob = getZoneHitProbability(zoneIndex);
-  if (prob <= 0) return 0;
-  const raw = (1 - TARGET_MARGIN) / prob;
-  return Math.min(TARGET_PAYOUT_CAP, Math.round(raw * 100) / 100);
+export function isMonotonicLadder(modeId: PlinkoModeId = 'split'): boolean {
+  if (modeId !== 'split') return false;
+  const z = getPlinkoConfig(modeId).zones;
+  const core = z[CORE_ZONE_INDEX].payout;
+  return (
+    core < z[4].payout &&
+    z[4].payout < z[3].payout &&
+    z[3].payout < z[2].payout &&
+    z[2].payout < z[1].payout &&
+    z[1].payout < z[0].payout
+  );
 }
 
-/** Assert center < inner < mid < outer < extreme for a risk preset. */
-export function isMonotonicLadder(risk: PlinkoRisk): boolean {
-  const z = RISK_CONFIGS[risk].zones;
-  const center = z[4].payout;
-  const inner = z[3].payout;
-  const mid = z[2].payout;
-  const outer = z[1].payout;
-  const extreme = z[0].payout;
-  return center < inner && inner < mid && mid < outer && outer < extreme;
+export function getZoneLabel(zoneIndex: number, modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): string {
+  return getPlinkoConfig(modeId).zones[zoneIndex]?.label ?? 'Core';
 }
 
-export function getZoneLabel(risk: PlinkoRisk, zoneIndex: number): string {
-  return RISK_CONFIGS[risk].zones[zoneIndex]?.label ?? 'Center';
+export function getZoneColor(zoneIndex: number, modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): string {
+  return getPlinkoConfig(modeId).zones[zoneIndex]?.color ?? '#7B8794';
 }
 
-export function getZoneColor(risk: PlinkoRisk, zoneIndex: number): string {
-  return RISK_CONFIGS[risk].zones[zoneIndex]?.color ?? '#7B8794';
+export function getMaxPayout(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): number {
+  const zones = getPlinkoConfig(modeId).zones;
+  return Math.max(...zones.map((z) => z.payout));
 }
 
-export function getMaxPayout(risk: PlinkoRisk): number {
-  return RISK_CONFIGS[risk].zones[0].payout;
-}
+export function getDisplayZoneGroups(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): {
+  group: BarrierZone['displayGroup'];
+  label: string;
+  payout: number;
+  color: string;
+}[] {
+  const mode = getPlinkoMode(modeId);
+  const zones = mode.config.zones;
 
-export function getRiskConfig(risk: PlinkoRisk): RiskConfig {
-  return RISK_CONFIGS[risk];
+  const order: BarrierZone['displayGroup'][] = ['extreme', 'outer', 'mid', 'inner', 'micro', 'core'];
+  const labels: Record<BarrierZone['displayGroup'], string> = {
+    extreme: 'Extreme',
+    outer: 'Outer',
+    mid: 'Mid',
+    inner: 'Inner',
+    micro: 'Micro',
+    core: 'Core',
+  };
+  return order.map((group) => {
+    const idx = zones.findIndex((z) => z.displayGroup === group);
+    const zone = zones[idx]!;
+    return {
+      group,
+      label: labels[group],
+      payout: zone.payout,
+      color: zone.color,
+    };
+  });
 }
 
 function boxMullerTransform(): number {
   const buf = new Uint32Array(2);
   crypto.getRandomValues(buf);
-  const u1 = (buf[0] + 1) / (0xFFFFFFFF + 2);
-  const u2 = (buf[1] + 1) / (0xFFFFFFFF + 2);
+  const u1 = (buf[0] + 1) / (0xffffffff + 2);
+  const u2 = (buf[1] + 1) / (0xffffffff + 2);
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
 export function generateGBMQuote(currentPrice: number, sigma: number, dt: number = 1): number {
-  const mu = 0;
   const z = boxMullerTransform();
-  const drift = (mu - (sigma * sigma) / 2) * dt;
-  const diffusion = sigma * Math.sqrt(dt) * z;
-  return currentPrice * Math.exp(drift + diffusion);
+  const drift = (-(sigma * sigma) / 2) * dt;
+  return currentPrice * Math.exp(drift + sigma * Math.sqrt(dt) * z);
 }
 
-export function extractLastDigitFromQuote(quote: number): number {
-  const str = quote.toFixed(2).replace('.', '');
-  return parseInt(str[str.length - 1], 10);
-}
-
-/**
- * Compute the effective volatility for a run configuration.
- * scaledSigma adjusts the base sigma so that the total path variance
- * is proportional to tickCount, then sigma_eff is the std dev of the
- * total log return over all ticks.
- */
-export function computeSigmaEff(sigma: number, tickCount: number): number {
-  const dt = 0.01;
-  const scaledSigma = sigma / Math.sqrt(100 / tickCount);
+export function computeSigmaEff(
+  sigma: number = getPlinkoConfig().sigma,
+  tickCount: number = getPlinkoConfig().tickCount,
+): number {
+  const scaledSigma = getPlinkoScaledSigma(sigma, tickCount);
+  const dt = getPlinkoStepDt(tickCount);
   return scaledSigma * Math.sqrt(tickCount * dt);
 }
 
 /**
- * Compute the actual price levels for each barrier given risk config.
- * Returns an array of { sigma: number, price: number } for barriers
- * at ±1σ, ±2σ, ±3σ, ±4σ relative to startPrice.
+ * One-shot terminal log-return — equivalent to simulating all GBM steps with dt = horizon/tickCount.
+ * Use for RTP calibration/Monte Carlo instead of stepping tick-by-tick.
  */
-export function getBarrierPriceLevels(
-  risk: PlinkoRisk,
-  startPrice: number = 1000,
-): { sigma: number; price: number }[] {
-  const config = RISK_CONFIGS[risk];
+export function sampleTerminalLogReturn(
+  sigma: number = getPlinkoConfig().sigma,
+  tickCount: number = getPlinkoConfig().tickCount,
+): number {
+  const scaledSigma = getPlinkoScaledSigma(sigma, tickCount);
+  const dt = getPlinkoStepDt(tickCount);
+  const mu = (-(scaledSigma * scaledSigma) / 2) * tickCount * dt;
+  const sigmaEff = computeSigmaEff(sigma, tickCount);
+  return mu + sigmaEff * boxMullerTransform();
+}
+
+/** Settlement-only simulation (no quote array). Matches full-path RTP. */
+export function simulatePlinkoPayout(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): number {
+  const config = getPlinkoConfig(modeId);
+  const logReturn = sampleTerminalLogReturn(config.sigma, config.tickCount);
   const sigmaEff = computeSigmaEff(config.sigma, config.tickCount);
+  return resolveZoneForMode(modeId, logReturn, sigmaEff, config.zones).payout;
+}
+
+export function computeSimulatedRTP(n: number, modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): number {
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    total += simulatePlinkoPayout(modeId);
+  }
+  return total / n;
+}
+
+export function getBarrierPriceLevels(
+  startPrice: number = PLINKO_START_PRICE,
+  modeId: PlinkoModeId = DEFAULT_PLINKO_MODE,
+): { sigma: number; price: number }[] {
+  const { sigma, tickCount } = getPlinkoConfig(modeId);
+  const sigmaEff = computeSigmaEff(sigma, tickCount);
   const levels: { sigma: number; price: number }[] = [];
-  for (const k of [-4, -3, -2, -1, 1, 2, 3, 4]) {
+  for (const k of [-4, -3, -2, -1, -0.5, 0.5, 1, 2, 3, 4]) {
     levels.push({ sigma: k, price: startPrice * Math.exp(k * sigmaEff) });
   }
   return levels;
 }
 
-/**
- * Resolve the Z-score of the final log return into a zone index and payout.
- * Zones 0-4 = positive side (Extreme+, Outer+, Mid+, Inner+, Center)
- * Zones 5-8 = negative side (Inner-, Mid-, Outer-, Extreme-)
- */
+/** @deprecated Use resolveZoneForMode */
 export function resolveZone(
   logReturn: number,
   sigmaEff: number,
   zones: BarrierZone[],
 ): { zoneIndex: number; payout: number; zScore: number } {
-  const zScore = sigmaEff > 0 ? logReturn / sigmaEff : 0;
-  const absZ = Math.abs(zScore);
-  const isPositive = zScore >= 0;
-
-  if (isPositive) {
-    for (let i = 0; i < 5; i++) {
-      const zone = zones[i];
-      if (absZ >= zone.minSigma && (absZ < zone.maxSigma || zone.maxSigma === Infinity)) {
-        return { zoneIndex: i, payout: zone.payout, zScore };
-      }
-    }
-    return { zoneIndex: 4, payout: zones[4].payout, zScore };
-  } else {
-    for (let i = 8; i >= 5; i--) {
-      const zone = zones[i];
-      if (absZ >= zone.minSigma && (absZ < zone.maxSigma || zone.maxSigma === Infinity)) {
-        return { zoneIndex: i, payout: zone.payout, zScore };
-      }
-    }
-    return { zoneIndex: 4, payout: zones[4].payout, zScore };
-  }
+  return resolveZoneForMode('split', logReturn, sigmaEff, zones);
 }
 
 export interface VolatilityRun {
   quotes: number[];
-  digits: number[];
   startPrice: number;
   endPrice: number;
   percentChange: number;
@@ -303,32 +276,34 @@ export interface VolatilityRun {
   isPositive: boolean;
 }
 
-export function generateVolatilityRun(risk: PlinkoRisk): VolatilityRun {
-  const config = RISK_CONFIGS[risk];
+export function generateVolatilityRun(modeId: PlinkoModeId = DEFAULT_PLINKO_MODE): VolatilityRun {
+  const config = getPlinkoConfig(modeId);
   const { tickCount, sigma } = config;
-  const scaledSigma = sigma / Math.sqrt(100 / tickCount);
+  const scaledSigma = getPlinkoScaledSigma(sigma, tickCount);
+  const dt = getPlinkoStepDt(tickCount);
   const sigmaEff = computeSigmaEff(sigma, tickCount);
 
-  const startPrice = 1000;
+  const startPrice = PLINKO_START_PRICE;
   const quotes: number[] = [startPrice];
-  const digits: number[] = [];
   let currentPrice = startPrice;
 
   for (let i = 0; i < tickCount; i++) {
-    const quote = generateGBMQuote(currentPrice, scaledSigma, 0.01);
-    currentPrice = quote;
-    quotes.push(quote);
-    digits.push(extractLastDigitFromQuote(quote));
+    currentPrice = generateGBMQuote(currentPrice, scaledSigma, dt);
+    quotes.push(currentPrice);
   }
 
   const endPrice = quotes[quotes.length - 1];
   const percentChange = (endPrice - startPrice) / startPrice;
   const logReturn = Math.log(endPrice / startPrice);
-  const { zoneIndex, payout, zScore } = resolveZone(logReturn, sigmaEff, config.zones);
+  const { zoneIndex, payout, zScore } = resolveZoneForMode(
+    modeId,
+    logReturn,
+    sigmaEff,
+    config.zones,
+  );
 
   return {
     quotes,
-    digits,
     startPrice,
     endPrice,
     percentChange,
@@ -337,4 +312,33 @@ export function generateVolatilityRun(risk: PlinkoRisk): VolatilityRun {
     payout,
     isPositive: percentChange >= 0,
   };
+}
+
+export function estimateLiveZScore(
+  currentPrice: number,
+  startPrice: number = PLINKO_START_PRICE,
+  modeId: PlinkoModeId = DEFAULT_PLINKO_MODE,
+): number {
+  const { sigma, tickCount } = getPlinkoConfig(modeId);
+  const sigmaEff = computeSigmaEff(sigma, tickCount);
+  if (sigmaEff <= 0) return 0;
+  return Math.log(currentPrice / startPrice) / sigmaEff;
+}
+
+export function getDistanceToNextZoneLabel(
+  zScore: number,
+  modeId: PlinkoModeId = DEFAULT_PLINKO_MODE,
+): string | null {
+  const absZ = Math.abs(zScore);
+  if (absZ < 0.5) {
+    const dist = 0.5 - absZ;
+    return modeId === 'balanced'
+      ? `${dist.toFixed(2)}σ to Slot 5/7`
+      : `${dist.toFixed(2)}σ to Micro`;
+  }
+  if (absZ < 1) return `${(1 - absZ).toFixed(2)}σ to next slot`;
+  if (absZ < 2) return `${(2 - absZ).toFixed(2)}σ to next slot`;
+  if (absZ < 3) return `${(3 - absZ).toFixed(2)}σ to next slot`;
+  if (absZ < 4) return `${(4 - absZ).toFixed(2)}σ to edge slot`;
+  return modeId === 'balanced' ? 'Edge slot' : 'Extreme zone';
 }

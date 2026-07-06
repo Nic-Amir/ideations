@@ -4,14 +4,10 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
-  getRiskConfig,
-  getBarrierPriceLevels,
+  getPlinkoConfig,
   getMaxPayout,
-  getTargetPayout,
-  getZoneHitProbability,
   isNetWin,
 } from '@/lib/games/plinko';
-import type { PlinkoRisk } from '@/types';
 import { Button } from '@trading-game/design-intelligence-layer';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport } from '@/components/games/shared/game-layout';
@@ -22,377 +18,81 @@ import {
 } from '@/components/games/shared/result-overlay';
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 import { useIsLandscape } from '@/hooks/use-landscape';
-import {
-  renderPlinkoChart,
-  hitTestZone,
-  type ChartScene,
-  type SettlementFx,
-} from '@/components/games/plinko/plinko-renderer';
+import { useIsDesktop } from '@/hooks/use-media-query';
+import { PlinkoChart } from '@/components/games/plinko/plinko-chart';
+import { PlinkoSessionHud } from '@/components/games/plinko/plinko-session-hud';
+import { PlinkoSettleChip } from '@/components/games/plinko/plinko-settle-chip';
+import { PlinkoModePicker } from '@/components/games/plinko/plinko-mode-picker';
+import { PlinkoGoalPicker } from '@/components/games/plinko/plinko-goal-picker';
+import { PlinkoDistanceChip } from '@/components/games/plinko/plinko-distance-chip';
+import { PlinkoStreakBadge, formatZoneRange } from '@/components/games/plinko/plinko-ui';
+import { getPlinkoMode, type BarrierZone } from '@/lib/games/plinko-modes';
+import '@/components/games/plinko/plinko-game.css';
 import {
   useVolatilityPlinko,
   MAX_CONCURRENT_RUNS,
   SESSION_OPTIONS,
-  START_PRICE,
-  type RunDisplay,
-  type PlinkoBetMode,
 } from '@/hooks/use-volatility-plinko';
 
-// ---------------------------------------------------------------------------
-// Session progress
-// ---------------------------------------------------------------------------
+const HINT_KEY = 'ideations-plinko-hint-seen';
 
-function SessionProgress({ completed, total }: { completed: number; total: number }) {
-  const pct = Math.round((completed / total) * 100);
+function PlinkoFirstHint({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <div className="flex items-center gap-3 rounded-full bg-subtle px-3 py-1.5 text-xs text-on-subtle">
-      <span className="font-display tabular-nums">
-        {completed}/{total}
+    <button
+      type="button"
+      onClick={onDismiss}
+      className="absolute inset-0 z-10 flex items-center justify-center bg-overlay/40 p-4"
+      aria-label="Dismiss hint"
+    >
+      <span className="plinko-hint-pill">
+        Path lands in a zone — the multiplier on the right is what you get paid.
       </span>
-      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-border-subtle">
-        <div
-          className="h-full rounded-full bg-primary transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
+    </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Bet mode toggle
-// ---------------------------------------------------------------------------
-
-function BetModeToggle({
-  mode,
-  onChange,
-  disabled,
-}: {
-  mode: PlinkoBetMode;
-  onChange: (m: PlinkoBetMode) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Bet mode"
-      className="mx-4 mt-2 grid grid-cols-2 gap-1 rounded-lg bg-subtle p-1"
-    >
-      {(
-        [
-          { id: 'spread', label: 'Spread', hint: 'Paid by landing zone' },
-          { id: 'target', label: 'Target', hint: 'Pick a zone, bigger payout' },
-        ] as const
-      ).map((opt) => {
-        const selected = mode === opt.id;
-        return (
-          <button
-            key={opt.id}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            onClick={() => onChange(opt.id)}
-            className={cn(
-              'min-h-[44px] rounded-md px-2 py-1.5 text-center transition-colors',
-              selected
-                ? 'bg-primary/15 text-primary'
-                : 'text-on-subtle',
-              disabled && 'opacity-50 cursor-not-allowed',
-            )}
-          >
-            <div className="text-xs font-display font-bold">{opt.label}</div>
-            <div className="text-[10px] opacity-80">{opt.hint}</div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Target zone chips (accessible alternative to tapping the chart)
-// ---------------------------------------------------------------------------
-
-function TargetZoneChips({
-  risk,
-  selected,
-  onSelect,
-  disabled,
-}: {
-  risk: PlinkoRisk;
-  selected: number | null;
-  onSelect: (i: number) => void;
-  disabled: boolean;
-}) {
-  const zones = getRiskConfig(risk).zones;
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Target zone"
-      className="flex gap-1.5 px-4 pt-2 overflow-x-auto"
-    >
-      {zones.map((zone, i) => {
-        const isSelected = selected === i;
-        const payout = getTargetPayout(i);
-        return (
-          <button
-            key={i}
-            type="button"
-            role="radio"
-            aria-checked={isSelected}
-            disabled={disabled}
-            onClick={() => onSelect(i)}
-            className={cn(
-              'min-h-[44px] min-w-[64px] shrink-0 rounded-lg border px-2 py-1 text-center transition-colors',
-              isSelected
-                ? 'border-primary/40 bg-primary/10'
-                : 'border-border-subtle bg-subtle',
-              disabled && 'opacity-50 cursor-not-allowed',
-            )}
-          >
-            <div className="flex items-center justify-center gap-1">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: zone.color }}
-              />
-              <span className="text-[10px] text-on-subtle">{zone.label}</span>
-            </div>
-            <div
-              className="text-xs font-display font-bold tabular-nums"
-              style={{ color: zone.color }}
-            >
-              {payout}×
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Risk preset cards
-// ---------------------------------------------------------------------------
-
-function RiskPresetCards({
-  risk,
-  onSelect,
-  disabled,
-}: {
-  risk: PlinkoRisk;
-  onSelect: (r: PlinkoRisk) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Risk preset"
-      className="flex gap-2 px-4 pt-2 overflow-x-auto snap-x snap-mandatory"
-    >
-      {(['low', 'medium', 'high'] as PlinkoRisk[]).map((r) => {
-        const rc = getRiskConfig(r);
-        const selected = risk === r;
-        const zoneColors = rc.zones.slice(0, 5).map((z) => z.color);
-        return (
-          <button
-            key={r}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            onClick={() => onSelect(r)}
-            className={cn(
-              'min-h-[44px] min-w-[108px] shrink-0 snap-start rounded-lg border p-2.5 text-left transition-colors',
-              selected
-                ? 'border-primary/30 bg-primary/10 text-primary'
-                : 'border-border-subtle bg-subtle text-on-subtle',
-              disabled && 'opacity-50 cursor-not-allowed',
-            )}
-          >
-            <div className="text-xs font-display font-bold capitalize">{r}</div>
-            <div className="mt-1 flex gap-0.5">
-              {zoneColors.map((c, i) => (
-                <span key={i} className="h-1 flex-1 rounded-full" style={{ backgroundColor: c }} />
-              ))}
-            </div>
-            <div className="mt-1.5 space-y-0.5 text-[10px] opacity-90">
-              <div>{rc.tickCount} ticks · {(rc.targetRTP * 100).toFixed(0)}% RTP</div>
-              <div className="font-display tabular-nums">Up to {getMaxPayout(r)}×</div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function formatSigmaRange(zone: ReturnType<typeof getRiskConfig>['zones'][0]): string {
-  if (zone.minSigma === 0) return `|Z| < ${zone.maxSigma}σ`;
-  if (zone.maxSigma === Infinity) return `|Z| ≥ ${zone.minSigma}σ`;
-  return `${zone.minSigma}σ – ${zone.maxSigma}σ`;
-}
-
-// ---------------------------------------------------------------------------
-// Chart host — thin canvas wrapper; all draw logic lives in plinko-renderer
-// ---------------------------------------------------------------------------
-
-function hasLiveFx(fx: SettlementFx[], now: number): boolean {
-  return fx.some((f) => now - f.startedAt < f.durationMs);
-}
-
-function VolatilityChart({
-  runs,
-  activeRuns,
-  risk,
-  width,
-  height,
-  fx,
-  isEmpty,
-  targetZoneIndex,
-  targetPayout,
-  onZoneTap,
-  tapEnabled,
-}: {
-  runs: RunDisplay[];
-  activeRuns: RunDisplay[];
-  risk: PlinkoRisk;
-  width: number;
-  height: number;
-  fx: SettlementFx[];
-  isEmpty: boolean;
-  targetZoneIndex: number | null;
-  targetPayout: number | null;
-  onZoneTap: (zoneIndex: number) => void;
-  tapEnabled: boolean;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<ChartScene | null>(null);
-  const rafRef = useRef(0);
-
-  const config = getRiskConfig(risk);
-  const barrierLevels = getBarrierPriceLevels(risk, START_PRICE);
-
-  sceneRef.current = {
-    width,
-    height,
-    tickCount: config.tickCount,
-    startPrice: START_PRICE,
-    zones: config.zones,
-    barrierLevels,
-    runs,
-    activeRuns,
-    fx,
-    isEmpty,
-    emptyLabel: tapEnabled
-      ? 'Tap a zone to set your target'
-      : 'Generate a path to see volatility in motion',
-    emptySubLabel: `${config.tickCount} ticks · ${risk} risk`,
-    targetZoneIndex,
-    targetPayout,
-    now: performance.now(),
-  };
-
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    const scene = sceneRef.current;
-    if (!canvas || !scene) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = scene.width * dpr;
-    canvas.height = scene.height * dpr;
-    canvas.style.width = `${scene.width}px`;
-    canvas.style.height = `${scene.height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    renderPlinkoChart(ctx, { ...scene, now: performance.now() });
-  }, []);
-
-  // Redraw on any prop change
-  useEffect(() => {
-    draw();
-  });
-
-  // Keep animating while settlement FX are live even after runs finish
-  useEffect(() => {
-    if (!hasLiveFx(fx, performance.now())) return;
-
-    function loop() {
-      draw();
-      if (hasLiveFx(sceneRef.current?.fx ?? [], performance.now())) {
-        rafRef.current = requestAnimationFrame(loop);
-      } else {
-        draw();
-      }
-    }
-    rafRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [fx, draw]);
-
-  const handleTap = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!tapEnabled) return;
-      const canvas = canvasRef.current;
-      const scene = sceneRef.current;
-      if (!canvas || !scene) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const zone = hitTestZone(scene, x, y);
-      if (zone !== null) onZoneTap(zone);
-    },
-    [tapEnabled, onZoneTap],
-  );
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className={cn('block rounded-md', tapEnabled && 'cursor-pointer')}
-      style={{ width, height }}
-      aria-label={
-        tapEnabled
-          ? 'Volatility path chart. Tap a price band to set your target zone.'
-          : 'Volatility path chart'
-      }
-      onClick={handleTap}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export function PlinkoGame() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartSize, setChartSize] = useState({ width: 320, height: 240 });
+  const [showHint, setShowHint] = useState(false);
   const isLandscape = useIsLandscape();
+  const isDesktop = useIsDesktop();
 
   const {
-    risk,
-    setRisk,
     stake,
     setStake,
-    betMode,
-    setBetMode,
-    targetZoneIndex,
-    setTargetZoneIndex,
-    targetPayout,
     runs,
     activeRuns,
     lastResult,
     history,
+    playMode,
     session,
     sessionSummary,
-    settlementFx,
+    playError,
+    zoneFlashes,
+    nearMissFlashes,
+    settleFloats,
+    settleChip,
+    netWinStreak,
     chartPulse,
     liveAnnouncement,
     config,
     balance,
     maxStake,
     isAnimating,
+    sessionActive,
+    sessionSettling,
     canGenerate,
+    canAffordSession,
+    selectedMode,
+    setSelectedMode,
+    pendingSessionSize,
+    offeredGoals,
+    prepareSession,
+    cancelSessionPrepare,
+    sessionMilestone,
+    focusedRunId,
+    setFocusedRunId,
     generate,
     startSession,
     stopSession,
@@ -400,23 +100,60 @@ export function PlinkoGame() {
   } = useVolatilityPlinko();
 
   const isEmpty = runs.length === 0 && activeRuns.length === 0;
-  const sessionActive = session?.running ?? false;
   const [showResult, setShowResult] = useState(false);
   const [showSessionSummary, setShowSessionSummary] = useState(false);
+  const [stopConfirm, setStopConfirm] = useState(false);
 
-  const isTargetMode = betMode === 'target';
-  const controlsLocked = isAnimating || sessionActive;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setShowHint(!localStorage.getItem(HINT_KEY));
+  }, []);
+
+  const dismissHint = useCallback(() => {
+    localStorage.setItem(HINT_KEY, '1');
+    setShowHint(false);
+  }, []);
 
   useEffect(() => {
     if (!lastResult) return;
-    const megaWin = lastResult.payout > 50;
-    if (sessionActive && !megaWin) return;
+    if (playMode.kind !== 'single') return;
+    if (showSessionSummary) return;
+    if (lastResult.payout <= 5) return;
     setShowResult(true);
-  }, [lastResult, sessionActive]);
+  }, [lastResult, playMode.kind, showSessionSummary]);
 
   useEffect(() => {
     if (sessionSummary) setShowSessionSummary(true);
   }, [sessionSummary]);
+
+  const dismissPathResult = useCallback(() => setShowResult(false), []);
+
+  const handleGenerate = useCallback(() => {
+    setShowResult(false);
+    generate();
+  }, [generate]);
+
+  const handleStartSession = useCallback(
+    (total: number, goal: Parameters<typeof startSession>[1]) => {
+      setShowResult(false);
+      setStopConfirm(false);
+      startSession(total, goal);
+    },
+    [startSession],
+  );
+
+  const handleStopSession = useCallback(() => {
+    if (
+      session &&
+      session.total - session.completed > 10 &&
+      !stopConfirm
+    ) {
+      setStopConfirm(true);
+      return;
+    }
+    setStopConfirm(false);
+    stopSession();
+  }, [session, stopConfirm, stopSession]);
 
   useEffect(() => {
     const el = chartContainerRef.current;
@@ -432,45 +169,17 @@ export function PlinkoGame() {
     return () => ro.disconnect();
   }, []);
 
-  const targetZone =
-    targetZoneIndex !== null ? config.zones[targetZoneIndex] : null;
-
-  const generateLabel = (() => {
-    if (activeRuns.length >= MAX_CONCURRENT_RUNS) return 'Max paths in flight';
-    if (isTargetMode) {
-      if (targetZoneIndex === null) return 'Pick a target zone';
-      return activeRuns.length > 0
-        ? `Another at ${targetPayout}×`
-        : `Bet ${targetZone?.label} · ${targetPayout}×`;
-    }
-    return activeRuns.length > 0 ? 'Generate another' : 'Generate path';
-  })();
-
-  const footerText = (() => {
-    if (isAnimating) return `${activeRuns.length}/${MAX_CONCURRENT_RUNS} paths in flight`;
-    if (isTargetMode && targetZoneIndex !== null) {
-      const prob = getZoneHitProbability(targetZoneIndex);
-      return `Target ${targetZone?.label} · ${targetPayout}× · ${(prob * 100).toFixed(prob < 0.01 ? 3 : 1)}% hit chance`;
-    }
-    if (isTargetMode) return 'Tap a price band on the chart or pick a zone below';
-    if (!isLandscape) {
-      return `${config.tickCount} ticks · ${(config.targetRTP * 100).toFixed(0)}% RTP · sessions from ${(SESSION_OPTIONS[0] * stake).toLocaleString()} credits`;
-    }
-    return `${config.tickCount} ticks · ${(config.targetRTP * 100).toFixed(0)}% RTP`;
-  })();
+  const generateLabel =
+    activeRuns.length >= MAX_CONCURRENT_RUNS
+      ? 'Max paths in flight'
+      : activeRuns.length > 0
+        ? 'Generate another'
+        : 'Generate path';
 
   const pathNetPL =
     lastResult && showResult ? lastResult.amount - lastResult.stake : 0;
 
-  const resultTitle = (() => {
-    if (!lastResult) return '';
-    if (lastResult.mode === 'target') {
-      return lastResult.targetHit
-        ? `Target hit · ${lastResult.payout}×`
-        : `Missed · landed ${lastResult.zoneLabel}`;
-    }
-    return `${lastResult.payout}× · ${lastResult.zoneLabel}`;
-  })();
+  const modeDef = getPlinkoMode(selectedMode);
 
   const infoSections: GameInfoSection[] = [
     {
@@ -478,18 +187,10 @@ export function PlinkoGame() {
       label: 'About',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p className="rounded-lg border border-border-subtle bg-subtle px-3 py-2 text-xs">
-            <strong className="text-on-prominent">Simulation</strong> — paths use client-side
-            GBM with <code className="text-on-prominent">crypto.getRandomValues()</code>, not the
-            live tick stream. Chart digits are visual only and do not affect payout.
-          </p>
           <p>
-            <strong className="text-on-prominent">Spread mode</strong> pays by whichever sigma
-            zone the terminal move lands in.
-          </p>
-          <p>
-            <strong className="text-on-prominent">Target mode</strong> lets you pick one zone;
-            the payout is priced from its hit probability minus a 5% margin, locked when you bet.
+            Two pricing modes share the same payout wall. Split pays more the
+            further you land from center; Stripes mixes win/lose bands at each
+            distance. 98% RTP on both.
           </p>
           <Link
             href="/provably-fair#volatility-plinko"
@@ -504,64 +205,27 @@ export function PlinkoGame() {
       id: 'payouts',
       label: 'Payouts',
       content: (
-        <div className="space-y-3">
-          <div>
-            <p className="mb-2 text-xs font-display font-bold text-on-prominent">Spread mode</p>
-            <div className="space-y-2">
-              {config.zones.map((zone, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
+        <div className="space-y-2">
+          {config.zones.map((zone: BarrierZone, i: number) => (
+            <div key={i} className="rounded-lg bg-subtle px-3 py-2 body-xs space-y-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: zone.color }}
+                />
+                <span className="font-medium text-on-prominent">{zone.label}</span>
+                <span
+                  className={cn(
+                    'ml-auto font-display tabular-nums font-medium',
+                    zone.payout >= 1 ? 'text-semantic-win' : 'text-semantic-loss',
+                  )}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: zone.color }}
-                    />
-                    <span className="text-on-subtle truncate">{zone.label}</span>
-                  </div>
-                  <span className="text-on-subtle shrink-0 tabular-nums">{formatSigmaRange(zone)}</span>
-                  <span
-                    className="font-display tabular-nums font-medium shrink-0"
-                    style={{ color: zone.color }}
-                  >
-                    {zone.payout}×
-                  </span>
-                </div>
-              ))}
+                  {zone.payout}×
+                </span>
+              </div>
+              <p className="text-on-subtle pl-4">{formatZoneRange(zone)}</p>
             </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-display font-bold text-on-prominent">Target mode</p>
-            <div className="space-y-2">
-              {config.zones.map((zone, i) => {
-                const prob = getZoneHitProbability(i);
-                return (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: zone.color }}
-                      />
-                      <span className="text-on-subtle truncate">{zone.label}</span>
-                    </div>
-                    <span className="text-on-subtle shrink-0 tabular-nums">
-                      {(prob * 100).toFixed(prob < 0.01 ? 3 : 1)}%
-                    </span>
-                    <span
-                      className="font-display tabular-nums font-medium shrink-0"
-                      style={{ color: zone.color }}
-                    >
-                      {getTargetPayout(i)}×
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          ))}
         </div>
       ),
     },
@@ -576,13 +240,10 @@ export function PlinkoGame() {
               const won = isNetWin(entry.payout);
               return (
                 <div
-                  key={`${entry.payout}-${index}`}
+                  key={`${entry.zoneIndex}-${entry.payout}-${index}`}
                   className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
                 >
-                  <span className="text-on-subtle truncate">
-                    {entry.mode === 'target' ? (entry.targetHit ? '◎ hit' : '◎ miss') + ' · ' : ''}
-                    {entry.zoneLabel}
-                  </span>
+                  <span className="text-on-subtle truncate">{entry.zoneLabel}</span>
                   <span className="font-display tabular-nums">{entry.payout}×</span>
                   <span
                     className={cn(
@@ -607,9 +268,8 @@ export function PlinkoGame() {
       label: 'Rules',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p>Select risk, set stake, generate a synthetic price path.</p>
-          <p>Spread: paid by the landing zone. Target: pick one zone for a probability-priced payout.</p>
-          <p>Run up to {MAX_CONCURRENT_RUNS} paths at once. Session mode queues batches.</p>
+          <p>Select stake, pick a mode, and start a session with a goal — or quick-generate a single path. {(config.targetRTP * 100).toFixed(0)}% RTP · up to {getMaxPayout(selectedMode)}×.</p>
+          <p>Session mode runs 5/10/25 paths in batches of up to {MAX_CONCURRENT_RUNS}.</p>
         </div>
       ),
     },
@@ -624,113 +284,139 @@ export function PlinkoGame() {
       <GameViewport
         play={
           <div className="flex flex-col flex-1 min-h-0">
-            <div className="shrink-0 mx-3 mt-2 flex justify-center">
-              <span className="rounded-full bg-subtle px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-on-subtle">
-                Simulation · client-side GBM
-              </span>
+            <div className="shrink-0 px-layout-margin-inline py-2 space-y-2 border-b border-border-subtle bg-prominent">
+              <PlinkoModePicker
+                value={selectedMode}
+                onChange={setSelectedMode}
+                disabled={sessionActive || sessionSettling || isAnimating}
+              />
+              {session ? (
+                <PlinkoSessionHud
+                  session={session}
+                  stake={stake}
+                  netWinStreak={netWinStreak}
+                  status={sessionSettling ? 'settling' : 'running'}
+                  milestone={sessionMilestone}
+                />
+              ) : (
+                <PlinkoStreakBadge count={netWinStreak} />
+              )}
             </div>
             <div
               ref={chartContainerRef}
-              className={cn(
-                'flex-1 min-h-0 mx-3 my-2 rounded-lg border border-border-subtle bg-subtle overflow-hidden transition-transform duration-300',
-                chartPulse && 'scale-[1.01]',
-              )}
+              className={cn('plinko-chart-root', chartPulse && 'is-pulse')}
             >
-              <VolatilityChart
+              <PlinkoChart
                 runs={runs}
                 activeRuns={activeRuns}
-                risk={risk}
                 width={chartSize.width}
                 height={chartSize.height}
-                fx={settlementFx}
+                zoneFlashes={zoneFlashes}
+                nearMissFlashes={nearMissFlashes}
+                settleFloats={settleFloats}
                 isEmpty={isEmpty}
-                targetZoneIndex={isTargetMode ? targetZoneIndex : null}
-                targetPayout={targetPayout}
-                onZoneTap={setTargetZoneIndex}
-                tapEnabled={isTargetMode && !controlsLocked}
+                modeId={selectedMode}
+                focusedRunId={focusedRunId}
+                onFocusRun={setFocusedRunId}
               />
+              <PlinkoDistanceChip activeRuns={activeRuns} modeId={selectedMode} />
+              {showHint && isEmpty ? <PlinkoFirstHint onDismiss={dismissHint} /> : null}
+              <div className="absolute bottom-2 left-0 right-0 z-10 pointer-events-none">
+                <PlinkoSettleChip chip={settleChip} />
+              </div>
             </div>
           </div>
         }
         dock={
-          <>
-            <BetModeToggle
-              mode={betMode}
-              onChange={setBetMode}
-              disabled={controlsLocked}
-            />
-            {isTargetMode && (
-              <TargetZoneChips
-                risk={risk}
-                selected={targetZoneIndex}
-                onSelect={setTargetZoneIndex}
-                disabled={controlsLocked}
-              />
-            )}
-            <RiskPresetCards
-              risk={risk}
-              onSelect={setRisk}
-              disabled={controlsLocked}
-            />
-            {sessionActive && session ? (
-              <div className="px-4 pt-2">
-                <SessionProgress completed={session.completed} total={session.total} />
-              </div>
-            ) : null}
-            <StakeDock
-              stake={stake}
-              max={maxStake}
-              balance={balance}
-              onStakeChange={setStake}
-              stakeDisabled={controlsLocked}
-              showSlider={!sessionActive}
-              footer={footerText}
-              actions={
-                <>
-                  {sessionActive ? (
-                    <Button variant="secondary" className="w-full min-h-[44px]" onClick={stopSession}>
-                      Stop session
+          <StakeDock
+            stake={stake}
+            max={maxStake}
+            balance={balance}
+            onStakeChange={setStake}
+            stakeDisabled={sessionActive || sessionSettling}
+            showSlider={!sessionActive && !sessionSettling && isDesktop}
+            footer={
+              playError ? (
+                <span className="text-semantic-loss">{playError}</span>
+              ) : isAnimating ? (
+                `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live`
+              ) : isLandscape ? (
+                `${modeDef.label} · 98% RTP`
+              ) : (
+                `${modeDef.shortPitch}`
+              )
+            }
+            actions={
+              <>
+                {pendingSessionSize && offeredGoals.length > 0 ? (
+                  <PlinkoGoalPicker
+                    total={pendingSessionSize}
+                    modeId={selectedMode}
+                    goals={offeredGoals}
+                    onPick={(goal) => handleStartSession(pendingSessionSize, goal)}
+                    onCancel={cancelSessionPrepare}
+                  />
+                ) : null}
+                {sessionActive || sessionSettling ? (
+                  <>
+                    <div className="text-center text-xs text-on-subtle py-1">
+                      {sessionSettling
+                        ? 'Finishing in-flight paths…'
+                        : `Session running · ${session?.completed ?? 0}/${session?.total ?? 0}`}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="w-full min-h-[44px]"
+                      onClick={handleStopSession}
+                    >
+                      {stopConfirm ? 'Tap again to stop' : 'Stop session'}
                     </Button>
-                  ) : (
+                  </>
+                ) : (
+                  <>
                     <Button
                       variant="primary"
                       className="w-full min-h-[44px]"
                       disabled={!canGenerate}
                       aria-busy={isAnimating}
-                      onClick={generate}
+                      onClick={handleGenerate}
                     >
                       {generateLabel}
                     </Button>
-                  )}
-                  {!sessionActive && (
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {SESSION_OPTIONS.map((n) => (
-                        <Button
-                          key={n}
-                          variant="secondary"
-                          size="sm"
-                          className="min-h-[44px] flex-1"
-                          disabled={!canGenerate || isAnimating}
-                          onClick={() => startSession(n)}
-                          title={`${n} paths × ${stake} = ${(n * stake).toLocaleString()} credits`}
-                        >
-                          {n} paths
-                        </Button>
-                      ))}
+                    <div className="grid grid-cols-3 gap-2">
+                      {SESSION_OPTIONS.map((n) => {
+                        const cost = n * stake;
+                        const affordable = canAffordSession(n);
+                        return (
+                          <Button
+                            key={n}
+                            variant="secondary"
+                            size="sm"
+                            className="min-h-[44px] flex flex-col gap-0.5 py-1"
+                            disabled={!affordable || isAnimating}
+                            onClick={() => prepareSession(n)}
+                          >
+                            <span>{n} paths</span>
+                            <span className="body-xs opacity-80 tabular-nums">
+                              {cost.toLocaleString()} cr
+                            </span>
+                          </Button>
+                        );
+                      })}
                     </div>
-                  )}
-                </>
-              }
-            />
-          </>
+                  </>
+                )}
+              </>
+            }
+          />
         }
       />
 
       <ResultOverlay
-        open={showResult && !!lastResult}
+        open={showResult && !!lastResult && playMode.kind === 'single' && (lastResult.payout > 5)}
         won={isNetWin(lastResult?.payout ?? 0)}
         tier={getResultTierFromPayout(lastResult?.payout ?? 0)}
-        title={resultTitle}
+        title={lastResult ? `${lastResult.payout}× · ${lastResult.zoneLabel}` : ''}
         subtitle={
           lastResult
             ? `${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move`
@@ -738,19 +424,21 @@ export function PlinkoGame() {
         }
         amount={lastResult ? Math.abs(pathNetPL) : undefined}
         amountLabel={pathNetPL >= 0 ? 'net' : 'lost'}
-        autoDismissMs={
-          sessionActive || (lastResult?.payout ?? 0) > 50 ? 0 : 1500
-        }
-        onDismiss={() => setShowResult(false)}
+        autoDismissMs={(lastResult?.payout ?? 0) > 5 ? 0 : 1500}
+        onDismiss={dismissPathResult}
       />
 
       <ResultOverlay
         open={showSessionSummary && !!sessionSummary}
         won={(sessionSummary?.netPL ?? 0) >= 0}
-        title="Session complete"
+        title={
+          sessionSummary && sessionSummary.completed < sessionSummary.total
+            ? 'Session ended early'
+            : 'Session complete'
+        }
         subtitle={
           sessionSummary
-            ? `${sessionSummary.completed} paths · Best ${sessionSummary.bestPayout}× · ${sessionSummary.wins} wins`
+            ? `${sessionSummary.completed}/${sessionSummary.total} paths · Best ${sessionSummary.bestPayout}× · Goal ${sessionSummary.goalProgress.met ? 'met' : 'missed'}`
             : undefined
         }
         amount={sessionSummary?.netPL}
