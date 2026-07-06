@@ -15,6 +15,7 @@ export const GAMES: GameInfo[] = [
     mechanics: 'Draw unique digits, monitor knockout risk, cash out on your timing.',
     marketSource: 'Deriv live ticks',
     status: 'Live',
+    track: 'roadmap',
     iconKey: 'digit-collect',
   },
   {
@@ -28,7 +29,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '45-120 sec',
     mechanics: 'Deal five digits, hold strong positions, and optimize the redraw.',
     marketSource: 'Deriv live ticks',
-    status: 'Preview',
+    status: 'Live',
+    track: 'other',
     iconKey: 'digit-poker',
   },
   {
@@ -42,7 +44,8 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-45 sec',
     mechanics: 'Spin three live digits, evaluate the line, then collect or gamble.',
     marketSource: 'Deriv live ticks',
-    status: 'Preview',
+    status: 'Live',
+    track: 'other',
     iconKey: 'digit-slots',
   },
   {
@@ -57,11 +60,14 @@ export const GAMES: GameInfo[] = [
     mechanics: 'Choose risk, generate a run, and settle on the terminal move zone.',
     marketSource: 'Client-side simulation',
     status: 'Live',
+    track: 'roadmap',
     iconKey: 'volatility-run',
   },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');
+export const ROADMAP_GAMES = GAMES.filter((game) => game.track === 'roadmap');
+export const OTHER_GAMES = GAMES.filter((game) => game.track === 'other');
 
 export function getGameBySlug(slug: string) {
   return GAMES.find((game) => game.slug === slug);

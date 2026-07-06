@@ -91,6 +91,8 @@ export interface SlotResult {
 
 export type GameIconKey = 'digit-collect' | 'digit-poker' | 'digit-slots' | 'volatility-run';
 
+export type GameTrack = 'roadmap' | 'other';
+
 export interface GameInfo {
   slug: string;
   name: string;
@@ -103,6 +105,7 @@ export interface GameInfo {
   mechanics: string;
   marketSource: string;
   status: 'Live' | 'Preview';
+  track: GameTrack;
   iconKey: GameIconKey;
   comingSoon?: boolean;
 }

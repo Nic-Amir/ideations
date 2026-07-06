@@ -4,8 +4,16 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Sparkles, Wallet } from 'lucide-react';
-import { GAMES, LIVE_GAMES } from '@/lib/games/game-registry';
-import { Badge, Card, TicketCard } from '@trading-game/design-intelligence-layer';
+import { ROADMAP_GAMES, OTHER_GAMES } from '@/lib/games/game-registry';
+import {
+  Badge,
+  Card,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  TicketCard,
+} from '@trading-game/design-intelligence-layer';
 import { GameIcon } from '@/components/layout/game-icon';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useMounted } from '@/hooks/use-mounted';
@@ -17,12 +25,8 @@ const RISK_COLOR: Record<string, string> = {
   Low: 'text-semantic-win',
 };
 
-const FEATURED_GAME = LIVE_GAMES[0];
-const GRID_GAMES = GAMES.filter((game) => game.slug !== FEATURED_GAME?.slug);
-
-function isLive(slug: string) {
-  return LIVE_GAMES.some((game) => game.slug === slug);
-}
+const FEATURED_GAME = ROADMAP_GAMES.find((game) => game.status === 'Live') ?? ROADMAP_GAMES[0];
+const ROADMAP_GRID_GAMES = ROADMAP_GAMES.filter((game) => game.slug !== FEATURED_GAME?.slug);
 
 export default function HomePage() {
   const router = useRouter();
@@ -82,46 +86,68 @@ export default function HomePage() {
         </div>
       </div>
 
-      {FEATURED_GAME && (
-        <section>
-          <Link href={`/game/${FEATURED_GAME.slug}`} className="block">
-            <FeaturedHeroCard game={FEATURED_GAME} />
-          </Link>
-        </section>
-      )}
+      <Tabs defaultValue="roadmap" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+          <TabsTrigger value="other">Other ideas</TabsTrigger>
+        </TabsList>
 
-      <section>
-        <h2 className="mb-3 font-display text-sm font-bold text-on-prominent">
-          All games
-        </h2>
-        <div className="grid grid-cols-1 gap-3 min-[960px]:grid-cols-2">
-          {GRID_GAMES.map((game, idx) => {
-            const live = isLive(game.slug);
-            return (
-              <motion.div
-                key={game.slug}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.04, duration: 0.2 }}
-              >
-                {live ? (
-                  <Link href={`/game/${game.slug}`} className="group block">
-                    <GameGridCard game={game} />
-                  </Link>
-                ) : (
-                  <div className="opacity-60">
-                    <GameGridCard game={game} preview />
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
+        <TabsContent value="roadmap" className="space-y-6">
+          {FEATURED_GAME && (
+            <section>
+              <Link href={`/game/${FEATURED_GAME.slug}`} className="block">
+                <FeaturedHeroCard game={FEATURED_GAME} />
+              </Link>
+            </section>
+          )}
+
+          <section>
+            <h2 className="mb-3 font-display text-sm font-bold text-on-prominent">
+              All games
+            </h2>
+            <GameGrid games={ROADMAP_GRID_GAMES} />
+          </section>
+        </TabsContent>
+
+        <TabsContent value="other" className="space-y-6">
+          <p className="text-sm text-on-subtle">
+            Side experiments that didn&apos;t make the roadmap.
+          </p>
+          <GameGrid games={OTHER_GAMES} />
+        </TabsContent>
+      </Tabs>
 
       <p className="body-xs text-on-subtle">
         All outcomes from live Deriv tick data.
       </p>
+    </div>
+  );
+}
+
+function GameGrid({ games }: { games: GameInfo[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-3 min-[960px]:grid-cols-2">
+      {games.map((game, idx) => {
+        const live = game.status === 'Live';
+        return (
+          <motion.div
+            key={game.slug}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.04, duration: 0.2 }}
+          >
+            {live ? (
+              <Link href={`/game/${game.slug}`} className="group block">
+                <GameGridCard game={game} />
+              </Link>
+            ) : (
+              <div className="opacity-60">
+                <GameGridCard game={game} preview />
+              </div>
+            )}
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
