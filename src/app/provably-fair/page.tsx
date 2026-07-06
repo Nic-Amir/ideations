@@ -5,50 +5,8 @@ import {
   CardContent,
   Separator,
 } from '@trading-game/design-intelligence-layer';
-import {
-  getRiskConfig,
-  computeAnalyticalRTP,
-  computeSigmaEff,
-  getZoneProbabilities,
-} from '@/lib/games/plinko';
-import type { PlinkoRisk } from '@/types';
-
-function formatSigmaRange(minSigma: number, maxSigma: number): string {
-  if (minSigma === 0) return `|Z| < ${maxSigma}σ`;
-  if (maxSigma === Infinity) return `|Z| ≥ ${minSigma}σ`;
-  return `${minSigma}σ – ${maxSigma}σ`;
-}
-
-function PlinkoZoneTable({ risk }: { risk: PlinkoRisk }) {
-  const config = getRiskConfig(risk);
-  const sigmaEff = computeSigmaEff(config.sigma, config.tickCount);
-  const analytical = computeAnalyticalRTP(risk);
-  return (
-    <Card className="border-0 bg-subtle">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="font-medium text-on-prominent capitalize">{risk} risk</p>
-          <p className="text-xs text-on-subtle">
-            {config.tickCount} ticks · σ_eff = {sigmaEff.toFixed(4)} · target RTP{' '}
-            {(config.targetRTP * 100).toFixed(0)}% · analytical ~{(analytical * 100).toFixed(1)}%
-          </p>
-        </div>
-        <div className="space-y-1">
-          {config.zones.map((zone) => (
-            <div key={zone.label} className="flex justify-between gap-2 text-xs text-on-subtle">
-              <span>{zone.label}</span>
-              <span className="font-display tabular-nums">{formatSigmaRange(zone.minSigma, zone.maxSigma)}</span>
-              <span className="font-display tabular-nums text-on-prominent">{zone.payout}×</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function ProvablyFairPage() {
-  const zoneProbs = getZoneProbabilities();
   return (
     <div className="mx-auto max-w-3xl px-layout-margin-inline py-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -234,7 +192,7 @@ export default function ProvablyFairPage() {
 
       <Separator />
 
-      <section id="volatility-plinko" className="space-y-4 scroll-mt-6">
+      <section className="space-y-4">
         <h2 className="heading-h3 font-display text-on-prominent">
           Game 4: Volatility Plinko
         </h2>
@@ -244,45 +202,14 @@ export default function ProvablyFairPage() {
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             crypto.getRandomValues()
           </code>{' '}
-          as the entropy source. Settlement uses the terminal log-return Z-score
-          against σ-barriers — not the decorative digits shown on the chart.
+          as the entropy source.
         </p>
         <Card className="border-0 bg-subtle">
-          <CardContent className="p-4 font-display text-xs text-on-subtle space-y-2">
+          <CardContent className="p-4 font-display text-xs text-on-subtle">
             <p>S(t+1) = S(t) × exp((μ − σ²/2)Δt + σ√(Δt) × Z)</p>
-            <p>μ = 0, Δt = 0.01 per tick, Z ~ N(0,1) via Box-Muller</p>
-            <p>
-              σ_eff = σ × tickCount / 100 — std dev of total log return over the path
-            </p>
-            <p>zScore = ln(S_T / S_0) / σ_eff → payout zone</p>
-            <p className="text-on-prominent/80">
-              The per-step drift term −(σ²/2)Δt biases log returns slightly negative vs
-              the symmetric normal zone model. Payouts are calibrated to empirical
-              Monte Carlo RTP, not the analytical formula alone.
-            </p>
+            <p className="mt-1">μ = 0 (no drift), σ = risk-dependent, Z = Box-Muller normal</p>
           </CardContent>
         </Card>
-        <Card className="border-0 bg-subtle">
-          <CardContent className="p-4 space-y-2 body-sm">
-            <p className="font-medium text-on-prominent">Zone probabilities (Z ~ N(0,1))</p>
-            <div className="grid gap-1 text-xs text-on-subtle sm:grid-cols-2">
-              <p>Center |Z| &lt; 1: {(zoneProbs.center * 100).toFixed(2)}%</p>
-              <p>Inner 1–2σ (each side): {(zoneProbs.inner * 100).toFixed(2)}%</p>
-              <p>Mid 2–3σ (each side): {(zoneProbs.mid * 100).toFixed(2)}%</p>
-              <p>Outer 3–4σ (each side): {(zoneProbs.outer * 100).toFixed(3)}%</p>
-              <p>Extreme ≥4σ (each side): {(zoneProbs.extreme * 100).toFixed(4)}%</p>
-            </div>
-            <p className="text-xs text-on-subtle pt-1">
-              A payout ≥ 1× returns your stake or more. Center bands (0.2–0.5×) are
-              partial returns — net losses after the full stake is deducted.
-            </p>
-          </CardContent>
-        </Card>
-        <div className="space-y-3">
-          <PlinkoZoneTable risk="low" />
-          <PlinkoZoneTable risk="medium" />
-          <PlinkoZoneTable risk="high" />
-        </div>
       </section>
 
       <Separator />
