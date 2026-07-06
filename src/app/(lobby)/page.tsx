@@ -39,7 +39,7 @@ export default function HomePage() {
         </div>
         <div>
           <h1 className="font-display text-xl font-bold text-on-prominent">
-            Ideations
+            Trading Game product roadmap
           </h1>
           <p className="text-sm text-on-subtle">
             Market-driven digit games — demo pricing and mechanics.
