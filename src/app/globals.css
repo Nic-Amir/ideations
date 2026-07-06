@@ -1,7 +1,17 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap");
-@import "@trading-game/design-intelligence-layer/styles";
 @import "tailwindcss";
-@source "../node_modules/@trading-game/design-intelligence-layer/dist";
+@import "@trading-game/design-intelligence-layer/styles";
+@source "../../node_modules/@trading-game/design-intelligence-layer/dist";
+
+/* TicketCard stub shimmer animation */
+@keyframes stub-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
 
 /* Safe area padding for mobile */
 .pb-safe {
