@@ -5,10 +5,12 @@ import {
   getPlinkoConfig,
   getBarrierPriceLevels,
   getDisplayZoneGroups,
+  computeSigmaEff,
   CORE_ZONE_INDEX,
   type VolatilityRun,
 } from '@/lib/games/plinko';
 import { getPlinkoMode, type BarrierZone, type PlinkoModeId } from '@/lib/games/plinko-modes';
+import { groupForAbsZ, type TargetGroup } from '@/lib/games/plinko-target';
 import {
   getPlinkoChartColors,
   getChartPadding,
@@ -234,6 +236,19 @@ export interface PlinkoChartProps {
   modeId: PlinkoModeId;
   focusedRunId?: number | null;
   onFocusRun?: (runId: number) => void;
+  /** Highlighted band group when a target bet is armed. */
+  targetGroup?: TargetGroup | null;
+  /** Tap a payout band to pick it as the target (target bet type only). */
+  onSelectTarget?: (group: TargetGroup) => void;
+}
+
+interface ChartScaleSnapshot {
+  bandX: number;
+  paddingTop: number;
+  plotH: number;
+  yMin: number;
+  yMax: number;
+  sigmaEff: number;
 }
 
 export function PlinkoChart({
@@ -248,8 +263,11 @@ export function PlinkoChart({
   modeId,
   focusedRunId = null,
   onFocusRun,
+  targetGroup = null,
+  onSelectTarget,
 }: PlinkoChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scaleRef = useRef<ChartScaleSnapshot | null>(null);
   const isDesktop = useIsDesktop();
   const maxVisibleActive = isDesktop ? 5 : 3;
   const config = getPlinkoConfig(modeId);
@@ -303,6 +321,15 @@ export function PlinkoChart({
       padding.left + (i / totalTicks) * plotW;
     const yScale = (v: number) =>
       padding.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+
+    scaleRef.current = {
+      bandX,
+      paddingTop: padding.top,
+      plotH,
+      yMin,
+      yMax,
+      sigmaEff: computeSigmaEff(config.sigma, config.tickCount),
+    };
 
     const focusPrice =
       visibleActive[visibleActive.length - 1]?.run.quotes[
@@ -379,6 +406,30 @@ export function PlinkoChart({
     ctx.fillText('Entry', padding.left, startY - 4);
 
     drawGroupedBands();
+
+    if (targetGroup) {
+      const bounds = getGroupBandBounds(targetGroup, barrierLevels, yScale, yMin, yMax, modeId);
+      if (bounds) {
+        const strokeTarget = (top: number, bottom: number) => {
+          if (bottom <= top) return;
+          ctx.save();
+          ctx.strokeStyle = bounds.color;
+          ctx.lineWidth = 2;
+          ctx.shadowColor = withAlpha(bounds.color, 0.6);
+          ctx.shadowBlur = 8;
+          ctx.strokeRect(bandX - 1.5, top + 1, bandWidth + 3, bottom - top - 2);
+          ctx.restore();
+          ctx.fillStyle = withAlpha(bounds.color, 0.14);
+          ctx.fillRect(bandX, top, bandWidth, bottom - top);
+        };
+        if (targetGroup === 'core') {
+          strokeTarget(bounds.posTop, bounds.negBot);
+        } else {
+          strokeTarget(bounds.posTop, bounds.posBot);
+          strokeTarget(bounds.negTop, bounds.negBot);
+        }
+      }
+    }
 
     if (isEmpty) {
       ctx.globalAlpha = 0.35;
@@ -486,6 +537,11 @@ export function PlinkoChart({
         const progress = reducedMotion ? 1 : 1 - (f.until - now) / 1200;
         const offsetY = progress * 24;
         const alpha = reducedMotion ? 0.8 : 1 - progress * 0.5;
+
+        if (!reducedMotion && f.payout >= 2) {
+          drawWinBurst(ctx, ex, ey, progress, f.id, f.payout >= 5 ? colors.semanticWin : getPathStroke(false).stroke);
+        }
+
         ctx.globalAlpha = alpha;
         const isWin = f.payout >= 1;
         ctx.fillStyle = isWin ? colors.semanticWin : colors.semanticLoss;
@@ -522,6 +578,7 @@ export function PlinkoChart({
     stripWidth,
     modeId,
     focusedRunId,
+    targetGroup,
   ]);
 
   return (
@@ -531,7 +588,23 @@ export function PlinkoChart({
         className="block cursor-pointer"
         style={{ width, height }}
         aria-label="Volatility path chart"
-        onClick={() => {
+        onClick={(e) => {
+          const snap = scaleRef.current;
+          if (onSelectTarget && snap) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (x >= snap.bandX) {
+              const price =
+                snap.yMin +
+                ((snap.paddingTop + snap.plotH - y) / snap.plotH) * (snap.yMax - snap.yMin);
+              if (price > 0 && snap.sigmaEff > 0) {
+                const absZ = Math.abs(Math.log(price / START_PRICE) / snap.sigmaEff);
+                onSelectTarget(groupForAbsZ(absZ));
+              }
+              return;
+            }
+          }
           if (!onFocusRun || visibleActive.length < 2) return;
           const last = visibleActive[visibleActive.length - 1];
           onFocusRun(focusedRunId === last.id ? visibleActive[0].id : last.id);
@@ -544,6 +617,35 @@ export function PlinkoChart({
       ) : null}
     </div>
   );
+}
+
+/** Deterministic radial particle burst — seeded by float id so frames agree. */
+function drawWinBurst(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  progress: number,
+  seed: number,
+  color: string,
+) {
+  const count = 10;
+  const maxDist = 34;
+  ctx.save();
+  for (let i = 0; i < count; i++) {
+    const angle = ((i + (seed % 7) * 0.37) / count) * Math.PI * 2;
+    const speed = 0.7 + ((seed * 31 + i * 17) % 10) / 18;
+    const dist = progress * maxDist * speed;
+    const px = cx + Math.cos(angle) * dist;
+    const py = cy + Math.sin(angle) * dist - progress * 8;
+    const r = Math.max(0.5, 2.4 * (1 - progress));
+    ctx.globalAlpha = Math.max(0, 1 - progress) * 0.9;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 function drawPath(

@@ -19,6 +19,7 @@ import {
   isNearMiss,
   isMonotonicLadder,
   normalCDF,
+  sampleTerminalLogReturn,
   ZONE_COUNT,
   CORE_ZONE_INDEX,
 } from '../plinko';
@@ -29,6 +30,15 @@ import {
   formatSessionGoal,
   pickSessionGoals,
 } from '../plinko-session-goals';
+import {
+  TARGET_GROUPS,
+  TARGET_MARGIN,
+  TARGET_PAYOUT_CAP,
+  getTargetHitProbability,
+  getTargetPayout,
+  isTargetHit,
+  groupForAbsZ,
+} from '../plinko-target';
 
 describe('Plinko Engine (European Multi-Barrier Option)', () => {
   test('plinko config exists with 11 barrier zones (split center)', () => {
@@ -231,6 +241,80 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
       expect(p.current).toBe(0);
       expect(p.met).toBe(false);
     });
+  });
+
+  describe('target bet pricing', () => {
+    test('hit probabilities sum to ~1 across all bands', () => {
+      const total = TARGET_GROUPS.reduce(
+        (sum, g) => sum + getTargetHitProbability(g),
+        0,
+      );
+      expect(total).toBeCloseTo(1, 2);
+    });
+
+    test('payouts follow (1 - margin) / probability, capped', () => {
+      for (const group of TARGET_GROUPS) {
+        const p = getTargetHitProbability(group);
+        const expected = Math.min(TARGET_PAYOUT_CAP, (1 - TARGET_MARGIN) / p);
+        expect(getTargetPayout(group)).toBeCloseTo(expected, 1);
+      }
+    });
+
+    test('target RTP equals 1 - margin for every uncapped band', () => {
+      for (const group of TARGET_GROUPS) {
+        const rtp = getTargetHitProbability(group) * getTargetPayout(group);
+        if (getTargetPayout(group) < TARGET_PAYOUT_CAP) {
+          expect(rtp).toBeGreaterThan(0.975);
+          expect(rtp).toBeLessThan(0.985);
+        } else {
+          expect(rtp).toBeLessThanOrEqual(0.985);
+        }
+      }
+    });
+
+    test('rarer bands pay more', () => {
+      expect(getTargetPayout('extreme')).toBeGreaterThan(getTargetPayout('outer'));
+      expect(getTargetPayout('outer')).toBeGreaterThan(getTargetPayout('mid'));
+      expect(getTargetPayout('mid')).toBeGreaterThan(getTargetPayout('inner'));
+    });
+
+    test('isTargetHit matches zone display groups on both sides', () => {
+      // Split zones: index 5 is core, 4/6 micro, 3/7 inner, 0/10 extreme
+      expect(isTargetHit('core', 5, 'split')).toBe(true);
+      expect(isTargetHit('micro', 4, 'split')).toBe(true);
+      expect(isTargetHit('micro', 6, 'split')).toBe(true);
+      expect(isTargetHit('inner', 3, 'split')).toBe(true);
+      expect(isTargetHit('inner', 7, 'split')).toBe(true);
+      expect(isTargetHit('extreme', 0, 'split')).toBe(true);
+      expect(isTargetHit('extreme', 10, 'split')).toBe(true);
+      expect(isTargetHit('core', 0, 'split')).toBe(false);
+      expect(isTargetHit('inner', 5, 'balanced')).toBe(false);
+    });
+
+    test('groupForAbsZ maps sigma distances to bands', () => {
+      expect(groupForAbsZ(0.2)).toBe('core');
+      expect(groupForAbsZ(0.7)).toBe('micro');
+      expect(groupForAbsZ(1.5)).toBe('inner');
+      expect(groupForAbsZ(2.5)).toBe('mid');
+      expect(groupForAbsZ(3.5)).toBe('outer');
+      expect(groupForAbsZ(6)).toBe('extreme');
+    });
+
+    test('Monte Carlo target RTP near 98% on inner band', () => {
+      const payout = getTargetPayout('inner');
+      const config = getPlinkoConfig('split');
+      const sigmaEff = computeSigmaEff(config.sigma, config.tickCount);
+      let total = 0;
+      const n = 80_000;
+      for (let i = 0; i < n; i++) {
+        const logReturn = sampleTerminalLogReturn(config.sigma, config.tickCount);
+        const { zoneIndex } = resolveZone(logReturn, sigmaEff, config.zones);
+        total += isTargetHit('inner', zoneIndex, 'split') ? payout : 0;
+      }
+      const rtp = total / n;
+      expect(rtp).toBeGreaterThan(0.92);
+      expect(rtp).toBeLessThan(1.04);
+    }, 60_000);
   });
 
   describe('Monte Carlo RTP validation', () => {

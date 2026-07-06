@@ -28,10 +28,17 @@ import {
   getMilestoneMessage,
 } from '@/lib/games/plinko-session-goals';
 import { getPlinkoMode } from '@/lib/games/plinko-modes';
+import {
+  getTargetPayout,
+  isTargetHit,
+  type PlinkoBetType,
+  type TargetGroup,
+} from '@/lib/games/plinko-target';
 import { usePlinkoSound } from '@/hooks/use-plinko-sound';
 
 export type { SessionGoal, SessionGoalProgress, SessionMilestone } from '@/lib/games/plinko-session-goals';
 export type { PlinkoModeId } from '@/lib/games/plinko';
+export type { PlinkoBetType, TargetGroup } from '@/lib/games/plinko-target';
 
 export const MAX_CONCURRENT_RUNS = 5;
 export const MAX_VISIBLE_PATHS_MOBILE = 3;
@@ -47,6 +54,11 @@ export const PATH_TRAIL_MS = 2000;
 export const MAX_TRAIL_PATHS = 3;
 export const SETTLE_CHIP_MS = 1800;
 
+/** Bet terms snapshotted at placement — target payouts are locked, Box-O style. */
+export type RunBet =
+  | { type: 'wall' }
+  | { type: 'target'; group: TargetGroup; lockedPayout: number };
+
 export interface RunDisplay {
   id: number;
   run: VolatilityRun;
@@ -56,7 +68,16 @@ export interface RunDisplay {
   visibleTickIndex: number;
   startedAt: number;
   stake: number;
+  bet: RunBet;
   settledAt?: number;
+}
+
+/** Payout actually credited for a run, per its locked bet terms. */
+export function getEffectivePayout(r: RunDisplay, modeId: PlinkoModeId): number {
+  if (r.bet.type === 'target') {
+    return isTargetHit(r.bet.group, r.run.zoneIndex, modeId) ? r.bet.lockedPayout : 0;
+  }
+  return r.run.payout;
 }
 
 export interface PlinkoResult {
@@ -68,6 +89,9 @@ export interface PlinkoResult {
   zoneIndex: number;
   zoneLabel: string;
   zoneColor: string;
+  betType: PlinkoBetType;
+  targetHit?: boolean;
+  targetGroup?: TargetGroup;
 }
 
 export interface HistoryEntry {
@@ -78,6 +102,7 @@ export interface HistoryEntry {
   zoneColor: string;
   stake: number;
   winAmount: number;
+  betType: PlinkoBetType;
 }
 
 export interface SessionStats {
@@ -173,11 +198,14 @@ function computeAnimProgress(elapsed: number): number {
   return Math.min(elapsed / total, 1);
 }
 
-function resolveSettleVariant(run: VolatilityRun, modeId: PlinkoModeId): SettleChipVariant {
-  if (isNearMiss(run.zoneIndex, run.zScore, modeId)) return 'nearMiss';
+function resolveSettleVariant(r: RunDisplay, modeId: PlinkoModeId): SettleChipVariant {
+  if (r.bet.type === 'target') {
+    return isTargetHit(r.bet.group, r.run.zoneIndex, modeId) ? 'win' : 'core';
+  }
+  if (isNearMiss(r.run.zoneIndex, r.run.zScore, modeId)) return 'nearMiss';
   const coreIdx = getPlinkoMode(modeId).coreZoneIndex;
-  if ((coreIdx !== null && run.zoneIndex === coreIdx) || run.payout < 1) return 'core';
-  if (run.payout <= 1.5) return 'micro';
+  if ((coreIdx !== null && r.run.zoneIndex === coreIdx) || r.run.payout < 1) return 'core';
+  if (r.run.payout <= 1.5) return 'micro';
   return 'win';
 }
 
@@ -229,21 +257,22 @@ function advanceSessionMode(
   let streak = sessionStreak;
 
   for (const r of justCompleted) {
-    const winAmount = r.stake * r.run.payout;
+    const payout = getEffectivePayout(r, modeId);
+    const winAmount = r.stake * payout;
     netPL += winAmount - r.stake;
-    if (r.run.payout > bestPayout) {
-      bestPayout = r.run.payout;
+    if (payout > bestPayout) {
+      bestPayout = payout;
       bestZoneLabel = getZoneLabel(r.run.zoneIndex, modeId);
       bestZoneColor = getZoneColor(r.run.zoneIndex, modeId);
     }
-    if (isNetWin(r.run.payout)) {
+    if (isNetWin(payout)) {
       wins += 1;
       streak += 1;
       peakStreak = Math.max(peakStreak, streak);
     } else {
       streak = 0;
     }
-    if (mode.goal.kind === 'minPayout' && r.run.payout >= mode.goal.threshold) {
+    if (mode.goal.kind === 'minPayout' && payout >= mode.goal.threshold) {
       minPayoutHits += 1;
     }
   }
@@ -305,6 +334,8 @@ export function useVolatilityPlinko() {
   const [chartPulse, setChartPulse] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState('');
   const [selectedMode, setSelectedMode] = useState<PlinkoModeId>(DEFAULT_PLINKO_MODE);
+  const [betType, setBetType] = useState<PlinkoBetType>('wall');
+  const [targetGroup, setTargetGroup] = useState<TargetGroup>('inner');
   const [pendingSessionSize, setPendingSessionSize] = useState<number | null>(null);
   const [offeredGoals, setOfferedGoals] = useState<SessionGoal[]>([]);
   const [sessionMilestone, setSessionMilestone] = useState<SessionMilestone | null>(null);
@@ -318,6 +349,8 @@ export function useVolatilityPlinko() {
   const animFrameRef = useRef<number>(0);
   const activeRunsRef = useRef<RunDisplay[]>([]);
   const modeRef = useRef<PlinkoModeId>(DEFAULT_PLINKO_MODE);
+  const betTypeRef = useRef<PlinkoBetType>('wall');
+  const targetGroupRef = useRef<TargetGroup>('inner');
   const sessionStreakRef = useRef(0);
   const addWinningsRef = useRef(addWinnings);
   const placeBetRef = useRef(placeBet);
@@ -333,6 +366,8 @@ export function useVolatilityPlinko() {
   useEffect(() => { stakeRef.current = stake; }, [stake]);
   useEffect(() => { playModeRef.current = playMode; }, [playMode]);
   useEffect(() => { modeRef.current = selectedMode; }, [selectedMode]);
+  useEffect(() => { betTypeRef.current = betType; }, [betType]);
+  useEffect(() => { targetGroupRef.current = targetGroup; }, [targetGroup]);
 
   const queueRuns = useCallback((count: number): number => {
     const current = activeRunsRef.current;
@@ -342,6 +377,15 @@ export function useVolatilityPlinko() {
 
     const currentStake = stakeRef.current;
     const newRuns: RunDisplay[] = [];
+
+    const bet: RunBet =
+      betTypeRef.current === 'target'
+        ? {
+            type: 'target',
+            group: targetGroupRef.current,
+            lockedPayout: getTargetPayout(targetGroupRef.current),
+          }
+        : { type: 'wall' };
 
     for (let i = 0; i < toAdd; i++) {
       if (!placeBetRef.current(currentStake)) break;
@@ -355,6 +399,7 @@ export function useVolatilityPlinko() {
         visibleTickIndex: 0,
         startedAt: performance.now(),
         stake: currentStake,
+        bet,
       });
     }
 
@@ -562,23 +607,24 @@ export function useVolatilityPlinko() {
         const modeId = modeRef.current;
 
         for (const r of justCompleted) {
-          const winAmount = r.stake * r.run.payout;
+          const payout = getEffectivePayout(r, modeId);
+          const winAmount = r.stake * payout;
           const netPL = winAmount - r.stake;
           if (winAmount > 0) addWinningsRef.current(winAmount);
 
-          playLand(r.run.payout);
-          if (r.run.payout > 10) playBigWin();
+          playLand(payout);
+          if (payout > 10) playBigWin();
           clearRunTicks(r.id);
           lastTickPlayedRef.current.delete(r.id);
 
-          const flashMs = r.run.payout > 5 ? ZONE_FLASH_BIG_MS : ZONE_FLASH_MS;
+          const flashMs = payout > 5 ? ZONE_FLASH_BIG_MS : ZONE_FLASH_MS;
           flashes.push({
             runId: r.id,
             zoneIndex: r.run.zoneIndex,
             until: now + flashMs,
           });
 
-          if (isNearMiss(r.run.zoneIndex, r.run.zScore, modeId)) {
+          if (r.bet.type === 'wall' && isNearMiss(r.run.zoneIndex, r.run.zScore, modeId)) {
             nearMisses.push({ runId: r.id, until: now + NEAR_MISS_FLASH_MS });
           }
 
@@ -587,13 +633,13 @@ export function useVolatilityPlinko() {
               id: floatIdRef.current++,
               runId: r.id,
               netPL,
-              payout: r.run.payout,
+              payout,
               zoneIndex: r.run.zoneIndex,
               until: now + SETTLE_FLOAT_MS,
             });
           }
 
-          if (r.run.payout > 5) {
+          if (payout > 5) {
             setChartPulse(true);
             setTimeout(() => setChartPulse(false), 600);
           }
@@ -602,7 +648,7 @@ export function useVolatilityPlinko() {
         setNetWinStreak((prev) => {
           let streak = prev;
           for (const r of justCompleted) {
-            if (isNetWin(r.run.payout)) streak += 1;
+            if (isNetWin(getEffectivePayout(r, modeId))) streak += 1;
             else streak = 0;
           }
           return streak;
@@ -610,10 +656,12 @@ export function useVolatilityPlinko() {
 
         if (isBatch) {
           const batchNet = justCompleted.reduce(
-            (sum, r) => sum + r.stake * r.run.payout - r.stake,
+            (sum, r) => sum + r.stake * getEffectivePayout(r, modeId) - r.stake,
             0,
           );
-          const batchWins = justCompleted.filter((r) => isNetWin(r.run.payout)).length;
+          const batchWins = justCompleted.filter((r) =>
+            isNetWin(getEffectivePayout(r, modeId)),
+          ).length;
           setSettleChip({
             id: chipIdRef.current++,
             kind: 'batch',
@@ -625,17 +673,18 @@ export function useVolatilityPlinko() {
           });
         } else if (modeAtSettle.kind === 'single') {
           const r = justCompleted[0];
-          const netPL = r.stake * r.run.payout - r.stake;
+          const payout = getEffectivePayout(r, modeId);
+          const netPL = r.stake * payout - r.stake;
           const zoneLabel = getZoneLabel(r.run.zoneIndex, modeId);
           const zoneColor = getZoneColor(r.run.zoneIndex, modeId);
-          const variant = resolveSettleVariant(r.run, modeId);
+          const variant = resolveSettleVariant(r, modeId);
 
-          if (r.run.payout <= 5) {
+          if (payout <= 5) {
             setSettleChip({
               id: chipIdRef.current++,
               kind: 'single',
               variant,
-              payout: r.run.payout,
+              payout,
               zoneLabel,
               zoneColor,
               netPL,
@@ -652,14 +701,15 @@ export function useVolatilityPlinko() {
         }
 
         const latest = justCompleted[justCompleted.length - 1];
+        const latestPayout = getEffectivePayout(latest, modeId);
         const zoneLabel = getZoneLabel(latest.run.zoneIndex, modeId);
         const zoneColor = getZoneColor(latest.run.zoneIndex, modeId);
-        const amount = latest.stake * latest.run.payout;
+        const amount = latest.stake * latestPayout;
         const pctStr = (latest.run.percentChange * 100).toFixed(2);
         const sign = latest.run.percentChange >= 0 ? 'plus' : 'minus';
 
         setLastResult({
-          payout: latest.run.payout,
+          payout: latestPayout,
           amount,
           stake: latest.stake,
           pctChange: latest.run.percentChange,
@@ -667,22 +717,31 @@ export function useVolatilityPlinko() {
           zoneIndex: latest.run.zoneIndex,
           zoneLabel,
           zoneColor,
+          betType: latest.bet.type,
+          targetHit:
+            latest.bet.type === 'target'
+              ? isTargetHit(latest.bet.group, latest.run.zoneIndex, modeId)
+              : undefined,
+          targetGroup: latest.bet.type === 'target' ? latest.bet.group : undefined,
         });
 
         setLiveAnnouncement(
-          `${latest.run.payout} times payout in ${zoneLabel} zone, ${sign} ${pctStr} percent move`,
+          latest.bet.type === 'target'
+            ? `Target ${latestPayout > 0 ? 'hit' : 'missed'}, path landed in ${zoneLabel} zone, ${sign} ${pctStr} percent move`
+            : `${latestPayout} times payout in ${zoneLabel} zone, ${sign} ${pctStr} percent move`,
         );
 
         setHistory((prev) =>
           [
             ...justCompleted.map((r) => ({
-              payout: r.run.payout,
+              payout: getEffectivePayout(r, modeId),
               pctChange: r.run.percentChange,
               zoneIndex: r.run.zoneIndex,
               zoneLabel: getZoneLabel(r.run.zoneIndex, modeId),
               zoneColor: getZoneColor(r.run.zoneIndex, modeId),
               stake: r.stake,
-              winAmount: r.stake * r.run.payout,
+              winAmount: r.stake * getEffectivePayout(r, modeId),
+              betType: r.bet.type,
             })),
             ...prev,
           ].slice(0, 20),
@@ -817,8 +876,14 @@ export function useVolatilityPlinko() {
     stake <= balance && balance > 0 && activeRuns.length < MAX_CONCURRENT_RUNS && !sessionActive && !sessionSettling;
 
   const session = sessionFromPlayMode(playMode);
+  const targetPayoutPreview = getTargetPayout(targetGroup);
 
   return {
+    betType,
+    setBetType,
+    targetGroup,
+    setTargetGroup,
+    targetPayoutPreview,
     stake,
     setStake,
     runs,

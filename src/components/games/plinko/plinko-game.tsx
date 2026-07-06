@@ -23,6 +23,11 @@ import { PlinkoChart } from '@/components/games/plinko/plinko-chart';
 import { PlinkoSessionHud } from '@/components/games/plinko/plinko-session-hud';
 import { PlinkoSettleChip } from '@/components/games/plinko/plinko-settle-chip';
 import { PlinkoModePicker } from '@/components/games/plinko/plinko-mode-picker';
+import {
+  PlinkoBetTypeToggle,
+  PlinkoTargetPicker,
+} from '@/components/games/plinko/plinko-target-picker';
+import { TARGET_GROUP_LABELS } from '@/lib/games/plinko-target';
 import { PlinkoGoalPicker } from '@/components/games/plinko/plinko-goal-picker';
 import { PlinkoDistanceChip } from '@/components/games/plinko/plinko-distance-chip';
 import { PlinkoStreakBadge, formatZoneRange } from '@/components/games/plinko/plinko-ui';
@@ -86,6 +91,11 @@ export function PlinkoGame() {
     canAffordSession,
     selectedMode,
     setSelectedMode,
+    betType,
+    setBetType,
+    targetGroup,
+    setTargetGroup,
+    targetPayoutPreview,
     pendingSessionSize,
     offeredGoals,
     prepareSession,
@@ -192,6 +202,11 @@ export function PlinkoGame() {
             further you land from center; Stripes mixes win/lose bands at each
             distance. 98% RTP on both.
           </p>
+          <p>
+            Target bets flip the game: pick one band before the drop and get
+            paid its fair odds (minus 2% edge) only if the path lands there.
+            Rarer bands pay bigger — tap a band on the chart to arm it.
+          </p>
           <Link
             href="/provably-fair#volatility-plinko"
             className="inline-block text-xs text-primary hover:underline"
@@ -285,11 +300,18 @@ export function PlinkoGame() {
         play={
           <div className="flex flex-col flex-1 min-h-0">
             <div className="shrink-0 px-layout-margin-inline py-2 space-y-2 border-b border-border-subtle bg-prominent">
-              <PlinkoModePicker
-                value={selectedMode}
-                onChange={setSelectedMode}
-                disabled={sessionActive || sessionSettling || isAnimating}
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <PlinkoModePicker
+                  value={selectedMode}
+                  onChange={setSelectedMode}
+                  disabled={sessionActive || sessionSettling || isAnimating}
+                />
+                <PlinkoBetTypeToggle
+                  value={betType}
+                  onChange={setBetType}
+                  disabled={sessionActive || sessionSettling || isAnimating}
+                />
+              </div>
               {session ? (
                 <PlinkoSessionHud
                   session={session}
@@ -318,6 +340,12 @@ export function PlinkoGame() {
                 modeId={selectedMode}
                 focusedRunId={focusedRunId}
                 onFocusRun={setFocusedRunId}
+                targetGroup={betType === 'target' ? targetGroup : null}
+                onSelectTarget={
+                  betType === 'target' && !sessionActive && !sessionSettling
+                    ? setTargetGroup
+                    : undefined
+                }
               />
               <PlinkoDistanceChip activeRuns={activeRuns} modeId={selectedMode} />
               {showHint && isEmpty ? <PlinkoFirstHint onDismiss={dismissHint} /> : null}
@@ -340,6 +368,8 @@ export function PlinkoGame() {
                 <span className="text-semantic-loss">{playError}</span>
               ) : isAnimating ? (
                 `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live`
+              ) : betType === 'target' ? (
+                `Target ${TARGET_GROUP_LABELS[targetGroup]} · ${targetPayoutPreview}× if hit`
               ) : isLandscape ? (
                 `${modeDef.label} · 98% RTP`
               ) : (
@@ -348,6 +378,14 @@ export function PlinkoGame() {
             }
             actions={
               <>
+                {betType === 'target' && !sessionActive && !sessionSettling ? (
+                  <PlinkoTargetPicker
+                    value={targetGroup}
+                    modeId={selectedMode}
+                    onChange={setTargetGroup}
+                    disabled={isAnimating}
+                  />
+                ) : null}
                 {pendingSessionSize && offeredGoals.length > 0 ? (
                   <PlinkoGoalPicker
                     total={pendingSessionSize}
@@ -416,7 +454,15 @@ export function PlinkoGame() {
         open={showResult && !!lastResult && playMode.kind === 'single' && (lastResult.payout > 5)}
         won={isNetWin(lastResult?.payout ?? 0)}
         tier={getResultTierFromPayout(lastResult?.payout ?? 0)}
-        title={lastResult ? `${lastResult.payout}× · ${lastResult.zoneLabel}` : ''}
+        title={
+          lastResult
+            ? lastResult.betType === 'target'
+              ? lastResult.targetHit
+                ? `Target hit — ${lastResult.payout}×`
+                : `Target missed · landed ${lastResult.zoneLabel}`
+              : `${lastResult.payout}× · ${lastResult.zoneLabel}`
+            : ''
+        }
         subtitle={
           lastResult
             ? `${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move`
