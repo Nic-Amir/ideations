@@ -181,6 +181,7 @@ export function useBarrierRace() {
     setPath(null);
     setPick(null);
     setVisibleTick(0);
+    phaseRef.current = 'idle';
     setPhase('idle');
     setBarrierFlash(false);
     setCashedOut(false);
@@ -188,6 +189,14 @@ export function useBarrierRace() {
     cashedOutRef.current = null;
     cashOutOfferRef.current = null;
   }, []);
+
+  /** Restart immediately with the same pick and stake (result overlay CTA). */
+  const raceAgain = useCallback(() => {
+    const lastPick = pickRef.current;
+    if (phaseRef.current !== 'settled' || !lastPick) return;
+    dismissResult();
+    startRace(lastPick);
+  }, [dismissResult, startRace]);
 
   const cashOut = useCallback(() => {
     const racePath = pathRef.current;
@@ -414,6 +423,7 @@ export function useBarrierRace() {
     startPrice: BARRIER_RACE_CONFIG.s0,
     startRace,
     dismissResult,
+    raceAgain,
     raceTickMs: RACE_TICK_MS,
     settleMs: RACE_SETTLE_MS,
   };

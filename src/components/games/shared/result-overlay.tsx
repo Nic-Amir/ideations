@@ -18,6 +18,8 @@ export interface ResultOverlayProps {
   autoDismissMs?: number;
   primaryAction?: { label: string; onClick: () => void };
   tier?: ResultTier;
+  /** Show a thin depleting bar indicating time until auto-dismiss. */
+  showAutoDismissBar?: boolean;
 }
 
 function tierStyles(tier: ResultTier) {
@@ -68,6 +70,7 @@ export function ResultOverlay({
   autoDismissMs = 0,
   primaryAction,
   tier,
+  showAutoDismissBar = false,
 }: ResultOverlayProps) {
   const resolvedTier = tier ?? (won ? 'win' : 'loss');
   const styles = tierStyles(resolvedTier);
@@ -135,6 +138,16 @@ export function ResultOverlay({
                     Continue
                   </Button>
                 )}
+                {showAutoDismissBar && autoDismissMs > 0 ? (
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-subtle">
+                    <motion.div
+                      className="h-full rounded-full bg-border-prominent"
+                      initial={{ width: '100%' }}
+                      animate={{ width: '0%' }}
+                      transition={{ duration: autoDismissMs / 1000, ease: 'linear' }}
+                    />
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </motion.div>

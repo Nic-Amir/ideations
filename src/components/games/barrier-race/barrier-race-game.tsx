@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Card } from '@trading-game/design-intelligence-layer';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
@@ -121,12 +121,17 @@ function ModeToggle({
   );
 }
 
-function AssetPickCard({
+/**
+ * Digits-style trade button: the pick, odds and payout live on one large
+ * colored surface. This is the game's single trade gesture.
+ */
+function PickButton({
   asset,
   odds,
   payout,
   selected,
   disabled,
+  idle,
   onSelect,
 }: {
   asset: AssetId;
@@ -134,47 +139,55 @@ function AssetPickCard({
   payout: number;
   selected: boolean;
   disabled: boolean;
+  idle: boolean;
   onSelect: () => void;
 }) {
   const { name, tag } = ASSET_LABELS[asset];
   const isDrift = asset === 'drift';
 
   return (
-    <button
+    <motion.button
       type="button"
       disabled={disabled}
       onClick={onSelect}
+      animate={idle ? { y: [0, -3, 0] } : { y: 0 }}
+      transition={
+        idle
+          ? {
+              duration: 2.5,
+              repeat: Infinity,
+              ease: 'easeInOut',
+              delay: isDrift ? 0 : 0.4,
+            }
+          : { duration: 0.2 }
+      }
       className={cn(
-        'flex flex-1 flex-col items-start rounded-lg border p-3 text-left transition-colors min-h-[88px]',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        selected
-          ? 'border-primary bg-primary/10'
-          : 'border-border-subtle bg-subtle hover:bg-secondary-hover',
+        'flex min-h-[76px] flex-1 flex-col rounded-xl px-4 py-3 text-left transition-opacity',
+        isDrift ? 'bg-primary' : 'bg-semantic-info',
+        'text-on-prominent-static-inverse',
+        disabled && !selected && 'opacity-40',
+        disabled && selected && 'ring-2 ring-border-prominent ring-offset-2 ring-offset-card',
+        !disabled && 'active:scale-[0.98]',
       )}
     >
-      <div className="flex w-full items-center justify-between gap-2">
-        <span
-          className={cn(
-            'font-display text-sm font-bold',
-            isDrift ? 'text-primary' : 'text-semantic-info',
-          )}
-        >
-          {name}
-        </span>
-        <span className="font-display text-lg font-bold tabular-nums text-on-prominent">
+      <div className="flex w-full items-baseline justify-between gap-2">
+        <span className="font-display text-base font-bold">{name}</span>
+        <span className="font-display text-xl font-bold tabular-nums">
           {odds.toFixed(2)}×
         </span>
       </div>
-      <span className="mt-0.5 text-xs text-on-subtle">{tag}</span>
-      <span className="mt-auto pt-2 text-xs text-on-subtle tabular-nums">
-        Payout: {payout.toLocaleString()} credits
-      </span>
-    </button>
+      <div className="mt-auto flex w-full items-baseline justify-between gap-2 pt-1">
+        <span className="text-xs opacity-80">{tag}</span>
+        <span className="text-xs tabular-nums opacity-90">
+          Pays {payout.toLocaleString()}
+        </span>
+      </div>
+    </motion.button>
   );
 }
 
 // Starting distance per asset (spec's d/s: ~4.95σ for Drift, ~3.30σ for Vol),
-// used to normalize the live meters so both start visually "full distance".
+// used to normalize the live rails so both start visually "full distance".
 const START_DISTANCES = (() => {
   const { vol, logBarrier, logS0 } = deriveParams();
   return {
@@ -183,7 +196,7 @@ const START_DISTANCES = (() => {
   };
 })();
 
-function DistanceMeter({
+function DistanceRail({
   asset,
   sigma,
   isPick,
@@ -201,14 +214,14 @@ function DistanceMeter({
     <div className="flex items-center gap-2">
       <span
         className={cn(
-          'w-9 shrink-0 text-xs font-semibold',
+          'w-8 shrink-0 text-[10px] font-semibold',
           isDrift ? 'text-primary' : 'text-semantic-info',
           isPick && 'underline underline-offset-2',
         )}
       >
         {ASSET_LABELS[asset].name}
       </span>
-      <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-subtle">
+      <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-border-subtle/60">
         <div
           className={cn(
             'absolute inset-y-0 left-0 rounded-full transition-[width] duration-150',
@@ -217,8 +230,8 @@ function DistanceMeter({
           style={{ width: `${progress * 100}%` }}
         />
       </div>
-      <span className="w-14 shrink-0 text-right text-xs text-on-subtle tabular-nums">
-        {touched ? 'Touch!' : `${sigma.toFixed(1)}σ away`}
+      <span className="w-12 shrink-0 text-right text-[10px] text-on-subtle tabular-nums">
+        {touched ? 'Touch!' : `${sigma.toFixed(1)}σ`}
       </span>
     </div>
   );
@@ -288,11 +301,27 @@ export function BarrierRaceGame() {
     startPrice,
     startRace,
     dismissResult,
+    raceAgain,
   } = useBarrierRace();
 
+  const idle = phase === 'idle';
   const racing = phase === 'racing';
   const settled = phase === 'settled';
   const showOverlay = settled && result !== null;
+
+  // Leader readout for the on-chart banner.
+  const leader = (() => {
+    if (!racing || !liveDistances) return null;
+    if (liveDistances.drift <= 0 || liveDistances.vol <= 0) return null;
+    const asset: AssetId =
+      liveDistances.drift <= liveDistances.vol ? 'drift' : 'vol';
+    return { asset, sigma: liveDistances[asset] };
+  })();
+
+  const nearMissAsset =
+    settled && result?.outcome === 'lose' && result.nearMiss?.isNearMiss
+      ? result.pick
+      : null;
 
   const cashOutStory = (() => {
     if (result?.outcome !== 'cashout' || !result.counterfactual) return null;
@@ -355,94 +384,117 @@ export function BarrierRaceGame() {
       <GameViewport
         market={<WinRateStrip {...windowStats} />}
         play={
-          <div className="flex flex-col flex-1 min-h-0 gap-3 p-4">
+          <div className="flex flex-col flex-1 min-h-0">
             {playError ? (
-              <GameNotice tone="danger">{playError}</GameNotice>
+              <div className="px-4 pt-3">
+                <GameNotice tone="danger">{playError}</GameNotice>
+              </div>
             ) : null}
 
-            <Card className="flex-1 min-h-[180px] border-0 bg-subtle overflow-hidden">
-              <div className="h-full min-h-[180px] p-2">
-                <RaceChart
-                  path={path}
-                  visibleTick={visibleTick}
-                  barrier={barrier}
-                  startPrice={startPrice}
-                  barrierFlash={barrierFlash}
-                  ghost={cashedOut}
-                />
-              </div>
-            </Card>
+            {/* Full-bleed play surface — chart is the star, live state lives on it */}
+            <div className="relative flex-1 min-h-[220px]">
+              <RaceChart
+                path={path}
+                visibleTick={visibleTick}
+                barrier={barrier}
+                startPrice={startPrice}
+                barrierFlash={barrierFlash}
+                ghost={cashedOut}
+                nearMissAsset={nearMissAsset}
+              />
 
-            {phase === 'idle' ? (
-              <div className="shrink-0 space-y-2">
-                <ModeToggle mode={mode} onChange={setMode} disabled={!canTrade} />
-                <p className="text-xs text-on-subtle text-center">
-                  {mode === 'cashout'
-                    ? 'Sell your position mid-race at the live price'
-                    : `Both assets start at ${startPrice.toFixed(2)} — first to reach ${barrier.toFixed(2)} wins`}
-                </p>
-                <div className="flex gap-2">
-                  <AssetPickCard
+              {leader ? (
+                <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2">
+                  <span
+                    className={cn(
+                      'rounded-full border border-border-subtle bg-card/90 px-3 py-1 text-xs font-semibold backdrop-blur-sm',
+                      leader.asset === 'drift'
+                        ? 'text-primary'
+                        : 'text-semantic-info',
+                    )}
+                  >
+                    {ASSET_LABELS[leader.asset].name} leads ·{' '}
+                    {leader.sigma.toFixed(1)}σ to go
+                    {pick === leader.asset ? ' — your pick' : ''}
+                  </span>
+                </div>
+              ) : null}
+
+              {!idle && liveDistances && pick ? (
+                <div className="pointer-events-none absolute inset-x-3 bottom-2 space-y-1 rounded-lg border border-border-subtle/60 bg-card/80 px-3 py-2 backdrop-blur-sm">
+                  <DistanceRail
                     asset="drift"
-                    odds={driftOdds}
-                    payout={Math.round(stake * driftOdds)}
-                    selected={pick === 'drift'}
-                    disabled={!canTrade}
-                    onSelect={() => startRace('drift')}
+                    sigma={liveDistances.drift}
+                    isPick={pick === 'drift'}
                   />
-                  <AssetPickCard
+                  <DistanceRail
                     asset="vol"
-                    odds={volOdds}
-                    payout={Math.round(stake * volOdds)}
-                    selected={pick === 'vol'}
-                    disabled={!canTrade}
-                    onSelect={() => startRace('vol')}
+                    sigma={liveDistances.vol}
+                    isPick={pick === 'vol'}
                   />
                 </div>
-              </div>
-            ) : (
-              <div className="shrink-0 space-y-2">
-                {mode === 'cashout' && racing ? (
-                  cashedOut ? (
-                    <p className="text-center text-xs text-on-subtle">
-                      Position sold — replaying how the race ended
-                    </p>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      className={cn(
-                        'w-full min-h-[48px] font-display font-bold tabular-nums',
-                        cashOutOffer !== null &&
-                          cashOutOffer > stake &&
-                          'text-semantic-win',
-                      )}
+              ) : null}
+
+              {mode === 'cashout' && racing ? (
+                cashedOut ? (
+                  <p className="pointer-events-none absolute inset-x-0 bottom-16 text-center text-xs text-on-subtle">
+                    Position sold — replaying how the race ended
+                  </p>
+                ) : (
+                  <div className="absolute inset-x-0 bottom-16 flex justify-center">
+                    <button
+                      type="button"
                       disabled={cashOutOffer === null}
                       onClick={cashOut}
+                      className={cn(
+                        'min-h-[44px] rounded-full border px-5 font-display text-sm font-bold tabular-nums shadow-sm backdrop-blur-sm transition-colors',
+                        cashOutOffer !== null && cashOutOffer > stake
+                          ? 'border-semantic-win/40 bg-semantic-win/15 text-semantic-win'
+                          : 'border-border-prominent bg-card/90 text-on-prominent',
+                      )}
                     >
                       {cashOutOffer !== null
-                        ? `Cash out — ${cashOutOffer.toLocaleString()} credits`
+                        ? `Cash out — ${cashOutOffer.toLocaleString()}`
                         : 'Pricing…'}
-                    </Button>
-                  )
-                ) : null}
-                <div className="space-y-1.5">
-                  {liveDistances && pick ? (
-                    <>
-                      <DistanceMeter
-                        asset="drift"
-                        sigma={liveDistances.drift}
-                        isPick={pick === 'drift'}
-                      />
-                      <DistanceMeter
-                        asset="vol"
-                        sigma={liveDistances.vol}
-                        isPick={pick === 'vol'}
-                      />
-                    </>
-                  ) : null}
-                </div>
+                    </button>
+                  </div>
+                )
+              ) : null}
+            </div>
+
+            {/* Single trade surface: pick buttons directly under the chart edge */}
+            <div className="shrink-0 space-y-2 p-4 pt-2">
+              {idle ? (
+                <>
+                  <ModeToggle mode={mode} onChange={setMode} disabled={!canTrade} />
+                  <p className="text-center text-xs text-on-subtle">
+                    {mode === 'cashout'
+                      ? 'Sell your position mid-race at the live price'
+                      : `First to reach ${barrier.toFixed(2)} wins — pick your racer`}
+                  </p>
+                </>
+              ) : null}
+              <div className="flex gap-2">
+                <PickButton
+                  asset="drift"
+                  odds={driftOdds}
+                  payout={Math.round(stake * driftOdds)}
+                  selected={pick === 'drift'}
+                  disabled={!idle || !canTrade}
+                  idle={idle && canTrade}
+                  onSelect={() => startRace('drift')}
+                />
+                <PickButton
+                  asset="vol"
+                  odds={volOdds}
+                  payout={Math.round(stake * volOdds)}
+                  selected={pick === 'vol'}
+                  disabled={!idle || !canTrade}
+                  idle={idle && canTrade}
+                  onSelect={() => startRace('vol')}
+                />
               </div>
-            )}
+            </div>
           </div>
         }
         dock={
@@ -453,31 +505,11 @@ export function BarrierRaceGame() {
             onStakeChange={setStake}
             stakeDisabled={racing || settled}
             footer={
-              phase === 'idle'
-                ? 'Tap an asset card to place your trade'
-                : undefined
-            }
-            actions={
-              phase === 'idle' ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="primary"
-                    className="min-h-[44px]"
-                    disabled={!canTrade}
-                    onClick={() => startRace('drift')}
-                  >
-                    Trade Drift
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="min-h-[44px]"
-                    disabled={!canTrade}
-                    onClick={() => startRace('vol')}
-                  >
-                    Trade Vol
-                  </Button>
-                </div>
-              ) : null
+              idle
+                ? 'Tap a racer above to start'
+                : racing
+                  ? 'Race in progress'
+                  : undefined
             }
           />
         }
@@ -500,7 +532,9 @@ export function BarrierRaceGame() {
         amountLabel="credits"
         tier={resultTier}
         onDismiss={dismissResult}
-        autoDismissMs={2200}
+        autoDismissMs={5000}
+        showAutoDismissBar
+        primaryAction={{ label: 'Race again', onClick: raceAgain }}
       />
     </GameShell>
   );
