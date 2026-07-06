@@ -63,6 +63,22 @@ export const GAMES: GameInfo[] = [
     track: 'roadmap',
     iconKey: 'volatility-run',
   },
+  {
+    slug: 'barrier-race',
+    name: 'Barrier Race',
+    shortName: 'Race',
+    description:
+      'Two simulated assets race toward a shared price barrier. Pick which one touches the target first and collect the offered multiplier.',
+    shortPitch: 'A first-to-touch race between steady drift and wild volatility.',
+    category: 'Race',
+    risk: 'Medium',
+    sessionLength: '5-30 sec',
+    mechanics: 'Select Drift or Vol and watch the correlated paths race to the barrier — or play cash-out mode and sell your position mid-race at the live price.',
+    marketSource: 'Client-side simulation',
+    status: 'Live',
+    track: 'roadmap',
+    iconKey: 'barrier-race',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

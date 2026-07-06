@@ -89,7 +89,12 @@ export interface SlotResult {
   digits: [number, number, number];
 }
 
-export type GameIconKey = 'digit-collect' | 'digit-poker' | 'digit-slots' | 'volatility-run';
+export type GameIconKey =
+  | 'digit-collect'
+  | 'digit-poker'
+  | 'digit-slots'
+  | 'volatility-run'
+  | 'barrier-race';
 
 export type GameTrack = 'roadmap' | 'other';
 
