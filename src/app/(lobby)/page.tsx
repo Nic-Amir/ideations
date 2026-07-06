@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { Sparkles, Wallet } from 'lucide-react';
 import { GAMES, LIVE_GAMES } from '@/lib/games/game-registry';
-import { Badge, Button, Card } from '@trading-game/design-intelligence-layer';
+import { Badge, Card, TicketCard } from '@trading-game/design-intelligence-layer';
 import { GameIcon } from '@/components/layout/game-icon';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useMounted } from '@/hooks/use-mounted';
+import type { GameInfo } from '@/types';
 
 const RISK_COLOR: Record<string, string> = {
   High: 'text-semantic-loss',
@@ -14,56 +17,46 @@ const RISK_COLOR: Record<string, string> = {
   Low: 'text-semantic-win',
 };
 
+const FEATURED_GAME = LIVE_GAMES[0];
+const GRID_GAMES = GAMES.filter((game) => game.slug !== FEATURED_GAME?.slug);
+
+function isLive(slug: string) {
+  return LIVE_GAMES.some((game) => game.slug === slug);
+}
+
 export default function HomePage() {
+  const router = useRouter();
   const { balance, totalWagered, totalWon } = useBalanceStore();
   const mounted = useMounted();
 
   const net = balance - 10_000;
 
   return (
-    <div className="mx-auto max-w-3xl px-layout-margin-inline py-6">
-      <div className="mb-6">
-        <h1 className="heading-h2 font-display text-on-prominent">Ideations</h1>
-        <p className="body-sm text-on-subtle mt-1">
-          Market-driven digit games — demo pricing and mechanics.
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
+      <header className="flex items-center gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xs bg-primary">
+          <Sparkles className="size-5 text-on-prominent-static-inverse" />
+        </div>
+        <div>
+          <h1 className="font-display text-xl font-bold text-on-prominent">
+            Ideations
+          </h1>
+          <p className="text-sm text-on-subtle">
+            Market-driven digit games — demo pricing and mechanics.
+          </p>
+        </div>
+      </header>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {GAMES.map((game, idx) => {
-          const isLive = LIVE_GAMES.some((g) => g.slug === game.slug);
-          return (
-            <motion.div
-              key={game.slug}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.04, duration: 0.2 }}
-            >
-              {isLive ? (
-                <Link href={`/game/${game.slug}`} className="group block">
-                  <GameCardContent game={game} />
-                </Link>
-              ) : (
-                <div className="opacity-60">
-                  <GameCardContent game={game} preview />
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
-
-      <Card className="mt-4 border-0 bg-subtle">
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3 text-xs text-on-subtle">
-          <span>
-            Balance{' '}
-            <span
-              className={`font-display font-semibold tabular-nums text-on-prominent ${net < -1000 ? 'text-semantic-loss' : ''}`}
-            >
-              {mounted ? balance.toLocaleString() : '—'}
-            </span>
-          </span>
-          <span className="text-border-subtle">/</span>
+      <div className="space-y-2">
+        <TicketCard
+          icon={<Wallet size={20} className="text-primary" />}
+          label="Balance"
+          value={mounted ? balance.toLocaleString() : '—'}
+          currency="credits"
+          stubLabel="Verify"
+          onStubClick={() => router.push('/provably-fair')}
+        />
+        <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-on-subtle">
           <span>
             Net{' '}
             <span
@@ -87,31 +80,98 @@ export default function HomePage() {
             </span>
           </span>
         </div>
-      </Card>
-
-      <div className="mt-4 flex items-center justify-between">
-        <span className="body-xs text-on-subtle">
-          All outcomes from live Deriv tick data.
-        </span>
-        <Button variant="tertiary" size="sm" asChild>
-          <Link href="/provably-fair">Verify the math</Link>
-        </Button>
       </div>
+
+      {FEATURED_GAME && (
+        <section>
+          <Link href={`/game/${FEATURED_GAME.slug}`} className="block">
+            <FeaturedHeroCard game={FEATURED_GAME} />
+          </Link>
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-3 font-display text-sm font-bold text-on-prominent">
+          All games
+        </h2>
+        <div className="grid grid-cols-1 gap-3 min-[960px]:grid-cols-2">
+          {GRID_GAMES.map((game, idx) => {
+            const live = isLive(game.slug);
+            return (
+              <motion.div
+                key={game.slug}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.04, duration: 0.2 }}
+              >
+                {live ? (
+                  <Link href={`/game/${game.slug}`} className="group block">
+                    <GameGridCard game={game} />
+                  </Link>
+                ) : (
+                  <div className="opacity-60">
+                    <GameGridCard game={game} preview />
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      <p className="body-xs text-on-subtle">
+        All outcomes from live Deriv tick data.
+      </p>
     </div>
   );
 }
 
-function GameCardContent({
+function FeaturedHeroCard({ game }: { game: GameInfo }) {
+  return (
+    <Card className="relative flex min-h-[280px] flex-col justify-between overflow-hidden border-0 bg-primary p-6 transition-transform duration-200 hover:scale-[1.01] md:p-8">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-8 -bottom-8 select-none opacity-20"
+      >
+        <GameIcon iconKey={game.iconKey} className="size-48 text-on-prominent-static-inverse md:size-56" />
+      </div>
+
+      <div className="relative z-10">
+        <Badge variant="default-success" size="sm">
+          Featured
+        </Badge>
+      </div>
+
+      <div className="relative z-10 mt-auto">
+        <h3 className="font-display text-2xl font-bold leading-tight text-on-prominent-static-inverse md:text-3xl">
+          {game.name}
+        </h3>
+        <p className="mt-2 line-clamp-2 font-body text-sm font-semibold text-on-prominent-static-inverse md:text-base">
+          {game.shortPitch}
+        </p>
+        <div className="mt-2 flex items-center gap-2 font-body text-xs text-on-prominent-static-inverse/70">
+          <span className="uppercase">{game.category}</span>
+          <span>/</span>
+          <span>{game.risk}</span>
+          <span>/</span>
+          <span>{game.sessionLength}</span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function GameGridCard({
   game,
   preview,
 }: {
-  game: (typeof GAMES)[number];
+  game: GameInfo;
   preview?: boolean;
 }) {
   return (
-    <Card className="border-0 overflow-hidden h-fit bg-subtle hover:bg-secondary-hover transition-colors duration-fast">
-      <div className="flex flex-row items-center px-4 py-3">
-        <div className="flex-1 min-w-0">
+    <Card className="h-fit overflow-hidden border-0 bg-subtle transition-colors duration-fast hover:bg-secondary-hover">
+      <div className="flex flex-row items-center px-6 py-4">
+        <div className="min-w-0 flex-1">
           <div className="mb-2">
             <Badge
               variant={preview ? 'default-warning' : 'default-success'}
@@ -120,24 +180,24 @@ function GameCardContent({
               {preview ? 'Preview' : 'Live'}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-primary">
-              <GameIcon iconKey={game.iconKey} className="h-5 w-5" />
-            </span>
-            <h3 className="font-bold text-on-prominent text-xl font-display leading-tight">
-              {game.name}
-            </h3>
-          </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-on-subtle font-body">
+          <h3 className="font-display text-2xl font-bold leading-tight text-on-prominent">
+            {game.name}
+          </h3>
+          <p className="mt-2 font-body text-sm text-on-subtle">
+            {game.shortPitch}
+          </p>
+          <div className="mt-2 flex items-center gap-2 font-body text-xs text-on-subtle">
             <span className="uppercase">{game.category}</span>
             <span>/</span>
             <span className={RISK_COLOR[game.risk] ?? ''}>{game.risk}</span>
             <span>/</span>
             <span>{game.sessionLength}</span>
           </div>
-          <p className="text-sm text-on-subtle font-body mt-2">
-            {game.shortPitch}
-          </p>
+        </div>
+        <div className="relative ml-4 shrink-0">
+          <div className="flex size-[90px] items-center justify-center rounded-full bg-primary/10 transition-transform duration-200 group-hover:scale-105 min-[960px]:size-[115px]">
+            <GameIcon iconKey={game.iconKey} className="size-10 text-primary min-[960px]:size-12" />
+          </div>
         </div>
       </div>
     </Card>
