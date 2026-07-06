@@ -5,18 +5,17 @@ import {
   getPlinkoConfig,
   getBarrierPriceLevels,
   getDisplayZoneGroups,
-  computeSigmaEff,
   CORE_ZONE_INDEX,
   type VolatilityRun,
 } from '@/lib/games/plinko';
 import { getPlinkoMode, type BarrierZone, type PlinkoModeId } from '@/lib/games/plinko-modes';
-import { groupForAbsZ, type TargetGroup } from '@/lib/games/plinko-target';
 import {
   getPlinkoChartColors,
   getChartPadding,
   getPayoutStripWidth,
   payoutOutcomeColor,
 } from '@/components/games/plinko/plinko-chart-colors';
+import { getCallOdds, type CallGroup } from '@/lib/games/plinko-call';
 import {
   START_PRICE,
   PATH_TRAIL_MS,
@@ -234,21 +233,13 @@ export interface PlinkoChartProps {
   settleFloats: SettleFloat[];
   isEmpty: boolean;
   modeId: PlinkoModeId;
-  focusedRunId?: number | null;
-  onFocusRun?: (runId: number) => void;
-  /** Highlighted band group when a target bet is armed. */
-  targetGroup?: TargetGroup | null;
-  /** Tap a payout band to pick it as the target (target bet type only). */
-  onSelectTarget?: (group: TargetGroup) => void;
-}
-
-interface ChartScaleSnapshot {
-  bandX: number;
-  paddingTop: number;
-  plotH: number;
-  yMin: number;
-  yMax: number;
-  sigmaEff: number;
+  /** Called-shot band, highlighted on the payout strip. */
+  calledGroup?: CallGroup | null;
+  /** Tap on a payout band toggles a call. */
+  onSelectGroup?: (group: CallGroup) => void;
+  /** Tap anywhere on the plot area drops a path. */
+  onDropTap?: () => void;
+  canDrop?: boolean;
 }
 
 export function PlinkoChart({
@@ -261,13 +252,13 @@ export function PlinkoChart({
   settleFloats,
   isEmpty,
   modeId,
-  focusedRunId = null,
-  onFocusRun,
-  targetGroup = null,
-  onSelectTarget,
+  calledGroup = null,
+  onSelectGroup,
+  onDropTap,
+  canDrop = false,
 }: PlinkoChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const scaleRef = useRef<ChartScaleSnapshot | null>(null);
+  const drawSceneRef = useRef<() => void>(() => {});
   const isDesktop = useIsDesktop();
   const maxVisibleActive = isDesktop ? 5 : 3;
   const config = getPlinkoConfig(modeId);
@@ -279,31 +270,12 @@ export function PlinkoChart({
   const visibleActive = activeRuns.slice(0, maxVisibleActive);
   const waitingCount = Math.max(0, activeRuns.length - maxVisibleActive);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.scale(dpr, dpr);
-
-    const colors = getPlinkoChartColors();
-    const fontFamily = resolveTheme().fontFamily;
-    ctx.fillStyle = colors.bg;
-    ctx.fillRect(0, 0, width, height);
-
+  // Shared by the draw scene and pointer hit-testing so both agree on geometry.
+  const computeLayout = () => {
     const plotW = width - padding.left - padding.right;
     const plotH = height - padding.top - padding.bottom;
     const bandX = width - padding.right + 4;
-    const bandWidth = stripWidth;
 
-    const activeRunIds = new Set(visibleActive.map((r) => r.id));
     let allQuotes: number[] = [START_PRICE];
     for (const r of runs) allQuotes = allQuotes.concat(r.run.quotes);
     for (const r of visibleActive) allQuotes = allQuotes.concat(r.run.quotes);
@@ -322,14 +294,68 @@ export function PlinkoChart({
     const yScale = (v: number) =>
       padding.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
-    scaleRef.current = {
-      bandX,
-      paddingTop: padding.top,
-      plotH,
-      yMin,
-      yMax,
-      sigmaEff: computeSigmaEff(config.sigma, config.tickCount),
-    };
+    return { plotW, plotH, bandX, yMin, yMax, xScale, yScale };
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const { bandX, yScale, yMin, yMax } = computeLayout();
+
+    if (x >= bandX - 4) {
+      if (!onSelectGroup) return;
+      for (const dg of displayGroups) {
+        const b = getGroupBandBounds(dg.group, barrierLevels, yScale, yMin, yMax, modeId);
+        if (!b) continue;
+        if (dg.group === 'core') {
+          if (y >= b.posTop && y <= b.negBot) {
+            onSelectGroup(dg.group);
+            return;
+          }
+        } else {
+          const inPos = y >= b.posTop && y <= b.posBot;
+          const inNeg = y >= b.negTop && y <= b.negBot;
+          if (inPos || inNeg) {
+            onSelectGroup(dg.group);
+            return;
+          }
+        }
+      }
+      return;
+    }
+
+    if (canDrop && onDropTap) onDropTap();
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    function drawScene() {
+    if (!canvas || !ctx) return;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(dpr, dpr);
+
+    const colors = getPlinkoChartColors();
+    const fontFamily = resolveTheme().fontFamily;
+    ctx.fillStyle = colors.bg;
+    ctx.fillRect(0, 0, width, height);
+
+    const { plotH, bandX, yMin, yMax, xScale, yScale } = computeLayout();
+    const bandWidth = stripWidth;
+
+    const activeRunIds = new Set(visibleActive.map((r) => r.id));
 
     const focusPrice =
       visibleActive[visibleActive.length - 1]?.run.quotes[
@@ -378,6 +404,52 @@ export function PlinkoChart({
         ctx.stroke();
         ctx.setLineDash([]);
       }
+
+      // Called-shot highlight: pulsing outline + odds tag on the called band(s)
+      if (calledGroup) {
+        const bounds = getGroupBandBounds(calledGroup, barrierLevels, yScale, yMin, yMax, modeId);
+        if (bounds) {
+          const t = reducedMotion ? 0.5 : (performance.now() % 1600) / 1600;
+          const pulse = reducedMotion ? 0.8 : 0.55 + 0.45 * Math.abs(Math.sin(t * Math.PI));
+          const odds = getCallOdds(calledGroup);
+
+          const outline = (top: number, bottom: number) => {
+            if (bottom <= top) return;
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = withAlpha(bounds.color, 0.28);
+            ctx.fillRect(bandX, top, bandWidth, bottom - top);
+            ctx.strokeStyle = bounds.color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bandX + 1, top + 1, bandWidth - 2, bottom - top - 2);
+            ctx.restore();
+          };
+
+          if (calledGroup === 'core') {
+            outline(bounds.posTop, bounds.negBot);
+          } else {
+            outline(bounds.posTop, bounds.posBot);
+            outline(bounds.negTop, bounds.negBot);
+          }
+
+          const tagY = calledGroup === 'core'
+            ? (bounds.posTop + bounds.negBot) / 2
+            : (bounds.posTop + bounds.posBot) / 2;
+          const tag = `CALL ${odds}×`;
+          ctx.font = `bold 9px ${fontFamily}`;
+          const tagW = ctx.measureText(tag).width + 10;
+          const tagX = bandX - tagW - 6;
+          ctx.fillStyle = bounds.color;
+          ctx.beginPath();
+          ctx.roundRect(tagX, tagY - 8, tagW, 16, 8);
+          ctx.fill();
+          ctx.fillStyle = colors.bg;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(tag, tagX + tagW / 2, tagY);
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
     };
 
     // Grid
@@ -407,28 +479,31 @@ export function PlinkoChart({
 
     drawGroupedBands();
 
-    if (targetGroup) {
-      const bounds = getGroupBandBounds(targetGroup, barrierLevels, yScale, yMin, yMax, modeId);
-      if (bounds) {
-        const strokeTarget = (top: number, bottom: number) => {
-          if (bottom <= top) return;
-          ctx.save();
-          ctx.strokeStyle = bounds.color;
-          ctx.lineWidth = 2;
-          ctx.shadowColor = withAlpha(bounds.color, 0.6);
-          ctx.shadowBlur = 8;
-          ctx.strokeRect(bandX - 1.5, top + 1, bandWidth + 3, bottom - top - 2);
-          ctx.restore();
-          ctx.fillStyle = withAlpha(bounds.color, 0.14);
-          ctx.fillRect(bandX, top, bandWidth, bottom - top);
-        };
-        if (targetGroup === 'core') {
-          strokeTarget(bounds.posTop, bounds.negBot);
-        } else {
-          strokeTarget(bounds.posTop, bounds.posBot);
-          strokeTarget(bounds.negTop, bounds.negBot);
-        }
+    // Idle anticipation: pulsing entry dot + shimmer sweep on the payout strip
+    if (visibleActive.length === 0) {
+      const pathColors = getPathStroke(false);
+      if (!reducedMotion) {
+        const t = (performance.now() % 1400) / 1400;
+        ctx.strokeStyle = withAlpha(pathColors.stroke, (1 - t) * 0.5);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(padding.left, startY, 4 + t * 7, 0, Math.PI * 2);
+        ctx.stroke();
+
+        const sweepT = (performance.now() % 3200) / 3200;
+        const sweepY = padding.top + sweepT * plotH;
+        const sweepH = 44;
+        const grad = ctx.createLinearGradient(0, sweepY - sweepH / 2, 0, sweepY + sweepH / 2);
+        grad.addColorStop(0, withAlpha(pathColors.stroke, 0));
+        grad.addColorStop(0.5, withAlpha(pathColors.stroke, 0.1));
+        grad.addColorStop(1, withAlpha(pathColors.stroke, 0));
+        ctx.fillStyle = grad;
+        ctx.fillRect(bandX, Math.max(padding.top, sweepY - sweepH / 2), bandWidth, sweepH);
       }
+      ctx.fillStyle = pathColors.stroke;
+      ctx.beginPath();
+      ctx.arc(padding.left, startY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     if (isEmpty) {
@@ -437,12 +512,12 @@ export function PlinkoChart({
       ctx.font = `600 13px ${fontFamily}`;
       ctx.textAlign = 'center';
       ctx.fillText(
-        'Where the path ends = your multiplier',
+        'Tap anywhere to drop a path',
         width / 2,
         height / 2 - 8,
       );
       ctx.font = `500 11px ${fontFamily}`;
-      ctx.fillText('Start a session or drop a path', width / 2, height / 2 + 12);
+      ctx.fillText('Tap a payout band to call your shot', width / 2, height / 2 + 12);
       ctx.globalAlpha = 1;
       return;
     }
@@ -486,14 +561,12 @@ export function PlinkoChart({
     for (const r of trailRuns) {
       if (activeRunIds.has(r.id)) continue;
       const age = r.settledAt ? now - r.settledAt : 0;
-      const dimmed = focusedRunId !== null && r.id !== focusedRunId;
-      const fade = Math.max(0, 1 - age / PATH_TRAIL_MS) * (dimmed ? 0.15 : 1);
+      const fade = Math.max(0, 1 - age / PATH_TRAIL_MS);
       drawPath(ctx, r, xScale, yScale, true, fade);
       drawPathEndpoint(ctx, r.run, xScale, yScale, fade);
     }
 
     for (const activeRun of visibleActive) {
-      const dimmed = focusedRunId !== null && activeRun.id !== focusedRunId;
       drawActivePath(
         ctx,
         activeRun,
@@ -507,7 +580,7 @@ export function PlinkoChart({
         bandWidth,
         reducedMotion,
         modeId,
-        dimmed ? 0.2 : 1,
+        1,
       );
     }
 
@@ -515,7 +588,6 @@ export function PlinkoChart({
     const headRun = visibleActive[visibleActive.length - 1];
     if (headRun) {
       const quotes = headRun.run.quotes;
-      const total = quotes.length - 1;
       const progress =
         headRun.animProgress >= 1 ? 1 : headRun.pathRevealProgress;
       const head = interpolatePathHead(quotes, progress, xScale, yScale);
@@ -542,6 +614,24 @@ export function PlinkoChart({
           drawWinBurst(ctx, ex, ey, progress, f.id, f.payout >= 5 ? colors.semanticWin : getPathStroke(false).stroke);
         }
 
+        // Tiered celebration: big multipliers get an expanding ring on top
+        if (!reducedMotion && f.payout >= 10) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, 1 - progress) * 0.6;
+          ctx.strokeStyle = colors.semanticWin;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 8 + progress * 42, 0, Math.PI * 2);
+          ctx.stroke();
+          if (f.payout >= 25) {
+            ctx.beginPath();
+            ctx.arc(ex, ey, 4 + progress * 26, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        }
+
         ctx.globalAlpha = alpha;
         const isWin = f.payout >= 1;
         ctx.fillStyle = isWin ? colors.semanticWin : colors.semanticLoss;
@@ -562,24 +652,25 @@ export function PlinkoChart({
     const totalTicks = sampleLen - 1;
     ctx.fillText('tick', padding.left, height - 6);
     ctx.fillText(String(totalTicks), width - padding.right - stripWidth / 2, height - 6);
-  }, [
-    runs,
-    visibleActive,
-    width,
-    height,
-    zoneFlashes,
-    nearMissFlashes,
-    settleFloats,
-    isEmpty,
-    config.tickCount,
-    displayGroups,
-    barrierLevels,
-    padding,
-    stripWidth,
-    modeId,
-    focusedRunId,
-    targetGroup,
-  ]);
+    }
+
+    drawSceneRef.current = drawScene;
+    drawScene();
+  });
+
+  // Idle animation driver — while no active runs the parent stops re-rendering,
+  // so pulse/shimmer/trail-fade need their own frame loop.
+  useEffect(() => {
+    if (visibleActive.length > 0) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    const loop = () => {
+      drawSceneRef.current();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [visibleActive.length]);
 
   return (
     <div className="relative w-full h-full">
@@ -587,31 +678,11 @@ export function PlinkoChart({
         ref={canvasRef}
         className="block cursor-pointer"
         style={{ width, height }}
-        aria-label="Volatility path chart"
-        onClick={(e) => {
-          const snap = scaleRef.current;
-          if (onSelectTarget && snap) {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            if (x >= snap.bandX) {
-              const price =
-                snap.yMin +
-                ((snap.paddingTop + snap.plotH - y) / snap.plotH) * (snap.yMax - snap.yMin);
-              if (price > 0 && snap.sigmaEff > 0) {
-                const absZ = Math.abs(Math.log(price / START_PRICE) / snap.sigmaEff);
-                onSelectTarget(groupForAbsZ(absZ));
-              }
-              return;
-            }
-          }
-          if (!onFocusRun || visibleActive.length < 2) return;
-          const last = visibleActive[visibleActive.length - 1];
-          onFocusRun(focusedRunId === last.id ? visibleActive[0].id : last.id);
-        }}
+        aria-label="Volatility path chart — tap to drop, tap a payout band to call your shot"
+        onClick={handleCanvasClick}
       />
       {waitingCount > 0 ? (
-        <span className="absolute top-2 right-2 rounded-full bg-card px-2 py-0.5 text-[10px] font-medium text-on-subtle border border-border-subtle">
+        <span className="absolute top-9 left-2 rounded-full bg-card px-2 py-0.5 text-[10px] font-medium text-on-subtle border border-border-subtle">
           +{waitingCount} waiting
         </span>
       ) : null}

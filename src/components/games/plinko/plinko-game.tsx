@@ -2,12 +2,16 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getMaxPayout, isNetWin } from '@/lib/games/plinko';
 import {
-  getPlinkoConfig,
-  getMaxPayout,
-  isNetWin,
-} from '@/lib/games/plinko';
+  CALL_GROUP_LABELS,
+  getCallOdds,
+  getCallStake,
+  type CallGroup,
+} from '@/lib/games/plinko-call';
 import { Button } from '@trading-game/design-intelligence-layer';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport } from '@/components/games/shared/game-layout';
@@ -17,21 +21,19 @@ import {
   getResultTierFromPayout,
 } from '@/components/games/shared/result-overlay';
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
-import { useIsLandscape } from '@/hooks/use-landscape';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { PlinkoChart } from '@/components/games/plinko/plinko-chart';
 import { PlinkoSessionHud } from '@/components/games/plinko/plinko-session-hud';
 import { PlinkoSettleChip } from '@/components/games/plinko/plinko-settle-chip';
-import { PlinkoModePicker } from '@/components/games/plinko/plinko-mode-picker';
-import {
-  PlinkoBetTypeToggle,
-  PlinkoTargetPicker,
-} from '@/components/games/plinko/plinko-target-picker';
-import { TARGET_GROUP_LABELS } from '@/lib/games/plinko-target';
 import { PlinkoGoalPicker } from '@/components/games/plinko/plinko-goal-picker';
 import { PlinkoDistanceChip } from '@/components/games/plinko/plinko-distance-chip';
 import { PlinkoStreakBadge, formatZoneRange } from '@/components/games/plinko/plinko-ui';
-import { getPlinkoMode, type BarrierZone } from '@/lib/games/plinko-modes';
+import {
+  getPlinkoMode,
+  PLINKO_MODE_IDS,
+  type BarrierZone,
+  type PlinkoModeId,
+} from '@/lib/games/plinko-modes';
 import '@/components/games/plinko/plinko-game.css';
 import {
   useVolatilityPlinko,
@@ -50,9 +52,153 @@ function PlinkoFirstHint({ onDismiss }: { onDismiss: () => void }) {
       aria-label="Dismiss hint"
     >
       <span className="plinko-hint-pill">
-        Path lands in a zone — the multiplier on the right is what you get paid.
+        Tap the chart to drop a path. Tap a payout band first to call your shot
+        for a bonus.
       </span>
     </button>
+  );
+}
+
+/** Compact on-chart mode switch (Box-O instrument-chip style). */
+function PlinkoModeChip({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: PlinkoModeId;
+  onChange: (mode: PlinkoModeId) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Pricing mode"
+      className="flex rounded-full border border-border-subtle bg-card/90 p-0.5 backdrop-blur-sm"
+    >
+      {PLINKO_MODE_IDS.map((id) => {
+        const mode = getPlinkoMode(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={value === id}
+            disabled={disabled}
+            onClick={() => onChange(id)}
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors min-h-[24px]',
+              value === id
+                ? 'bg-prominent text-on-prominent shadow-sm'
+                : 'text-on-subtle hover:text-on-prominent',
+              disabled && 'opacity-60',
+            )}
+          >
+            {mode.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlinkoSessionSheet({
+  open,
+  stake,
+  modeId,
+  pendingSize,
+  goals,
+  canAfford,
+  playError,
+  onPickSize,
+  onPickGoal,
+  onBackToSizes,
+  onClose,
+}: {
+  open: boolean;
+  stake: number;
+  modeId: PlinkoModeId;
+  pendingSize: number | null;
+  goals: Parameters<typeof PlinkoGoalPicker>[0]['goals'];
+  canAfford: (n: number) => boolean;
+  playError: string | null;
+  onPickSize: (n: number) => void;
+  onPickGoal: (goal: Parameters<typeof PlinkoGoalPicker>[0]['goals'][number]) => void;
+  onBackToSizes: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 96, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 96, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-t-2xl border border-border-subtle bg-card p-4 pb-safe"
+          >
+            <div className="flex items-center justify-between gap-2 pb-3">
+              <p className="font-display text-sm font-bold text-on-prominent">
+                {pendingSize && goals.length > 0
+                  ? `Pick a goal — ${pendingSize} paths`
+                  : 'Start a session'}
+              </p>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={onClose}
+                className="rounded-full p-1.5 text-on-subtle hover:text-on-prominent"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {playError ? (
+              <p className="pb-2 text-xs text-semantic-loss">{playError}</p>
+            ) : null}
+
+            {pendingSize && goals.length > 0 ? (
+              <PlinkoGoalPicker
+                total={pendingSize}
+                modeId={modeId}
+                goals={goals}
+                onPick={onPickGoal}
+                onCancel={onBackToSizes}
+              />
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {SESSION_OPTIONS.map((n) => {
+                  const cost = n * stake;
+                  const affordable = canAfford(n);
+                  return (
+                    <Button
+                      key={n}
+                      variant="secondary"
+                      size="sm"
+                      className="min-h-[56px] flex flex-col gap-0.5 py-1"
+                      disabled={!affordable}
+                      onClick={() => onPickSize(n)}
+                    >
+                      <span className="font-display font-bold">{n} paths</span>
+                      <span className="body-xs opacity-80 tabular-nums">
+                        {cost.toLocaleString()} cr
+                      </span>
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -60,7 +206,7 @@ export function PlinkoGame() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartSize, setChartSize] = useState({ width: 320, height: 240 });
   const [showHint, setShowHint] = useState(false);
-  const isLandscape = useIsLandscape();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
   const {
@@ -91,18 +237,14 @@ export function PlinkoGame() {
     canAffordSession,
     selectedMode,
     setSelectedMode,
-    betType,
-    setBetType,
-    targetGroup,
-    setTargetGroup,
-    targetPayoutPreview,
     pendingSessionSize,
     offeredGoals,
     prepareSession,
     cancelSessionPrepare,
     sessionMilestone,
-    focusedRunId,
-    setFocusedRunId,
+    calledGroup,
+    setCalledGroup,
+    dropCost,
     generate,
     startSession,
     stopSession,
@@ -128,7 +270,7 @@ export function PlinkoGame() {
     if (!lastResult) return;
     if (playMode.kind !== 'single') return;
     if (showSessionSummary) return;
-    if (lastResult.payout <= 5) return;
+    if (lastResult.payout <= 5 && !lastResult.call?.hit) return;
     setShowResult(true);
   }, [lastResult, playMode.kind, showSessionSummary]);
 
@@ -143,14 +285,28 @@ export function PlinkoGame() {
     generate();
   }, [generate]);
 
+  const toggleCallGroup = useCallback(
+    (group: CallGroup) => {
+      if (sessionActive || sessionSettling) return;
+      setCalledGroup((prev) => (prev === group ? null : group));
+    },
+    [sessionActive, sessionSettling, setCalledGroup],
+  );
+
   const handleStartSession = useCallback(
     (total: number, goal: Parameters<typeof startSession>[1]) => {
       setShowResult(false);
       setStopConfirm(false);
+      setSheetOpen(false);
       startSession(total, goal);
     },
     [startSession],
   );
+
+  const closeSheet = useCallback(() => {
+    cancelSessionPrepare();
+    setSheetOpen(false);
+  }, [cancelSessionPrepare]);
 
   const handleStopSession = useCallback(() => {
     if (
@@ -179,17 +335,14 @@ export function PlinkoGame() {
     return () => ro.disconnect();
   }, []);
 
-  const generateLabel =
-    activeRuns.length >= MAX_CONCURRENT_RUNS
-      ? 'Max paths in flight'
-      : activeRuns.length > 0
-        ? 'Generate another'
-        : 'Generate path';
-
   const pathNetPL =
-    lastResult && showResult ? lastResult.amount - lastResult.stake : 0;
+    lastResult && showResult
+      ? lastResult.amount - lastResult.stake + (lastResult.call?.net ?? 0)
+      : 0;
 
   const modeDef = getPlinkoMode(selectedMode);
+  const callOdds = calledGroup ? getCallOdds(calledGroup) : null;
+  const callStake = calledGroup ? getCallStake(stake) : null;
 
   const infoSections: GameInfoSection[] = [
     {
@@ -202,17 +355,27 @@ export function PlinkoGame() {
             further you land from center; Stripes mixes win/lose bands at each
             distance. 98% RTP on both.
           </p>
-          <p>
-            Target bets flip the game: pick one band before the drop and get
-            paid its fair odds (minus 2% edge) only if the path lands there.
-            Rarer bands pay bigger — tap a band on the chart to arm it.
-          </p>
           <Link
             href="/provably-fair#volatility-plinko"
             className="inline-block text-xs text-primary hover:underline"
           >
             View full math &amp; payout model →
           </Link>
+        </div>
+      ),
+    },
+    {
+      id: 'call',
+      label: 'Call your shot',
+      content: (
+        <div className="space-y-2 text-sm text-on-subtle">
+          <p>
+            Tap a payout band before dropping to call where the path will land.
+            The call is a side bet of 25% of your stake, priced at fair odds
+            from the exact band probability with the same 98% RTP — rarer bands
+            pay bigger call odds.
+          </p>
+          <p>Calls apply to single drops only, not session paths.</p>
         </div>
       ),
     },
@@ -251,14 +414,21 @@ export function PlinkoGame() {
         <div className="space-y-2">
           {history.length ? (
             history.map((entry, index) => {
-              const net = entry.winAmount - entry.stake;
-              const won = isNetWin(entry.payout);
+              const net = entry.winAmount - entry.stake + (entry.callNet ?? 0);
+              const won = net >= 0 && isNetWin(entry.payout);
               return (
                 <div
                   key={`${entry.zoneIndex}-${entry.payout}-${index}`}
                   className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-xs"
                 >
-                  <span className="text-on-subtle truncate">{entry.zoneLabel}</span>
+                  <span className="text-on-subtle truncate">
+                    {entry.zoneLabel}
+                    {entry.callNet !== undefined
+                      ? entry.callNet > 0
+                        ? ' · call ✓'
+                        : ' · call ✕'
+                      : ''}
+                  </span>
                   <span className="font-display tabular-nums">{entry.payout}×</span>
                   <span
                     className={cn(
@@ -283,12 +453,21 @@ export function PlinkoGame() {
       label: 'Rules',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p>Select stake, pick a mode, and start a session with a goal — or quick-generate a single path. {(config.targetRTP * 100).toFixed(0)}% RTP · up to {getMaxPayout(selectedMode)}×.</p>
+          <p>Tap the chart to drop a path — where it ends is your multiplier. {(config.targetRTP * 100).toFixed(0)}% RTP · up to {getMaxPayout(selectedMode)}×.</p>
           <p>Session mode runs 5/10/25 paths in batches of up to {MAX_CONCURRENT_RUNS}.</p>
         </div>
       ),
     },
   ];
+
+  const resultSubtitle = lastResult
+    ? `${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move` +
+      (lastResult.call
+        ? lastResult.call.hit
+          ? ` · Called ${lastResult.call.label} ✓ +${(lastResult.call.net).toFixed(0)}`
+          : ` · Called ${lastResult.call.label} ✕`
+        : '')
+    : undefined;
 
   return (
     <GameShell infoSections={infoSections} showSymbolPicker={false}>
@@ -299,31 +478,6 @@ export function PlinkoGame() {
       <GameViewport
         play={
           <div className="flex flex-col flex-1 min-h-0">
-            <div className="shrink-0 px-layout-margin-inline py-2 space-y-2 border-b border-border-subtle bg-prominent">
-              <div className="grid grid-cols-2 gap-2">
-                <PlinkoModePicker
-                  value={selectedMode}
-                  onChange={setSelectedMode}
-                  disabled={sessionActive || sessionSettling || isAnimating}
-                />
-                <PlinkoBetTypeToggle
-                  value={betType}
-                  onChange={setBetType}
-                  disabled={sessionActive || sessionSettling || isAnimating}
-                />
-              </div>
-              {session ? (
-                <PlinkoSessionHud
-                  session={session}
-                  stake={stake}
-                  netWinStreak={netWinStreak}
-                  status={sessionSettling ? 'settling' : 'running'}
-                  milestone={sessionMilestone}
-                />
-              ) : (
-                <PlinkoStreakBadge count={netWinStreak} />
-              )}
-            </div>
             <div
               ref={chartContainerRef}
               className={cn('plinko-chart-root', chartPulse && 'is-pulse')}
@@ -338,16 +492,53 @@ export function PlinkoGame() {
                 settleFloats={settleFloats}
                 isEmpty={isEmpty}
                 modeId={selectedMode}
-                focusedRunId={focusedRunId}
-                onFocusRun={setFocusedRunId}
-                targetGroup={betType === 'target' ? targetGroup : null}
-                onSelectTarget={
-                  betType === 'target' && !sessionActive && !sessionSettling
-                    ? setTargetGroup
-                    : undefined
-                }
+                calledGroup={sessionActive || sessionSettling ? null : calledGroup}
+                onSelectGroup={toggleCallGroup}
+                onDropTap={canGenerate ? handleGenerate : undefined}
+                canDrop={canGenerate}
               />
+
               <PlinkoDistanceChip activeRuns={activeRuns} modeId={selectedMode} />
+
+              {/* On-chart chrome: mode chip + streak (Box-O floating-chip style) */}
+              {session ? (
+                <div className="absolute inset-x-2 top-2 z-10">
+                  <PlinkoSessionHud
+                    session={session}
+                    stake={stake}
+                    netWinStreak={netWinStreak}
+                    status={sessionSettling ? 'settling' : 'running'}
+                    milestone={sessionMilestone}
+                  />
+                </div>
+              ) : (
+                <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
+                  <PlinkoStreakBadge count={netWinStreak} />
+                  <PlinkoModeChip
+                    value={selectedMode}
+                    onChange={setSelectedMode}
+                    disabled={isAnimating}
+                  />
+                </div>
+              )}
+
+              {/* Active call chip */}
+              {calledGroup && !session ? (
+                <div className="absolute bottom-2 left-2 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setCalledGroup(null)}
+                    className="flex items-center gap-1.5 rounded-full border border-border-subtle bg-card/90 py-1 pl-2.5 pr-1.5 text-[11px] font-semibold text-on-prominent backdrop-blur-sm"
+                  >
+                    <span className="tabular-nums">
+                      Call {CALL_GROUP_LABELS[calledGroup]} · {callOdds}× ·{' '}
+                      {callStake} cr
+                    </span>
+                    <X className="size-3.5 text-on-subtle" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+
               {showHint && isEmpty ? <PlinkoFirstHint onDismiss={dismissHint} /> : null}
               <div className="absolute bottom-2 left-0 right-0 z-10 pointer-events-none">
                 <PlinkoSettleChip chip={settleChip} />
@@ -364,113 +555,74 @@ export function PlinkoGame() {
             stakeDisabled={sessionActive || sessionSettling}
             showSlider={!sessionActive && !sessionSettling && isDesktop}
             footer={
-              playError ? (
+              playError && !sheetOpen ? (
                 <span className="text-semantic-loss">{playError}</span>
               ) : isAnimating ? (
-                `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live`
-              ) : betType === 'target' ? (
-                `Target ${TARGET_GROUP_LABELS[targetGroup]} · ${targetPayoutPreview}× if hit`
-              ) : isLandscape ? (
-                `${modeDef.label} · 98% RTP`
+                `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live · tap to drop another`
+              ) : calledGroup && !sessionActive ? (
+                `Tap the chart to drop · ${dropCost.toLocaleString()} cr incl. call`
               ) : (
-                `${modeDef.shortPitch}`
+                `Tap the chart to drop a path · ${modeDef.shortPitch}`
               )
             }
             actions={
-              <>
-                {betType === 'target' && !sessionActive && !sessionSettling ? (
-                  <PlinkoTargetPicker
-                    value={targetGroup}
-                    modeId={selectedMode}
-                    onChange={setTargetGroup}
-                    disabled={isAnimating}
-                  />
-                ) : null}
-                {pendingSessionSize && offeredGoals.length > 0 ? (
-                  <PlinkoGoalPicker
-                    total={pendingSessionSize}
-                    modeId={selectedMode}
-                    goals={offeredGoals}
-                    onPick={(goal) => handleStartSession(pendingSessionSize, goal)}
-                    onCancel={cancelSessionPrepare}
-                  />
-                ) : null}
-                {sessionActive || sessionSettling ? (
-                  <>
-                    <div className="text-center text-xs text-on-subtle py-1">
-                      {sessionSettling
-                        ? 'Finishing in-flight paths…'
-                        : `Session running · ${session?.completed ?? 0}/${session?.total ?? 0}`}
-                    </div>
-                    <Button
-                      variant="secondary"
-                      className="w-full min-h-[44px]"
-                      onClick={handleStopSession}
-                    >
-                      {stopConfirm ? 'Tap again to stop' : 'Stop session'}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="primary"
-                      className="w-full min-h-[44px]"
-                      disabled={!canGenerate}
-                      aria-busy={isAnimating}
-                      onClick={handleGenerate}
-                    >
-                      {generateLabel}
-                    </Button>
-                    <div className="grid grid-cols-3 gap-2">
-                      {SESSION_OPTIONS.map((n) => {
-                        const cost = n * stake;
-                        const affordable = canAffordSession(n);
-                        return (
-                          <Button
-                            key={n}
-                            variant="secondary"
-                            size="sm"
-                            className="min-h-[44px] flex flex-col gap-0.5 py-1"
-                            disabled={!affordable || isAnimating}
-                            onClick={() => prepareSession(n)}
-                          >
-                            <span>{n} paths</span>
-                            <span className="body-xs opacity-80 tabular-nums">
-                              {cost.toLocaleString()} cr
-                            </span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </>
+              sessionActive || sessionSettling ? (
+                <>
+                  <div className="text-center text-xs text-on-subtle py-1">
+                    {sessionSettling
+                      ? 'Finishing in-flight paths…'
+                      : `Session running · ${session?.completed ?? 0}/${session?.total ?? 0}`}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="w-full min-h-[44px]"
+                    onClick={handleStopSession}
+                  >
+                    {stopConfirm ? 'Tap again to stop' : 'Stop session'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="secondary"
+                  className="w-full min-h-[44px]"
+                  disabled={isAnimating}
+                  onClick={() => setSheetOpen(true)}
+                >
+                  Start a session
+                </Button>
+              )
             }
           />
         }
       />
 
+      <PlinkoSessionSheet
+        open={sheetOpen && !sessionActive && !sessionSettling}
+        stake={stake}
+        modeId={selectedMode}
+        pendingSize={pendingSessionSize}
+        goals={offeredGoals}
+        canAfford={canAffordSession}
+        playError={sheetOpen ? playError : null}
+        onPickSize={prepareSession}
+        onPickGoal={(goal) => {
+          if (pendingSessionSize) handleStartSession(pendingSessionSize, goal);
+        }}
+        onBackToSizes={cancelSessionPrepare}
+        onClose={closeSheet}
+      />
+
       <ResultOverlay
-        open={showResult && !!lastResult && playMode.kind === 'single' && (lastResult.payout > 5)}
-        won={isNetWin(lastResult?.payout ?? 0)}
+        open={showResult && !!lastResult && playMode.kind === 'single'}
+        won={pathNetPL >= 0}
         tier={getResultTierFromPayout(lastResult?.payout ?? 0)}
-        title={
-          lastResult
-            ? lastResult.betType === 'target'
-              ? lastResult.targetHit
-                ? `Target hit — ${lastResult.payout}×`
-                : `Target missed · landed ${lastResult.zoneLabel}`
-              : `${lastResult.payout}× · ${lastResult.zoneLabel}`
-            : ''
-        }
-        subtitle={
-          lastResult
-            ? `${lastResult.pctChange >= 0 ? '+' : ''}${(lastResult.pctChange * 100).toFixed(2)}% move`
-            : undefined
-        }
+        title={lastResult ? `${lastResult.payout}× · ${lastResult.zoneLabel}` : ''}
+        subtitle={resultSubtitle}
         amount={lastResult ? Math.abs(pathNetPL) : undefined}
         amountLabel={pathNetPL >= 0 ? 'net' : 'lost'}
-        autoDismissMs={(lastResult?.payout ?? 0) > 5 ? 0 : 1500}
+        autoDismissMs={5000}
+        showAutoDismissBar
+        primaryAction={{ label: 'Drop again', onClick: handleGenerate }}
         onDismiss={dismissPathResult}
       />
 
