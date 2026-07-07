@@ -40,7 +40,10 @@ export function getPlinkoChartColors() {
 }
 
 export function getChartPadding(rightStripWidth: number) {
-  return { top: 20, right: rightStripWidth, bottom: 32, left: 56 };
+  // Extra top clearance keeps the canvas-drawn PAYOUT header and top band
+  // label from sitting under the on-chart mode chip / streak badge overlay,
+  // which is DOM-positioned in the same top-right corner.
+  return { top: 44, right: rightStripWidth, bottom: 32, left: 56 };
 }
 
 export function getPayoutStripWidth(chartWidth: number): number {

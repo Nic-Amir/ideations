@@ -540,7 +540,8 @@ export function PlinkoChart({
 
     drawGroupedBands();
 
-    // Idle anticipation: pulsing entry dot + shimmer sweep on the payout strip
+    // Idle anticipation: pulsing entry dot only (no strip sweep — it read as
+    // an opaque moving box rather than a subtle shimmer).
     if (visibleActive.length === 0) {
       const pathColors = getPathStroke(false);
       if (!reducedMotion) {
@@ -550,16 +551,6 @@ export function PlinkoChart({
         ctx.beginPath();
         ctx.arc(padding.left, startY, 4 + t * 7, 0, Math.PI * 2);
         ctx.stroke();
-
-        const sweepT = (performance.now() % 3200) / 3200;
-        const sweepY = padding.top + sweepT * plotH;
-        const sweepH = 44;
-        const grad = ctx.createLinearGradient(0, sweepY - sweepH / 2, 0, sweepY + sweepH / 2);
-        grad.addColorStop(0, withAlpha(pathColors.stroke, 0));
-        grad.addColorStop(0.5, withAlpha(pathColors.stroke, 0.1));
-        grad.addColorStop(1, withAlpha(pathColors.stroke, 0));
-        ctx.fillStyle = grad;
-        ctx.fillRect(bandX, Math.max(padding.top, sweepY - sweepH / 2), bandWidth, sweepH);
       }
       ctx.fillStyle = pathColors.stroke;
       ctx.beginPath();
