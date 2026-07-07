@@ -96,7 +96,8 @@ export type GameIconKey =
   | 'volatility-run'
   | 'barrier-race'
   | 'barrier-predictor'
-  | 'barrier-touch';
+  | 'barrier-touch'
+  | 'synthetic-derby';
 
 export type GameTrack = 'roadmap' | 'other';
 

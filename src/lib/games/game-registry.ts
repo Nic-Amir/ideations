@@ -111,6 +111,22 @@ export const GAMES: GameInfo[] = [
     track: 'roadmap',
     iconKey: 'barrier-touch',
   },
+  {
+    slug: 'synthetic-derby',
+    name: 'Synthetic Derby',
+    shortName: 'Derby',
+    description:
+      'Sixteen virtual horses — each a synthetic asset with its own drift and volatility — race to the highest terminal price. Bet Winner, Place, Couple, Trio or Quinté at exact model-driven odds.',
+    shortPitch: 'Horse-track betting on racing synthetic price processes.',
+    category: 'Race',
+    risk: 'High',
+    sessionLength: '10-30 sec',
+    mechanics: 'Read the odds board, build a bet from Winner up to an ordered Quinté, and watch the field race — the finish order is the ranking of final prices.',
+    marketSource: 'Client-side simulation',
+    status: 'Live',
+    track: 'roadmap',
+    iconKey: 'synthetic-derby',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');
