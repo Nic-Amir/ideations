@@ -79,6 +79,22 @@ export const GAMES: GameInfo[] = [
     track: 'roadmap',
     iconKey: 'barrier-race',
   },
+  {
+    slug: 'barrier-predictor',
+    name: 'Barrier Predictor',
+    shortName: 'Predictor',
+    description:
+      'A simulated price sits between two symmetric barriers. Predict which barrier it touches first — and get your stake back if it touches neither.',
+    shortPitch: 'Call the breakout direction of a price trapped in a corridor.',
+    category: 'Prediction',
+    risk: 'Medium',
+    sessionLength: '5-15 sec',
+    mechanics: 'Set duration and barrier distance, tap Upper or Lower, and watch the price race to a first touch — no touch refunds your stake.',
+    marketSource: 'Client-side simulation',
+    status: 'Live',
+    track: 'roadmap',
+    iconKey: 'barrier-predictor',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

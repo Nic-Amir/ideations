@@ -44,6 +44,14 @@ const BarrierRaceGame = dynamic(
   { ssr: false, loading: () => <GameLoading /> },
 );
 
+const BarrierPredictorGame = dynamic(
+  () =>
+    import('@/components/games/barrier-predictor/barrier-predictor-game').then(
+      (m) => m.BarrierPredictorGame,
+    ),
+  { ssr: false, loading: () => <GameLoading /> },
+);
+
 function GameLoading() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-prominent">
@@ -58,6 +66,7 @@ const GAME_COMPONENTS: Record<string, React.ComponentType> = {
   'digit-slots': DigitSlotsGame,
   'volatility-plinko': PlinkoGame,
   'barrier-race': BarrierRaceGame,
+  'barrier-predictor': BarrierPredictorGame,
 };
 
 export default function GamePage({

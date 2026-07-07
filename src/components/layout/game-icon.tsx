@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideProps } from "lucide-react";
-import { Activity, Dice3, Flag, Spade, Target } from "lucide-react";
+import { Activity, ChevronsUpDown, Dice3, Flag, Spade, Target } from "lucide-react";
 import type { GameIconKey } from "@/types";
 
 const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
@@ -10,6 +10,7 @@ const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
   "digit-slots": Dice3,
   "volatility-run": Activity,
   "barrier-race": Flag,
+  "barrier-predictor": ChevronsUpDown,
 };
 
 export function GameIcon({
