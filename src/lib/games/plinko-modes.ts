@@ -16,9 +16,9 @@ export interface PlinkoConfig {
   zones: BarrierZone[];
 }
 
-export type PlinkoModeId = 'split' | 'balanced';
+export type PlinkoModeId = 'simple' | 'split' | 'balanced';
 
-export type PlinkoChartStyle = 'ladder';
+export type PlinkoChartStyle = 'ladder' | 'simple';
 
 export interface PlinkoModeDefinition {
   id: PlinkoModeId;
@@ -27,6 +27,9 @@ export interface PlinkoModeDefinition {
   config: PlinkoConfig;
   coreZoneIndex: number | null;
   chartStyle: PlinkoChartStyle;
+  /** Advanced features — hidden in the entry-level mode. */
+  supportsCalls: boolean;
+  supportsSessions: boolean;
 }
 
 const BASE_TICK = 3600;
@@ -103,6 +106,35 @@ export function buildStripeZones(payouts: {
   ];
 }
 
+/**
+ * Simple wall — one sentence: land outside the lines → ~2×, inside → half back.
+ * Two payout values across the same 11-zone geometry (|Z| ≥ 1 wins, |Z| < 1
+ * refunds half). 2.01× is calibrated so RTP ≈ 98%:
+ * 0.5·P(|Z|<1) + 2.01·P(|Z|≥1) = 0.5·0.6827 + 2.01·0.3173 ≈ 0.979.
+ */
+export const SIMPLE_WIN_PAYOUT = 2.01;
+export const SIMPLE_REFUND_PAYOUT = 0.5;
+
+function buildSimpleZones(): BarrierZone[] {
+  const win = SIMPLE_WIN_PAYOUT;
+  const refund = SIMPLE_REFUND_PAYOUT;
+  const winColor = STRIPE_WIN_COLOR;
+  const refundColor = '#7B8794';
+  return [
+    { label: 'Win +', minSigma: 4, maxSigma: Infinity, payout: win, color: winColor, displayGroup: 'extreme' },
+    { label: 'Win +', minSigma: 3, maxSigma: 4, payout: win, color: winColor, displayGroup: 'outer' },
+    { label: 'Win +', minSigma: 2, maxSigma: 3, payout: win, color: winColor, displayGroup: 'mid' },
+    { label: 'Win +', minSigma: 1, maxSigma: 2, payout: win, color: winColor, displayGroup: 'inner' },
+    { label: 'Refund', minSigma: 0.5, maxSigma: 1, payout: refund, color: refundColor, displayGroup: 'micro' },
+    { label: 'Refund', minSigma: 0, maxSigma: 0.5, payout: refund, color: refundColor, displayGroup: 'core' },
+    { label: 'Refund', minSigma: 0.5, maxSigma: 1, payout: refund, color: refundColor, displayGroup: 'micro' },
+    { label: 'Win -', minSigma: 1, maxSigma: 2, payout: win, color: winColor, displayGroup: 'inner' },
+    { label: 'Win -', minSigma: 2, maxSigma: 3, payout: win, color: winColor, displayGroup: 'mid' },
+    { label: 'Win -', minSigma: 3, maxSigma: 4, payout: win, color: winColor, displayGroup: 'outer' },
+    { label: 'Win -', minSigma: 4, maxSigma: Infinity, payout: win, color: winColor, displayGroup: 'extreme' },
+  ];
+}
+
 export const SPLIT_CORE_INDEX = 5;
 export const STRIPE_CORE_INDEX = 5;
 
@@ -147,12 +179,29 @@ export function isNearMissForMode(
 }
 
 export const PLINKO_MODES: Record<PlinkoModeId, PlinkoModeDefinition> = {
+  simple: {
+    id: 'simple',
+    label: 'Simple',
+    shortPitch: 'Outside the lines doubles',
+    coreZoneIndex: SPLIT_CORE_INDEX,
+    chartStyle: 'simple',
+    supportsCalls: false,
+    supportsSessions: false,
+    config: {
+      tickCount: BASE_TICK,
+      sigma: BASE_SIGMA,
+      targetRTP: TARGET_RTP,
+      zones: buildSimpleZones(),
+    },
+  },
   split: {
     id: 'split',
     label: 'Split',
     shortPitch: 'Hunt the tails, dodge the core',
     coreZoneIndex: SPLIT_CORE_INDEX,
     chartStyle: 'ladder',
+    supportsCalls: true,
+    supportsSessions: true,
     config: {
       tickCount: BASE_TICK,
       sigma: BASE_SIGMA,
@@ -173,6 +222,8 @@ export const PLINKO_MODES: Record<PlinkoModeId, PlinkoModeDefinition> = {
     shortPitch: 'Same wall — mixed payouts per band',
     coreZoneIndex: STRIPE_CORE_INDEX,
     chartStyle: 'ladder',
+    supportsCalls: true,
+    supportsSessions: true,
     config: {
       tickCount: BASE_TICK,
       sigma: BASE_SIGMA,
@@ -191,7 +242,7 @@ export const PLINKO_MODES: Record<PlinkoModeId, PlinkoModeDefinition> = {
 
 export const PLINKO_MODE_IDS = Object.keys(PLINKO_MODES) as PlinkoModeId[];
 
-export const DEFAULT_PLINKO_MODE: PlinkoModeId = 'split';
+export const DEFAULT_PLINKO_MODE: PlinkoModeId = 'simple';
 
 export function getPlinkoMode(id: PlinkoModeId = DEFAULT_PLINKO_MODE): PlinkoModeDefinition {
   return PLINKO_MODES[id] ?? PLINKO_MODES.split;

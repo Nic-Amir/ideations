@@ -330,6 +330,10 @@ export function getDistanceToNextZoneLabel(
   modeId: PlinkoModeId = DEFAULT_PLINKO_MODE,
 ): string | null {
   const absZ = Math.abs(zScore);
+  if (modeId === 'simple') {
+    if (absZ >= 1) return 'In the win zone';
+    return `${(1 - absZ).toFixed(2)}σ to the win zone`;
+  }
   if (absZ < 0.5) {
     const dist = 0.5 - absZ;
     return modeId === 'balanced'

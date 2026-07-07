@@ -52,8 +52,8 @@ function PlinkoFirstHint({ onDismiss }: { onDismiss: () => void }) {
       aria-label="Dismiss hint"
     >
       <span className="plinko-hint-pill">
-        Tap the chart to drop a path. Tap a payout band first to call your shot
-        for a bonus.
+        Press Drop to send a path down the wall — where it lands is what you
+        get paid.
       </span>
     </button>
   );
@@ -285,12 +285,15 @@ export function PlinkoGame() {
     generate();
   }, [generate]);
 
+  const supportsCalls = getPlinkoMode(selectedMode).supportsCalls;
+  const supportsSessions = getPlinkoMode(selectedMode).supportsSessions;
+
   const toggleCallGroup = useCallback(
     (group: CallGroup) => {
-      if (sessionActive || sessionSettling) return;
+      if (sessionActive || sessionSettling || !supportsCalls) return;
       setCalledGroup((prev) => (prev === group ? null : group));
     },
-    [sessionActive, sessionSettling, setCalledGroup],
+    [sessionActive, sessionSettling, supportsCalls, setCalledGroup],
   );
 
   const handleStartSession = useCallback(
@@ -344,6 +347,15 @@ export function PlinkoGame() {
   const callOdds = calledGroup ? getCallOdds(calledGroup) : null;
   const callStake = calledGroup ? getCallStake(stake) : null;
 
+  // Simple mode collapses the 11-zone wall into two readable payout rows.
+  const payoutRows: BarrierZone[] =
+    modeDef.chartStyle === 'simple'
+      ? [
+          { ...config.zones[3], label: 'Win', maxSigma: Infinity },
+          { ...config.zones[5], label: 'Refund', minSigma: 0, maxSigma: 1 },
+        ]
+      : config.zones;
+
   const infoSections: GameInfoSection[] = [
     {
       id: 'about',
@@ -351,9 +363,10 @@ export function PlinkoGame() {
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
           <p>
-            Two pricing modes share the same payout wall. Split pays more the
-            further you land from center; Stripes mixes win/lose bands at each
-            distance. 98% RTP on both.
+            Three modes on the same volatility wall, easiest first. Simple:
+            land outside the ±1σ lines and your stake doubles, inside refunds
+            half. Split pays more the further you land from center; Stripes
+            mixes win/lose bands at each distance. ~98% RTP on all three.
           </p>
           <Link
             href="/provably-fair#volatility-plinko"
@@ -364,27 +377,31 @@ export function PlinkoGame() {
         </div>
       ),
     },
-    {
-      id: 'call',
-      label: 'Call your shot',
-      content: (
-        <div className="space-y-2 text-sm text-on-subtle">
-          <p>
-            Tap a payout band before dropping to call where the path will land.
-            The call is a side bet of 25% of your stake, priced at fair odds
-            from the exact band probability with the same 98% RTP — rarer bands
-            pay bigger call odds.
-          </p>
-          <p>Calls apply to single drops only, not session paths.</p>
-        </div>
-      ),
-    },
+    ...(supportsCalls
+      ? [
+          {
+            id: 'call',
+            label: 'Call your shot',
+            content: (
+              <div className="space-y-2 text-sm text-on-subtle">
+                <p>
+                  Tap a payout band before dropping to call where the path will
+                  land. The call is a side bet of 25% of your stake, priced at
+                  fair odds from the exact band probability with the same 98%
+                  RTP — rarer bands pay bigger call odds.
+                </p>
+                <p>Calls apply to single drops only, not session paths.</p>
+              </div>
+            ),
+          } satisfies GameInfoSection,
+        ]
+      : []),
     {
       id: 'payouts',
       label: 'Payouts',
       content: (
         <div className="space-y-2">
-          {config.zones.map((zone: BarrierZone, i: number) => (
+          {payoutRows.map((zone, i) => (
             <div key={i} className="rounded-lg bg-subtle px-3 py-2 body-xs space-y-1">
               <div className="flex items-center gap-2">
                 <span
@@ -453,8 +470,12 @@ export function PlinkoGame() {
       label: 'Rules',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p>Tap the chart to drop a path — where it ends is your multiplier. {(config.targetRTP * 100).toFixed(0)}% RTP · up to {getMaxPayout(selectedMode)}×.</p>
-          <p>Session mode runs 5/10/25 paths in batches of up to {MAX_CONCURRENT_RUNS}.</p>
+          <p>Press Drop (or tap the chart) to send one path down the wall — where it ends is your multiplier. {(config.targetRTP * 100).toFixed(0)}% RTP · up to {getMaxPayout(selectedMode)}×.</p>
+          {supportsSessions ? (
+            <p>Session mode runs 5/10/25 paths in batches of up to {MAX_CONCURRENT_RUNS}.</p>
+          ) : (
+            <p>Switch to Split or Stripes for sessions and call-your-shot side bets.</p>
+          )}
         </div>
       ),
     },
@@ -492,8 +513,8 @@ export function PlinkoGame() {
                 settleFloats={settleFloats}
                 isEmpty={isEmpty}
                 modeId={selectedMode}
-                calledGroup={sessionActive || sessionSettling ? null : calledGroup}
-                onSelectGroup={toggleCallGroup}
+                calledGroup={sessionActive || sessionSettling || !supportsCalls ? null : calledGroup}
+                onSelectGroup={supportsCalls ? toggleCallGroup : undefined}
                 onDropTap={canGenerate ? handleGenerate : undefined}
                 canDrop={canGenerate}
               />
@@ -558,11 +579,11 @@ export function PlinkoGame() {
               playError && !sheetOpen ? (
                 <span className="text-semantic-loss">{playError}</span>
               ) : isAnimating ? (
-                `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live · tap to drop another`
+                `${activeRuns.length} path${activeRuns.length === 1 ? '' : 's'} live`
               ) : calledGroup && !sessionActive ? (
-                `Tap the chart to drop · ${dropCost.toLocaleString()} cr incl. call`
+                `${dropCost.toLocaleString()} cr per drop incl. call`
               ) : (
-                `Tap the chart to drop a path · ${modeDef.shortPitch}`
+                modeDef.shortPitch
               )
             }
             actions={
@@ -582,14 +603,27 @@ export function PlinkoGame() {
                   </Button>
                 </>
               ) : (
-                <Button
-                  variant="secondary"
-                  className="w-full min-h-[44px]"
-                  disabled={isAnimating}
-                  onClick={() => setSheetOpen(true)}
-                >
-                  Start a session
-                </Button>
+                <div className={cn('grid gap-2', supportsSessions && 'grid-cols-[2fr_1fr]')}>
+                  <Button
+                    variant="primary"
+                    className="w-full min-h-[44px] font-display font-bold tabular-nums"
+                    disabled={!canGenerate}
+                    aria-busy={isAnimating}
+                    onClick={handleGenerate}
+                  >
+                    Drop — {dropCost.toLocaleString()} cr
+                  </Button>
+                  {supportsSessions ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full min-h-[44px]"
+                      disabled={isAnimating}
+                      onClick={() => setSheetOpen(true)}
+                    >
+                      Session
+                    </Button>
+                  ) : null}
+                </div>
               )
             }
           />
@@ -597,7 +631,7 @@ export function PlinkoGame() {
       />
 
       <PlinkoSessionSheet
-        open={sheetOpen && !sessionActive && !sessionSettling}
+        open={sheetOpen && supportsSessions && !sessionActive && !sessionSettling}
         stake={stake}
         modeId={selectedMode}
         pendingSize={pendingSessionSize}

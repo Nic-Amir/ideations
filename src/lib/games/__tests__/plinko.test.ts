@@ -18,7 +18,6 @@ import {
   isNetWin,
   isNearMiss,
   isMonotonicLadder,
-  normalCDF,
   ZONE_COUNT,
   CORE_ZONE_INDEX,
 } from '../plinko';
@@ -56,10 +55,10 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
   });
 
   test('zone label and color helpers resolve from zone index', () => {
-    expect(getZoneLabel(0)).toBe('Extreme +');
-    expect(getZoneLabel(CORE_ZONE_INDEX)).toBe('Core');
-    expect(getZoneColor(0)).toBe('#2323FF');
-    expect(getMaxPayout()).toBe(37.58);
+    expect(getZoneLabel(0, 'split')).toBe('Extreme +');
+    expect(getZoneLabel(CORE_ZONE_INDEX, 'split')).toBe('Core');
+    expect(getZoneColor(0, 'split')).toBe('#2323FF');
+    expect(getMaxPayout('split')).toBe(37.58);
   });
 
   test('GBM quote generates a positive number', () => {
@@ -159,17 +158,60 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
     expect(isNetWin(1.2)).toBe(true);
   });
 
-  test('isNearMiss detects core lands near micro boundary', () => {
-    expect(isNearMiss(CORE_ZONE_INDEX, 0.39)).toBe(true);
-    expect(isNearMiss(CORE_ZONE_INDEX, -0.42)).toBe(true);
-    expect(isNearMiss(CORE_ZONE_INDEX, 0.2)).toBe(false);
-    expect(isNearMiss(4, 0.7)).toBe(false);
+  test('isNearMiss detects core lands near micro boundary (split only)', () => {
+    expect(isNearMiss(CORE_ZONE_INDEX, 0.39, 'split')).toBe(true);
+    expect(isNearMiss(CORE_ZONE_INDEX, -0.42, 'split')).toBe(true);
+    expect(isNearMiss(CORE_ZONE_INDEX, 0.2, 'split')).toBe(false);
+    expect(isNearMiss(4, 0.7, 'split')).toBe(false);
+    expect(isNearMiss(CORE_ZONE_INDEX, 0.39, 'simple')).toBe(false);
   });
 
   test('analytical RTP is within ±2% of 98%', () => {
     const rtp = computeAnalyticalRTP();
     expect(rtp).toBeGreaterThan(0.96);
     expect(rtp).toBeLessThan(1.0);
+  });
+
+  describe('simple mode (entry tier)', () => {
+    test('simple is the default mode and hides advanced features', () => {
+      expect(getPlinkoMode().id).toBe('simple');
+      expect(getPlinkoMode('simple').supportsCalls).toBe(false);
+      expect(getPlinkoMode('simple').supportsSessions).toBe(false);
+      expect(getPlinkoMode('split').supportsCalls).toBe(true);
+      expect(getPlinkoMode('split').supportsSessions).toBe(true);
+      expect(getPlinkoMode('balanced').supportsCalls).toBe(true);
+      expect(getPlinkoMode('balanced').supportsSessions).toBe(true);
+    });
+
+    test('simple wall has exactly two payout values: win outside ±1σ, refund inside', () => {
+      const zones = getPlinkoConfig('simple').zones;
+      expect(zones).toHaveLength(ZONE_COUNT);
+      for (const zone of zones) {
+        if (zone.minSigma >= 1) {
+          expect(zone.payout).toBe(2.01);
+        } else {
+          expect(zone.payout).toBe(0.5);
+        }
+      }
+    });
+
+    test('simple zone resolution: |Z| < 1 refunds half, |Z| ≥ 1 doubles', () => {
+      const zones = getPlinkoConfig('simple').zones;
+      const sigmaEff = 0.05;
+      const inside = resolveZone(0.7 * sigmaEff, sigmaEff, zones);
+      expect(inside.payout).toBe(0.5);
+      const outside = resolveZone(1.4 * sigmaEff, sigmaEff, zones);
+      expect(outside.payout).toBe(2.01);
+      const negOutside = resolveZone(-2.5 * sigmaEff, sigmaEff, zones);
+      expect(negOutside.payout).toBe(2.01);
+    });
+
+    test('simple analytical RTP is near 98%', () => {
+      // 0.5·P(|Z|<1) + 2.01·P(|Z|≥1) ≈ 0.979
+      const rtp = computeAnalyticalRTP('simple');
+      expect(rtp).toBeGreaterThan(0.97);
+      expect(rtp).toBeLessThan(0.99);
+    });
   });
 
   describe('multi-mode pricing', () => {
@@ -251,7 +293,7 @@ describe('Plinko Engine (European Multi-Barrier Option)', () => {
       60_000,
     );
 
-    test.each(['split', 'balanced'] as const)(
+    test.each(['simple', 'split', 'balanced'] as const)(
       '%s RTP is within ±1.5% of 98%',
       (modeId) => {
         const rtp = computeSimulatedRTP(80_000, modeId);

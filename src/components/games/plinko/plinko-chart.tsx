@@ -186,6 +186,31 @@ function matchZoneForGroup(
   return zones.find((z: BarrierZone) => z.displayGroup === group) ?? zones[0];
 }
 
+/**
+ * Simple-wall geometry: three merged regions split at the ±1σ lines.
+ * Win above +1σ, refund between, win below −1σ.
+ */
+function getSimpleBandBounds(
+  zoneIndex: number,
+  barrierLevels: ReturnType<typeof getBarrierPriceLevels>,
+  yScale: (v: number) => number,
+  plotTop: number,
+  plotBottom: number,
+  modeId: PlinkoModeId,
+): { top: number; bottom: number; zone: BarrierZone } | null {
+  const zones = getPlinkoConfig(modeId).zones;
+  const zone = zones[zoneIndex];
+  if (!zone) return null;
+  const posY = yScale(barrierLevels.find((b) => b.sigma === 1)?.price ?? START_PRICE);
+  const negY = yScale(barrierLevels.find((b) => b.sigma === -1)?.price ?? START_PRICE);
+  if (zone.payout >= 1) {
+    return zoneIndex < CORE_ZONE_INDEX
+      ? { top: plotTop, bottom: posY, zone }
+      : { top: negY, bottom: plotBottom, zone };
+  }
+  return { top: posY, bottom: negY, zone };
+}
+
 function getZoneBandBounds(
   zoneIndex: number,
   barrierLevels: ReturnType<typeof getBarrierPriceLevels>,
@@ -262,6 +287,7 @@ export function PlinkoChart({
   const isDesktop = useIsDesktop();
   const maxVisibleActive = isDesktop ? 5 : 3;
   const config = getPlinkoConfig(modeId);
+  const isSimple = getPlinkoMode(modeId).chartStyle === 'simple';
   const displayGroups = getDisplayZoneGroups(modeId);
   const barrierLevels = getBarrierPriceLevels(START_PRICE, modeId);
   const stripWidth = getPayoutStripWidth(width);
@@ -305,8 +331,8 @@ export function PlinkoChart({
     const y = e.clientY - rect.top;
     const { bandX, yScale, yMin, yMax } = computeLayout();
 
-    if (x >= bandX - 4) {
-      if (!onSelectGroup) return;
+    // Without call support (Simple mode) the whole surface is a drop target.
+    if (x >= bandX - 4 && onSelectGroup) {
       for (const dg of displayGroups) {
         const b = getGroupBandBounds(dg.group, barrierLevels, yScale, yMin, yMax, modeId);
         if (!b) continue;
@@ -367,6 +393,41 @@ export function PlinkoChart({
       ctx.font = `700 8px ${fontFamily}`;
       ctx.textAlign = 'center';
       ctx.fillText('PAYOUT', bandX + bandWidth / 2, padding.top - 4);
+
+      if (isSimple) {
+        // Three merged regions split at ±1σ — readable in one glance.
+        const zones = getPlinkoConfig(modeId).zones;
+        const posY = yScale(barrierLevels.find((b) => b.sigma === 1)?.price ?? START_PRICE);
+        const negY = yScale(barrierLevels.find((b) => b.sigma === -1)?.price ?? START_PRICE);
+        const plotBottom = height - padding.bottom;
+        const fog = isEmpty ? 1 : computeFogBlend(focusPrice, yScale(START_PRICE), plotH / 2);
+
+        const regions = [
+          { top: padding.top, bottom: posY, zone: zones[3] },
+          { top: posY, bottom: negY, zone: zones[CORE_ZONE_INDEX] },
+          { top: negY, bottom: plotBottom, zone: zones[7] },
+        ];
+        for (const r of regions) {
+          if (r.bottom <= r.top) continue;
+          ctx.fillStyle = payoutStripFill(r.zone, fog, isEmpty);
+          ctx.fillRect(bandX, r.top, bandWidth, r.bottom - r.top);
+          drawPayoutStripLabel(ctx, r.zone, r.top, r.bottom, bandX, bandWidth, colors, fontFamily);
+        }
+
+        for (const barrier of barrierLevels) {
+          if (Math.abs(barrier.sigma) !== 1) continue;
+          const by = yScale(barrier.price);
+          ctx.strokeStyle = isEmpty ? colors.grid : colors.gridActive;
+          ctx.setLineDash([2, 4]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(padding.left, by);
+          ctx.lineTo(bandX, by);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        return;
+      }
 
       for (const dg of displayGroups) {
         const bounds = getGroupBandBounds(dg.group, barrierLevels, yScale, yMin, yMax, modeId);
@@ -517,7 +578,13 @@ export function PlinkoChart({
         height / 2 - 8,
       );
       ctx.font = `500 11px ${fontFamily}`;
-      ctx.fillText('Tap a payout band to call your shot', width / 2, height / 2 + 12);
+      ctx.fillText(
+        isSimple
+          ? 'Land outside the lines to double your stake'
+          : 'Tap a payout band to call your shot',
+        width / 2,
+        height / 2 + 12,
+      );
       ctx.globalAlpha = 1;
       return;
     }
@@ -527,7 +594,9 @@ export function PlinkoChart({
     for (const flash of zoneFlashes) {
       if (flash.until <= now) continue;
       const alpha = reducedMotion ? 0.5 : Math.min(1, (flash.until - now) / 600);
-      const bounds = getZoneBandBounds(flash.zoneIndex, barrierLevels, yScale, yMin, yMax, modeId);
+      const bounds = isSimple
+        ? getSimpleBandBounds(flash.zoneIndex, barrierLevels, yScale, padding.top, height - padding.bottom, modeId)
+        : getZoneBandBounds(flash.zoneIndex, barrierLevels, yScale, yMin, yMax, modeId);
       if (!bounds) continue;
       ctx.fillStyle = bounds.zone.color + Math.round(alpha * 90).toString(16).padStart(2, '0');
       ctx.fillRect(bandX, bounds.top, bandWidth, bounds.bottom - bounds.top);
@@ -549,7 +618,10 @@ export function PlinkoChart({
     ctx.fillStyle = colors.textMuted;
     ctx.font = `600 8px ${fontFamily}`;
     ctx.textAlign = 'right';
-    for (const barrier of barrierLevels.filter((b) => Math.abs(b.sigma) >= 1)) {
+    const labeledLevels = barrierLevels.filter((b) =>
+      isSimple ? Math.abs(b.sigma) === 1 : Math.abs(b.sigma) >= 1,
+    );
+    for (const barrier of labeledLevels) {
       const by = yScale(barrier.price);
       ctx.fillText(`${barrier.sigma > 0 ? '+' : ''}${barrier.sigma}σ`, padding.left - 4, by + 3);
     }
@@ -581,6 +653,7 @@ export function PlinkoChart({
         reducedMotion,
         modeId,
         1,
+        isSimple ? { top: padding.top, bottom: height - padding.bottom } : null,
       );
     }
 
@@ -784,6 +857,7 @@ function drawActivePath(
   reducedMotion: boolean,
   modeId: PlinkoModeId,
   pathAlpha = 1,
+  simplePlot: { top: number; bottom: number } | null = null,
 ) {
   const quotes = activeRun.run.quotes;
   const total = quotes.length - 1;
@@ -834,14 +908,23 @@ function drawActivePath(
   ctx.fill();
 
   if (activeRun.animProgress >= 1) {
-    const bounds = getZoneBandBounds(
-      activeRun.run.zoneIndex,
-      barrierLevels,
-      yScaleFn,
-      yMin,
-      yMax,
-      modeId,
-    );
+    const bounds = simplePlot
+      ? getSimpleBandBounds(
+          activeRun.run.zoneIndex,
+          barrierLevels,
+          yScaleFn,
+          simplePlot.top,
+          simplePlot.bottom,
+          modeId,
+        )
+      : getZoneBandBounds(
+          activeRun.run.zoneIndex,
+          barrierLevels,
+          yScaleFn,
+          yMin,
+          yMax,
+          modeId,
+        );
     if (bounds) {
       ctx.strokeStyle = bounds.zone.color;
       ctx.lineWidth = 2;

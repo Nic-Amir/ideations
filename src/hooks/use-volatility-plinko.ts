@@ -12,7 +12,6 @@ import {
   getZoneColor,
   isNetWin,
   isNearMiss,
-  CORE_ZONE_INDEX,
   PLINKO_START_PRICE,
   DEFAULT_PLINKO_MODE,
   type VolatilityRun,
@@ -22,7 +21,6 @@ import {
   type SessionGoal,
   type SessionGoalProgress,
   type SessionMilestone,
-  createInitialGoalProgress,
   evaluateGoalProgress,
   pickSessionGoals,
   getMilestoneMessage,
@@ -360,6 +358,12 @@ export function useVolatilityPlinko() {
   useEffect(() => { modeRef.current = selectedMode; }, [selectedMode]);
   useEffect(() => { calledGroupRef.current = calledGroup; }, [calledGroup]);
 
+  // Mode switch clears any pending call when the target mode lacks call support.
+  const selectMode = useCallback((mode: PlinkoModeId) => {
+    setSelectedMode(mode);
+    if (!getPlinkoMode(mode).supportsCalls) setCalledGroup(null);
+  }, []);
+
   const queueRuns = useCallback((count: number, call?: ShotCall | null): number => {
     const current = activeRunsRef.current;
     const available = MAX_CONCURRENT_RUNS - current.length;
@@ -413,8 +417,12 @@ export function useVolatilityPlinko() {
 
 
   const queueRun = useCallback((): boolean => {
-    // Call side bets apply to single drops only, never to session paths.
-    const group = playModeRef.current.kind === 'session' ? null : calledGroupRef.current;
+    // Call side bets apply to single drops only, never to session paths,
+    // and only in modes that support them.
+    const group =
+      playModeRef.current.kind === 'session' || !getPlinkoMode(modeRef.current).supportsCalls
+        ? null
+        : calledGroupRef.current;
     const call = group ? buildShotCall(group, stakeRef.current) : null;
     return queueRuns(1, call) === 1;
   }, [queueRuns]);
@@ -903,7 +911,7 @@ export function useVolatilityPlinko() {
     canGenerate,
     canAffordSession: (total: number) => canAffordSession(total, stake, balance),
     selectedMode,
-    setSelectedMode,
+    setSelectedMode: selectMode,
     pendingSessionSize,
     offeredGoals,
     prepareSession,

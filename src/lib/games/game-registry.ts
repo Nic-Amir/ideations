@@ -57,7 +57,7 @@ export const GAMES: GameInfo[] = [
     category: 'Simulation',
     risk: 'High',
     sessionLength: '20-60 sec',
-    mechanics: 'Tap to drop a path, call your landing band for bonus odds, and settle on the terminal move zone.',
+    mechanics: 'Drop a path and settle on the terminal move zone — start Simple, graduate to Split/Stripes with calls and sessions.',
     marketSource: 'Client-side simulation',
     status: 'Live',
     track: 'roadmap',
