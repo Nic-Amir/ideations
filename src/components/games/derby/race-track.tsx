@@ -26,6 +26,44 @@ const START_X = 0.02;
 /** The finish line sits at this fraction of the lane width. */
 const FINISH_X = 0.94;
 
+/** Live top-5 strip, shared between the track and chart views. */
+export function LeaderboardStrip({
+  card,
+  liveRanks,
+  selection,
+  statusLabel,
+}: {
+  card: RaceCard;
+  liveRanks: number[];
+  selection: number[];
+  statusLabel: string;
+}) {
+  return (
+    <div className="flex items-center gap-1 overflow-hidden px-2 py-1.5">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+        {statusLabel}
+      </span>
+      {liveRanks.slice(0, 5).map((horse, position) => (
+        <span
+          key={horse}
+          className={cn(
+            'flex min-w-0 items-center gap-1 rounded-full border border-border-subtle bg-subtle px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors',
+            selection.includes(horse) && 'border-border-prominent text-on-prominent',
+            !selection.includes(horse) && 'text-on-subtle',
+          )}
+        >
+          <span className="text-on-subtle">{position + 1}</span>
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: card.horses[horse].silks }}
+          />
+          <span className="truncate">{card.horses[horse].name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function RaceTrack({
   card,
   path,
@@ -72,32 +110,17 @@ export function RaceTrack({
   }, [liveRanks]);
 
   const leader = liveRanks[0];
+  const revealedTick = Math.min(visibleTick, totalTicks);
 
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       {/* Live top-5 leaderboard strip */}
-      <div className="flex items-center gap-1 overflow-hidden px-2 py-1.5">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-          {running ? (finished ? 'Finish' : 'Live') : 'Post'}
-        </span>
-        {liveRanks.slice(0, 5).map((horse, position) => (
-          <span
-            key={horse}
-            className={cn(
-              'flex min-w-0 items-center gap-1 rounded-full border border-border-subtle bg-subtle px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors',
-              selection.includes(horse) && 'border-border-prominent text-on-prominent',
-              !selection.includes(horse) && 'text-on-subtle',
-            )}
-          >
-            <span className="text-on-subtle">{position + 1}</span>
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: card.horses[horse].silks }}
-            />
-            <span className="truncate">{card.horses[horse].name}</span>
-          </span>
-        ))}
-      </div>
+      <LeaderboardStrip
+        card={card}
+        liveRanks={liveRanks}
+        selection={selection}
+        statusLabel={running ? (finished ? 'Finish' : 'Live') : 'Post'}
+      />
 
       {/* Lanes */}
       <div
@@ -138,9 +161,11 @@ export function RaceTrack({
                   isPicked && 'bg-subtle',
                 )}
               >
-                {/* Horse chip — slides along the lane during the race */}
+                {/* Horse chip — slides along the lane during the race. Near
+                    the finish the label flips to the left of the chip so it
+                    never overflows the right edge. */}
                 <div
-                  className="absolute top-1/2 flex -translate-y-1/2 items-center gap-1"
+                  className="absolute top-1/2 h-4 w-4 -translate-y-1/2"
                   style={{
                     left: `${progress[horse.index] * 100}%`,
                     transition: running
@@ -150,7 +175,7 @@ export function RaceTrack({
                 >
                   <span
                     className={cn(
-                      'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[9px] font-bold text-black/80',
+                      'flex h-4 w-4 items-center justify-center rounded-sm text-[9px] font-bold text-black/80',
                       isPicked && 'ring-2 ring-border-prominent',
                       isLeader && !finished && 'animate-pulse',
                     )}
@@ -159,9 +184,14 @@ export function RaceTrack({
                     {horse.index + 1}
                   </span>
                   {running ? (
-                    <span className="text-[9px] font-semibold tabular-nums text-on-subtle">
-                      {rank + 1}
-                      {isPicked ? ` · P${slot + 1}` : ''}
+                    <span
+                      className={cn(
+                        'absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[9px] font-semibold tabular-nums',
+                        progress[horse.index] > 0.72 ? 'right-full mr-1' : 'left-full ml-1',
+                        isPicked ? 'text-on-prominent' : 'text-on-subtle',
+                      )}
+                    >
+                      {rank + 1} · {path.prices[horse.index][revealedTick].toFixed(1)}
                     </span>
                   ) : null}
                 </div>

@@ -124,7 +124,7 @@ export const GAMES: GameInfo[] = [
     mechanics: 'Read the odds board, build a bet from Winner up to an ordered Quinté, and watch the field race — the finish order is the ranking of final prices.',
     marketSource: 'Client-side simulation',
     status: 'Live',
-    track: 'roadmap',
+    track: 'other',
     iconKey: 'synthetic-derby',
   },
 ];

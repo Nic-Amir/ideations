@@ -1,13 +1,16 @@
 'use client';
 
-import { RotateCcw, X } from 'lucide-react';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Play, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
 import { StakeDock } from '@/components/games/shared/stake-dock';
 import { ResultOverlay } from '@/components/games/shared/result-overlay';
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
-import { RaceTrack } from '@/components/games/derby/race-track';
+import { RaceTrack, LeaderboardStrip } from '@/components/games/derby/race-track';
+import { DerbyChart } from '@/components/games/derby/derby-chart';
 import { useDerby, type DerbyResult } from '@/hooks/use-derby';
 import {
   BET_MODES,
@@ -325,6 +328,7 @@ export function DerbyGame() {
     stake,
     setStake,
     phase,
+    pick,
     path,
     visibleTick,
     result,
@@ -341,11 +345,17 @@ export function DerbyGame() {
     dismissResult,
   } = useDerby();
 
+  /** Race view: price chart (the trading view, default) or track lanes. */
+  const [view, setView] = useState<'chart' | 'track'>('chart');
+
   const idle = phase === 'idle';
   const running = phase === 'running';
   const settled = phase === 'settled';
   const showOverlay = settled && result !== null;
   const finished = running && ticksLeft === 0;
+
+  const pickedHorses = pick?.horses ?? selection;
+  const showChart = !idle && path !== null && view === 'chart';
 
   const copy = result ? resultCopy(result, card) : { title: '', subtitle: '' };
   const potentialPayout =
@@ -370,19 +380,62 @@ export function DerbyGame() {
               </div>
             ) : null}
 
-            {/* Full-bleed play surface — the track doubles as the odds board */}
+            {/* Full-bleed play surface — odds board while idle, price chart
+                (or track lanes) once the race is on */}
             <div className="relative flex-1 min-h-[300px]">
-              <RaceTrack
-                card={card}
-                path={path}
-                visibleTick={visibleTick}
-                liveRanks={liveRanks}
-                selection={selection}
-                onToggleHorse={toggleHorse}
-                selectable={idle}
-                inFinalStretch={inFinalStretch}
-                finished={finished || settled}
-              />
+              {showChart && path ? (
+                <div className="flex h-full flex-col">
+                  <LeaderboardStrip
+                    card={card}
+                    liveRanks={liveRanks}
+                    selection={pickedHorses}
+                    statusLabel={finished || settled ? 'Finish' : 'Live'}
+                  />
+                  <DerbyChart
+                    card={card}
+                    path={path}
+                    visibleTick={visibleTick}
+                    pickedHorses={pickedHorses}
+                    liveRanks={liveRanks}
+                    finished={finished || settled}
+                    className="flex-1 min-h-0"
+                  />
+                </div>
+              ) : (
+                <RaceTrack
+                  card={card}
+                  path={path}
+                  visibleTick={visibleTick}
+                  liveRanks={liveRanks}
+                  selection={pickedHorses}
+                  onToggleHorse={toggleHorse}
+                  selectable={idle}
+                  inFinalStretch={inFinalStretch}
+                  finished={finished || settled}
+                />
+              )}
+
+              {/* Chart/Track view toggle, once there is a race to look at */}
+              {!idle && path ? (
+                <div className="absolute right-2 top-1.5 flex rounded-lg border border-border-subtle bg-card/90 p-0.5 backdrop-blur-sm">
+                  {(['chart', 'track'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setView(v)}
+                      aria-pressed={view === v}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors',
+                        view === v
+                          ? 'bg-prominent text-on-prominent shadow-sm'
+                          : 'text-on-subtle hover:text-on-prominent',
+                      )}
+                    >
+                      {v === 'chart' ? 'Chart' : 'Track'}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
 
               {running && ticksLeft !== null ? (
                 <div className="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2">
@@ -409,6 +462,9 @@ export function DerbyGame() {
               {idle ? (
                 <>
                   <div className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 text-center text-[10px] font-bold text-on-subtle">
+                      1
+                    </span>
                     <div className="flex-1">
                       <ModePicker mode={mode} onChange={setMode} disabled={!idle} />
                     </div>
@@ -423,10 +479,20 @@ export function DerbyGame() {
                   </div>
 
                   {spec.orderable ? (
-                    <OrderToggle ordered={ordered} onChange={setOrdered} disabled={!idle} />
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 shrink-0" aria-hidden />
+                      <OrderToggle
+                        ordered={ordered}
+                        onChange={setOrdered}
+                        disabled={!idle}
+                      />
+                    </div>
                   ) : null}
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 shrink-0 text-center text-[10px] font-bold text-on-subtle">
+                      2
+                    </span>
                     <div className="flex-1">
                       <SelectionSlots
                         card={card}
@@ -449,40 +515,79 @@ export function DerbyGame() {
                 </>
               ) : null}
 
-              {/* Confirm bar: live multiplier + start */}
-              <button
-                type="button"
-                disabled={!canTrade}
-                onClick={startRace}
-                className={cn(
-                  'flex min-h-[52px] w-full items-center justify-between rounded-xl px-4 py-2 transition-opacity',
-                  'bg-prominent text-on-prominent',
-                  !canTrade && 'opacity-40',
-                  canTrade && 'active:scale-[0.99]',
-                )}
-              >
-                <span className="font-display text-sm font-bold">
-                  {running
-                    ? 'Racing…'
-                    : settled
-                      ? 'Race finished'
-                      : selectionComplete
-                        ? `Start race — ${spec.label}${spec.orderable && ordered ? ' (exact order)' : ''}`
-                        : `Pick ${spec.picks - selection.length} more horse${spec.picks - selection.length === 1 ? '' : 's'}`}
-                </span>
-                {pricing !== null ? (
-                  <span className="text-right">
-                    <span className="font-display text-lg font-bold tabular-nums">
+              {/* Start CTA / locked-bet summary */}
+              {idle ? (
+                selectionComplete ? (
+                  <motion.button
+                    type="button"
+                    disabled={!canTrade}
+                    onClick={startRace}
+                    animate={canTrade ? { scale: [1, 1.015, 1] } : { scale: 1 }}
+                    transition={
+                      canTrade
+                        ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }
+                        : { duration: 0.2 }
+                    }
+                    className={cn(
+                      'flex min-h-[60px] w-full items-center justify-between rounded-xl px-4 py-2',
+                      'bg-semantic-win text-on-prominent-static-inverse shadow-lg',
+                      !canTrade && 'opacity-40',
+                      canTrade && 'active:scale-[0.98]',
+                    )}
+                  >
+                    <span className="flex items-center gap-2 font-display text-base font-bold">
+                      <Play className="h-5 w-5 fill-current" />
+                      Start race
+                      <span className="text-xs font-semibold opacity-80">
+                        {spec.label}
+                        {spec.orderable && ordered ? ' · exact order' : ''}
+                      </span>
+                    </span>
+                    {pricing !== null ? (
+                      <span className="text-right">
+                        <span className="font-display text-xl font-bold tabular-nums">
+                          {pricing.multiplier >= 1000
+                            ? `${Math.round(pricing.multiplier).toLocaleString()}×`
+                            : `${pricing.multiplier.toFixed(2)}×`}
+                        </span>
+                        <span className="block text-[10px] tabular-nums opacity-90">
+                          Pays {potentialPayout.toLocaleString()}
+                        </span>
+                      </span>
+                    ) : null}
+                  </motion.button>
+                ) : (
+                  <div className="flex min-h-[60px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-subtle px-4 py-2 text-sm font-semibold text-on-subtle">
+                    <span className="w-4 shrink-0 text-center text-[10px] font-bold">3</span>
+                    Pick {spec.picks - selection.length} more horse
+                    {spec.picks - selection.length === 1 ? '' : 's'} on the board
+                    above, then start the race here
+                  </div>
+                )
+              ) : (
+                <div className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-border-subtle bg-subtle px-4 py-2">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-on-prominent">
+                    {running ? 'Racing —' : 'Finished —'} {spec.label}
+                    {spec.orderable && ordered ? ' (exact order)' : ''}
+                    <span className="flex items-center gap-0.5">
+                      {pickedHorses.map((h) => (
+                        <span
+                          key={h}
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: card.horses[h].silks }}
+                        />
+                      ))}
+                    </span>
+                  </span>
+                  {pricing !== null ? (
+                    <span className="text-xs font-bold tabular-nums text-on-prominent">
                       {pricing.multiplier >= 1000
                         ? `${Math.round(pricing.multiplier).toLocaleString()}×`
                         : `${pricing.multiplier.toFixed(2)}×`}
                     </span>
-                    <span className="block text-[10px] tabular-nums opacity-80">
-                      Pays {potentialPayout.toLocaleString()}
-                    </span>
-                  </span>
-                ) : null}
-              </button>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
         }
@@ -496,7 +601,9 @@ export function DerbyGame() {
             footer={
               idle
                 ? selectionComplete
-                  ? 'Fair odds — no commission (POC)'
+                  ? canTrade
+                    ? 'Fair odds — no commission (POC)'
+                    : 'Stake exceeds balance — lower it to start'
                   : 'Tap horses on the board to build your bet'
                 : running
                   ? 'Race in progress'
