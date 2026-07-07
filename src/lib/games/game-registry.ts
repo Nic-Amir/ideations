@@ -95,6 +95,22 @@ export const GAMES: GameInfo[] = [
     track: 'roadmap',
     iconKey: 'barrier-predictor',
   },
+  {
+    slug: 'barrier-touch',
+    name: 'Barrier Touch',
+    shortName: 'Touch',
+    description:
+      'Bet on touch events, not direction. Count how many times a simulated price crosses its entry line, or call a full round trip — one barrier first, then the other.',
+    shortPitch: 'Call the crossing count or a barrier round trip.',
+    category: 'Prediction',
+    risk: 'Medium',
+    sessionLength: '5-15 sec',
+    mechanics: 'Pick Count mode and a crossing bucket (0/1/2/3+), or Sequence mode and a barrier order — then watch the touch events play out tick by tick.',
+    marketSource: 'Client-side simulation',
+    status: 'Live',
+    track: 'roadmap',
+    iconKey: 'barrier-touch',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

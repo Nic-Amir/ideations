@@ -95,7 +95,8 @@ export type GameIconKey =
   | 'digit-slots'
   | 'volatility-run'
   | 'barrier-race'
-  | 'barrier-predictor';
+  | 'barrier-predictor'
+  | 'barrier-touch';
 
 export type GameTrack = 'roadmap' | 'other';
 
