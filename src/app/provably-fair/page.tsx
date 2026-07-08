@@ -39,8 +39,8 @@ export default function ProvablyFairPage() {
           randomness — in this case, <strong>7</strong>.
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">
-          Deriv synthetic indices (Volatility 10, 25, 50, 100 and Crash 300,
-          500, 1000) produce ticks approximately once per second. Each tick is
+          Deriv synthetic indices (Volatility 10, 25, 50, 100 and Crash 50,
+          150, 300) produce ticks approximately once per second. Each tick is
           timestamped (epoch) and auditable. For digit games, the last digit is
           uniformly distributed across 0–9, with each digit having a 10%
           probability. For Crash Pilot, the crash event itself is the source of
@@ -70,7 +70,7 @@ export default function ProvablyFairPage() {
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
           An Aviator-style crash game built directly on Deriv Crash synthetic
-          indices (Crash 300, 500, 1000). A Crash N index drifts upward and
+          indices (Crash 50, 150, 300). A Crash N index drifts upward and
           crashes on average once every N ticks — the crash event is generated
           by Deriv&apos;s audited market engine, not by this game. A crash is
           detected as any downward move in the quote, since the index only

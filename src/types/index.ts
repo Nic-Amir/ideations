@@ -46,7 +46,7 @@ export const SUPPORTED_SYMBOLS: SymbolInfo[] = [
   { id: '1HZ10V', name: 'Volatility 10 (1s)', tickFreq: '1 sec', description: 'Low volatility, 1-second ticks' },
 ];
 
-export type CrashSymbol = 'CRASH300N' | 'CRASH500' | 'CRASH1000';
+export type CrashSymbol = 'CRASH50' | 'CRASH150N' | 'CRASH300N';
 
 export interface CrashSymbolInfo {
   id: CrashSymbol;
@@ -58,22 +58,22 @@ export interface CrashSymbolInfo {
 
 export const CRASH_SYMBOLS: CrashSymbolInfo[] = [
   {
+    id: 'CRASH50',
+    name: 'Crash 50',
+    avgTicksPerCrash: 50,
+    description: 'Crashes every ~50 ticks on average — fastest climb, highest bust rate',
+  },
+  {
+    id: 'CRASH150N',
+    name: 'Crash 150',
+    avgTicksPerCrash: 150,
+    description: 'Crashes every ~150 ticks on average — balanced pace',
+  },
+  {
     id: 'CRASH300N',
     name: 'Crash 300',
     avgTicksPerCrash: 300,
-    description: 'Crashes every ~300 ticks on average — fast climb, frequent busts',
-  },
-  {
-    id: 'CRASH500',
-    name: 'Crash 500',
-    avgTicksPerCrash: 500,
-    description: 'Crashes every ~500 ticks on average — balanced pace',
-  },
-  {
-    id: 'CRASH1000',
-    name: 'Crash 1000',
-    avgTicksPerCrash: 1000,
-    description: 'Crashes every ~1000 ticks on average — slow climb, rare busts',
+    description: 'Crashes every ~300 ticks on average — slower climb, rarer busts',
   },
 ];
 

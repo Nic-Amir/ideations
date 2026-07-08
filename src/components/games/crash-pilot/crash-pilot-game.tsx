@@ -28,7 +28,7 @@ export function CrashPilotGame() {
   const { balance } = useBalanceStore();
   const isLandscape = useIsLandscape();
 
-  const [symbol, setSymbol] = useState<CrashSymbol>('CRASH500');
+  const [symbol, setSymbol] = useState<CrashSymbol>('CRASH150N');
   const [stake, setStake] = useState(100);
   const [autoCashout, setAutoCashout] = useState<number | null>(null);
 

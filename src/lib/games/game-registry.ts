@@ -14,7 +14,7 @@ export const GAMES: GameInfo[] = [
     risk: 'High',
     sessionLength: '10 sec - 5 min',
     mechanics:
-      'Pick Crash 300/500/1000, launch on any tick, and cash out manually or at an auto target — a crash tick from the live index busts the round.',
+      'Pick Crash 50/150/300, launch on any tick, and cash out manually or at an auto target — a crash tick from the live index busts the round.',
     marketSource: 'Deriv live ticks (Crash indices)',
     status: 'Live',
     track: 'roadmap',

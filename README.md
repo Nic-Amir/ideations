@@ -4,7 +4,7 @@ A proof-of-concept web application that reimagines gambling as a market-driven e
 
 ## Games
 
-- **Crash Pilot** — Aviator-style crash game riding live Deriv Crash indices (Crash 300/500/1000). The multiplier climbs on every surviving tick with geometric pricing (98% RTP); cash out before the index's built-in crash event busts the round.
+- **Crash Pilot** — Aviator-style crash game riding live Deriv Crash indices (Crash 50/150/300). The multiplier climbs on every surviving tick with geometric pricing (98% RTP); cash out before the index's built-in crash event busts the round.
 - **Digit Collect** — Crash/chicken-out game. Collect unique digits (0–9) from live ticks. Cash out before a duplicate knocks you out.
 - **Digit Poker** — Video poker with digits. 5-digit hands dealt from live ticks. Hold/draw mechanics with a pay table.
 - **Digit Slots** — 3-reel slot machine. Each reel stopped by a live tick. Includes gamble (double-or-nothing) feature.

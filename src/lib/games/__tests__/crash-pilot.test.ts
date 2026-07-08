@@ -142,8 +142,8 @@ describe('milestone table', () => {
   });
 
   it('faster indices reach targets in fewer ticks', () => {
-    const fast = getMilestoneTable(300);
-    const slow = getMilestoneTable(1000);
+    const fast = getMilestoneTable(50);
+    const slow = getMilestoneTable(300);
     const idx = fast.findIndex((m) => m.multiplier === 2);
     expect(fast[idx].ticks).toBeLessThan(slow[idx].ticks);
   });
