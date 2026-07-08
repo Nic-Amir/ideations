@@ -39,10 +39,12 @@ export default function ProvablyFairPage() {
           randomness — in this case, <strong>7</strong>.
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">
-          Deriv synthetic indices (Volatility 10, 25, 50, 100) produce ticks
-          approximately once per second. Each tick is timestamped (epoch) and
-          auditable. The last digit is uniformly distributed across 0–9, with
-          each digit having a 10% probability.
+          Deriv synthetic indices (Volatility 10, 25, 50, 100 and Crash 300,
+          500, 1000) produce ticks approximately once per second. Each tick is
+          timestamped (epoch) and auditable. For digit games, the last digit is
+          uniformly distributed across 0–9, with each digit having a 10%
+          probability. For Crash Pilot, the crash event itself is the source of
+          randomness.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 font-display text-xs">
@@ -58,6 +60,45 @@ export default function ProvablyFairPage() {
 // Last digit extracted: 7`}</pre>
           </CardContent>
         </Card>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="heading-h3 font-display text-on-prominent">
+          Crash Pilot
+        </h2>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          An Aviator-style crash game built directly on Deriv Crash synthetic
+          indices (Crash 300, 500, 1000). A Crash N index drifts upward and
+          crashes on average once every N ticks — the crash event is generated
+          by Deriv&apos;s audited market engine, not by this game. A crash is
+          detected as any downward move in the quote, since the index only
+          rises between crash events.
+        </p>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          The crash distribution is geometric and therefore{' '}
+          <strong>memoryless</strong>: every tick carries the same 1-in-N crash
+          probability regardless of how long the climb has lasted. This is why
+          a bet can start on any tick without changing the odds.
+        </p>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 body-sm">
+            <p className="font-medium text-on-prominent">Key Formulas</p>
+            <div className="font-display text-xs space-y-1 text-on-subtle">
+              <p>p (crash per tick) = 1 / N</p>
+              <p>P(survive k ticks) = (1 − p)^k</p>
+              <p>Fair multiplier after k ticks = 1 / (1 − p)^k</p>
+              <p>Displayed multiplier = Fair × 0.98 (2% house edge)</p>
+              <p>RTP at any cash-out point = 98% by construction</p>
+            </div>
+          </CardContent>
+        </Card>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Multipliers are capped at 100× and cash-outs settle at a minimum of
+          1.01×. Every round is auditable against the public tick history of
+          the underlying Crash index.
+        </p>
       </section>
 
       <Separator />

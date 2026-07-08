@@ -46,6 +46,39 @@ export const SUPPORTED_SYMBOLS: SymbolInfo[] = [
   { id: '1HZ10V', name: 'Volatility 10 (1s)', tickFreq: '1 sec', description: 'Low volatility, 1-second ticks' },
 ];
 
+export type CrashSymbol = 'CRASH300N' | 'CRASH500' | 'CRASH1000';
+
+export interface CrashSymbolInfo {
+  id: CrashSymbol;
+  name: string;
+  /** Average number of ticks between crash events (the N in the index name). */
+  avgTicksPerCrash: number;
+  description: string;
+}
+
+export const CRASH_SYMBOLS: CrashSymbolInfo[] = [
+  {
+    id: 'CRASH300N',
+    name: 'Crash 300',
+    avgTicksPerCrash: 300,
+    description: 'Crashes every ~300 ticks on average — fast climb, frequent busts',
+  },
+  {
+    id: 'CRASH500',
+    name: 'Crash 500',
+    avgTicksPerCrash: 500,
+    description: 'Crashes every ~500 ticks on average — balanced pace',
+  },
+  {
+    id: 'CRASH1000',
+    name: 'Crash 1000',
+    avgTicksPerCrash: 1000,
+    description: 'Crashes every ~1000 ticks on average — slow climb, rare busts',
+  },
+];
+
+export type CrashPilotState = 'idle' | 'flying' | 'cashed_out' | 'crashed';
+
 export type DigitCollectState = 'idle' | 'collecting' | 'cashed_out' | 'knocked_out';
 
 export type DigitPokerState = 'idle' | 'dealt' | 'drawing' | 'evaluated';
@@ -90,6 +123,7 @@ export interface SlotResult {
 }
 
 export type GameIconKey =
+  | 'crash-pilot'
   | 'digit-collect'
   | 'digit-poker'
   | 'digit-slots'

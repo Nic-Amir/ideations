@@ -4,6 +4,23 @@ import type { GameInfo } from '@/types';
 
 export const GAMES: GameInfo[] = [
   {
+    slug: 'crash-pilot',
+    name: 'Crash Pilot',
+    shortName: 'Crash',
+    description:
+      'An Aviator-style crash game riding live Deriv Crash indices. Your multiplier climbs on every surviving tick — cash out before the market engine triggers the crash.',
+    shortPitch: 'Ride a live Crash index and cash out before the market busts.',
+    category: 'Survival',
+    risk: 'High',
+    sessionLength: '10 sec - 5 min',
+    mechanics:
+      'Pick Crash 300/500/1000, launch on any tick, and cash out manually or at an auto target — a crash tick from the live index busts the round.',
+    marketSource: 'Deriv live ticks (Crash indices)',
+    status: 'Live',
+    track: 'roadmap',
+    iconKey: 'crash-pilot',
+  },
+  {
     slug: 'digit-collect',
     name: 'Digit Sync',
     shortName: 'Sync',
