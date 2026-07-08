@@ -12,7 +12,7 @@ import {
   getSurvivalProbability,
   getTicksToReachMultiplier,
   isCrashTick,
-} from '../crash-pilot';
+} from '../index-ascent';
 
 describe('crash detection', () => {
   it('flags a relative drop as a crash', () => {

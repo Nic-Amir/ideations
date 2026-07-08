@@ -77,7 +77,7 @@ export const CRASH_SYMBOLS: CrashSymbolInfo[] = [
   },
 ];
 
-export type CrashPilotState = 'idle' | 'flying' | 'cashed_out' | 'crashed';
+export type IndexAscentState = 'idle' | 'flying' | 'cashed_out' | 'crashed';
 
 export type DigitCollectState = 'idle' | 'collecting' | 'cashed_out' | 'knocked_out';
 
@@ -123,7 +123,7 @@ export interface SlotResult {
 }
 
 export type GameIconKey =
-  | 'crash-pilot'
+  | 'index-ascent'
   | 'digit-collect'
   | 'digit-poker'
   | 'digit-slots'

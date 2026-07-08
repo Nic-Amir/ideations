@@ -1,11 +1,11 @@
 "use client";
 
 import type { LucideProps } from "lucide-react";
-import { Activity, ChevronsUpDown, Dice3, Flag, Plane, Repeat, Spade, Target, Trophy } from "lucide-react";
+import { Activity, ChevronsUpDown, Dice3, Flag, Repeat, Spade, Target, TrendingUp, Trophy } from "lucide-react";
 import type { GameIconKey } from "@/types";
 
 const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
-  "crash-pilot": Plane,
+  "index-ascent": TrendingUp,
   "digit-collect": Target,
   "digit-poker": Spade,
   "digit-slots": Dice3,

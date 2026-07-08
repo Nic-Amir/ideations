@@ -6,10 +6,10 @@ import { getGameBySlug, isGameLive } from '@/lib/games/game-registry';
 import { notFound } from 'next/navigation';
 import { Spinner } from '@trading-game/design-intelligence-layer';
 
-const CrashPilotGame = dynamic(
+const IndexAscentGame = dynamic(
   () =>
-    import('@/components/games/crash-pilot/crash-pilot-game').then(
-      (m) => m.CrashPilotGame
+    import('@/components/games/index-ascent/index-ascent-game').then(
+      (m) => m.IndexAscentGame
     ),
   { ssr: false, loading: () => <GameLoading /> }
 );
@@ -82,7 +82,7 @@ function GameLoading() {
 }
 
 const GAME_COMPONENTS: Record<string, React.ComponentType> = {
-  'crash-pilot': CrashPilotGame,
+  'index-ascent': IndexAscentGame,
   'digit-collect': DigitCollectGame,
   'digit-poker': DigitPokerGame,
   'digit-slots': DigitSlotsGame,

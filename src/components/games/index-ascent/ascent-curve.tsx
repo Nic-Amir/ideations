@@ -2,11 +2,11 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import type { CrashPilotState } from '@/types';
+import type { IndexAscentState } from '@/types';
 
-interface CrashCurveProps {
+interface AscentCurveProps {
   curve: number[];
-  phase: CrashPilotState;
+  phase: IndexAscentState;
   className?: string;
 }
 
@@ -14,12 +14,8 @@ const VIEW_W = 100;
 const VIEW_H = 56;
 const PAD = 4;
 
-/**
- * SVG rising multiplier curve for the current round. The y axis auto-scales
- * to the peak multiplier so the line always climbs toward the top-right,
- * echoing the Aviator flight path.
- */
-export function CrashCurve({ curve, phase, className }: CrashCurveProps) {
+/** SVG rising multiplier curve for the current position. */
+export function AscentCurve({ curve, phase, className }: AscentCurveProps) {
   const { linePath, areaPath, endX, endY } = useMemo(() => {
     if (curve.length < 2) {
       return { linePath: '', areaPath: '', endX: PAD, endY: VIEW_H - PAD };

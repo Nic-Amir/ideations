@@ -9,15 +9,15 @@ import {
   getDisplayedMultiplier,
   isCrashTick,
   MIN_CASHOUT_MULTIPLIER,
-} from '@/lib/games/crash-pilot';
-import type { CrashPilotState, CrashSymbol, ParsedTick } from '@/types';
+} from '@/lib/games/index-ascent';
+import type { IndexAscentState, CrashSymbol, ParsedTick } from '@/types';
 
 const MAX_CHART_TICKS = 100;
 const MAX_MARKET_CRASHES = 12;
 const MAX_ROUND_HISTORY = 20;
 const MAX_CURVE_POINTS = 600;
 
-export interface CrashRoundResult {
+export interface AscentRoundResult {
   id: number;
   outcome: 'crashed' | 'cashed_out';
   multiplier: number;
@@ -31,20 +31,20 @@ interface ActiveRound {
   ticksSurvived: number;
 }
 
-export function useCrashPilot(symbol: CrashSymbol) {
+export function useIndexAscent(symbol: CrashSymbol) {
   const client = useDerivClient();
   const { placeBet, addWinnings } = useBalanceStore();
   const info = getCrashSymbolInfo(symbol);
 
-  const [phase, setPhase] = useState<CrashPilotState>('idle');
+  const [phase, setPhase] = useState<IndexAscentState>('idle');
   const [multiplier, setMultiplier] = useState(1);
   const [ticksSurvived, setTicksSurvived] = useState(0);
   const [curve, setCurve] = useState<number[]>([]);
   const [ticks, setTicks] = useState<ParsedTick[]>([]);
   const [marketStreak, setMarketStreak] = useState(0);
   const [marketCrashes, setMarketCrashes] = useState<number[]>([]);
-  const [lastResult, setLastResult] = useState<CrashRoundResult | null>(null);
-  const [roundHistory, setRoundHistory] = useState<CrashRoundResult[]>([]);
+  const [lastResult, setLastResult] = useState<AscentRoundResult | null>(null);
+  const [roundHistory, setRoundHistory] = useState<AscentRoundResult[]>([]);
 
   const roundRef = useRef<ActiveRound | null>(null);
   const prevQuoteRef = useRef<number | null>(null);
@@ -62,7 +62,7 @@ export function useCrashPilot(symbol: CrashSymbol) {
       const winAmount = outcome === 'cashed_out' ? round.stake * settledMultiplier : 0;
       if (winAmount > 0) addWinnings(winAmount);
 
-      const result: CrashRoundResult = {
+      const result: AscentRoundResult = {
         id: ++roundIdRef.current,
         outcome,
         multiplier: settledMultiplier,
