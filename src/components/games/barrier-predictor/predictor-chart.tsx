@@ -248,21 +248,12 @@ export function PredictorChart({
             strokeWidth={1.5}
           />
         ) : (
-          <>
-            {/* Idle: pulsing marker inviting play */}
-            <circle
-              cx={chart.head.x}
-              cy={chart.head.y}
-              r={10}
-              className="fill-primary opacity-20 animate-ping"
-            />
-            <circle
-              cx={chart.head.x}
-              cy={chart.head.y}
-              r={4}
-              className="fill-primary"
-            />
-          </>
+          <circle
+            cx={chart.head.x}
+            cy={chart.head.y}
+            r={4}
+            className="fill-primary"
+          />
         )}
 
         {/* Touch ping at settlement */}

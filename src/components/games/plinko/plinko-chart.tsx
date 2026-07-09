@@ -540,18 +540,9 @@ export function PlinkoChart({
 
     drawGroupedBands();
 
-    // Idle anticipation: pulsing entry dot only (no strip sweep — it read as
-    // an opaque moving box rather than a subtle shimmer).
+    // Idle: static entry dot (no expanding invite ring).
     if (visibleActive.length === 0) {
       const pathColors = getPathStroke(false);
-      if (!reducedMotion) {
-        const t = (performance.now() % 1400) / 1400;
-        ctx.strokeStyle = withAlpha(pathColors.stroke, (1 - t) * 0.5);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(padding.left, startY, 4 + t * 7, 0, Math.PI * 2);
-        ctx.stroke();
-      }
       ctx.fillStyle = pathColors.stroke;
       ctx.beginPath();
       ctx.arc(padding.left, startY, 3.5, 0, Math.PI * 2);

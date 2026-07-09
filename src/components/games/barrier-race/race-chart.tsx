@@ -230,13 +230,7 @@ export function RaceChart({
           </>
         ) : (
           <>
-            {/* Idle: both assets parked at spot, pulsing to invite play */}
-            <circle
-              cx={chart.head1.x}
-              cy={chart.head1.y}
-              r={10}
-              className="fill-primary opacity-20 animate-ping"
-            />
+            {/* Idle: both assets parked at spot */}
             <circle
               cx={chart.head1.x}
               cy={chart.head1.y}
