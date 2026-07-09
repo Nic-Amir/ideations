@@ -5,7 +5,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Ideations — Market-Driven Digit Gaming',
   description:
-    'Every game is powered by real market data. Trade on digits with provably fair, market-sourced entropy.',
+    'Market-driven and simulated games for the Trading Game roadmap. Simple rules, clear outcomes.',
 };
 
 export default function RootLayout({

@@ -26,7 +26,7 @@ const RISK_COLOR: Record<string, string> = {
 };
 
 const FEATURED_GAME = ROADMAP_GAMES.find((game) => game.status === 'Live') ?? ROADMAP_GAMES[0];
-const ROADMAP_GRID_GAMES = ROADMAP_GAMES.filter((game) => game.slug !== FEATURED_GAME?.slug);
+const ROADMAP_GRID_GAMES = ROADMAP_GAMES;
 
 export default function HomePage() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export default function HomePage() {
             Trading Game product roadmap
           </h1>
           <p className="text-sm text-on-subtle">
-            Market-driven digit games — demo pricing and mechanics.
+            Try the games. Simple rules, clear outcomes.
           </p>
         </div>
       </header>
@@ -118,7 +118,7 @@ export default function HomePage() {
       </Tabs>
 
       <p className="body-xs text-on-subtle">
-        All outcomes from live Deriv tick data.
+        Some games use live Deriv ticks. Others use client-side simulation.
       </p>
     </div>
   );
