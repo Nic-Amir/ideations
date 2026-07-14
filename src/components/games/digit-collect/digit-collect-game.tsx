@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Button, Spinner } from '@trading-game/design-intelligence-layer';
+import { Check, Minus, Plus, ShieldCheck, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
@@ -25,6 +27,446 @@ interface DrawnDigit {
   digit: number;
   tick: ParsedTick;
   isKnockout: boolean;
+}
+
+function formatCredits(value: number): string {
+  return Math.round(value).toLocaleString();
+}
+
+function PositionPanel({
+  gameState,
+  multiplier,
+  cashOutValue,
+  netPL,
+  collectedCount,
+  nextRisk,
+}: {
+  gameState: DigitCollectState;
+  multiplier: number;
+  cashOutValue: number;
+  netPL: number;
+  collectedCount: number;
+  nextRisk: number;
+}) {
+  const idle = gameState === 'idle';
+  const live = gameState === 'collecting';
+  const netTone = idle
+    ? 'text-on-subtle'
+    : netPL > 0
+      ? 'text-semantic-win'
+      : netPL < 0
+        ? 'text-semantic-loss'
+        : 'text-on-prominent';
+  const multiplierTone = idle
+    ? 'text-on-prominent'
+    : multiplier >= 1
+      ? 'text-semantic-win'
+      : 'text-semantic-loss';
+  const safeDigits = 10 - collectedCount;
+
+  return (
+    <section
+      aria-label="Round position"
+      className="rounded-xl border border-border-subtle bg-subtle/70 p-3 shadow-sm [@media(max-height:520px)]:p-2.5"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+            Position
+          </p>
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+              live
+                ? 'bg-semantic-win/10 text-semantic-win'
+                : 'bg-prominent text-on-subtle',
+            )}
+          >
+            {live ? 'Live' : idle ? 'Ready' : 'Closed'}
+          </span>
+        </div>
+        <p className="text-[10px] font-medium tabular-nums text-on-subtle">
+          {collectedCount}/10 synced
+        </p>
+      </div>
+
+      <div className="mt-2 grid grid-cols-[1.15fr_1fr_1fr] gap-2">
+        <div>
+          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Multiplier</p>
+          <motion.p
+            key={multiplier}
+            initial={{ scale: 1.03, opacity: 0.6 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className={cn(
+              'font-display text-3xl font-bold leading-none tabular-nums [@media(max-height:520px)]:text-2xl',
+              multiplierTone,
+            )}
+          >
+            {multiplier.toFixed(2)}×
+          </motion.p>
+        </div>
+        <div className="border-l border-border-subtle pl-2">
+          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Cash out</p>
+          <p className="mt-1 font-display text-base font-bold tabular-nums text-on-prominent">
+            {idle ? '—' : formatCredits(cashOutValue)}
+          </p>
+          <p className="text-[9px] text-on-subtle">credits</p>
+        </div>
+        <div className="border-l border-border-subtle pl-2">
+          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Net P/L</p>
+          <p className={cn('mt-1 font-display text-base font-bold tabular-nums', netTone)}>
+            {idle ? '—' : `${netPL > 0 ? '+' : netPL < 0 ? '−' : ''}${formatCredits(Math.abs(netPL))}`}
+          </p>
+          <p className="text-[9px] text-on-subtle">credits</p>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-border-subtle pt-2">
+        <div className="flex items-center justify-between gap-3 text-[10px] font-semibold tabular-nums">
+          <span className="flex items-center gap-1.5 text-on-prominent">
+            <ShieldCheck className="h-3.5 w-3.5 text-semantic-win" />
+            {safeDigits} safe
+          </span>
+          <span className={collectedCount > 0 ? 'text-semantic-loss' : 'text-on-subtle'}>
+            {collectedCount} repeat{collectedCount === 1 ? '' : 's'} · {(nextRisk * 100).toFixed(0)}% risk
+          </span>
+        </div>
+        <div
+          className="mt-1.5 grid grid-cols-10 gap-1"
+          role="img"
+          aria-label={`${safeDigits} safe digit${safeDigits === 1 ? '' : 's'} and ${collectedCount} knockout digit${collectedCount === 1 ? '' : 's'} on the next draw`}
+        >
+          {Array.from({ length: 10 }, (_, index) => (
+            <span
+              key={index}
+              className={cn(
+                'h-1.5 rounded-full',
+                index < collectedCount ? 'bg-semantic-loss' : 'bg-semantic-win/55',
+              )}
+              aria-hidden
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DigitBoard({ collected, history }: { collected: Set<number>; history: DrawnDigit[] }) {
+  const latest = history.at(-1);
+
+  return (
+    <section aria-labelledby="digit-board-title" className="w-full">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 id="digit-board-title" className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          Digit board
+        </h2>
+        <p className="text-[10px] text-on-subtle">Unique digits stay safe</p>
+      </div>
+      <div
+        role="list"
+        aria-label="Digit collection board"
+        className="grid grid-cols-5 gap-2 [@media(max-height:520px)]:gap-1.5"
+      >
+        {Array.from({ length: 10 }, (_, digit) => {
+          const firstDrawIndex = history.findIndex(
+            (entry) => entry.digit === digit && !entry.isKnockout,
+          );
+          const isCollected = collected.has(digit);
+          const isLatest = latest?.digit === digit;
+          const isKnockout = Boolean(isLatest && latest?.isKnockout);
+          const order = firstDrawIndex >= 0 ? firstDrawIndex + 1 : null;
+          const stateLabel = isKnockout
+            ? `Digit ${digit}, repeated on draw ${history.length}, knockout`
+            : isCollected
+              ? `Digit ${digit}, collected on draw ${order}${isLatest ? ', latest draw' : ''}`
+              : `Digit ${digit}, available`;
+
+          return (
+            <motion.div
+              key={digit}
+              role="listitem"
+              aria-label={stateLabel}
+              animate={
+                isKnockout
+                  ? { x: [0, -3, 3, -3, 3, 0] }
+                  : isLatest
+                    ? { scale: [1, 1.04, 1] }
+                    : undefined
+              }
+              className={cn(
+                'relative flex min-h-[62px] flex-col items-center justify-center rounded-xl border font-display tabular-nums [@media(max-height:520px)]:min-h-[48px]',
+                isKnockout
+                  ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
+                  : isCollected
+                    ? 'border-semantic-win/30 bg-semantic-win/10 text-semantic-win'
+                    : 'border-border-subtle bg-subtle text-on-subtle',
+                isLatest && 'ring-2 ring-border-prominent ring-offset-1 ring-offset-prominent',
+              )}
+            >
+              {order ? (
+                <span className="absolute right-1.5 top-1 rounded-full bg-prominent px-1.5 py-0.5 text-[8px] font-bold text-on-prominent">
+                  #{order}
+                </span>
+              ) : null}
+              <span className="text-xl font-bold leading-none sm:text-2xl">{digit}</span>
+              <span className="mt-1 flex items-center gap-0.5 text-[8px] font-semibold uppercase tracking-wide">
+                {isKnockout ? (
+                  <><X className="h-2.5 w-2.5" /> Repeat</>
+                ) : isCollected ? (
+                  <><Check className="h-2.5 w-2.5" /> Synced</>
+                ) : (
+                  'Open'
+                )}
+              </span>
+            </motion.div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DrawTrail({ history }: { history: DrawnDigit[] }) {
+  return (
+    <section aria-label="Draw trail" className="min-w-0">
+      <div className="mb-1.5 flex items-center justify-between [@media(max-height:520px)]:hidden">
+        <h2 id="draw-trail-title" className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          Draw trail
+        </h2>
+        <span className="text-[10px] tabular-nums text-on-subtle">{history.length}/10</span>
+      </div>
+      {history.length > 0 ? (
+        <div className="scrollbar-hide flex gap-1.5 overflow-x-auto pb-1" role="list" aria-label="Draw sequence">
+          {history.map((entry, index) => (
+            <span
+              key={`${entry.tick.epoch}-${index}`}
+              role="listitem"
+              aria-label={`Draw ${index + 1}, digit ${entry.digit}${entry.isKnockout ? ', repeated and knocked out' : ''}`}
+              className={cn(
+                'flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-lg border px-2 text-[10px] font-semibold tabular-nums [@media(max-height:520px)]:min-h-[32px]',
+                entry.isKnockout
+                  ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
+                  : index === history.length - 1
+                    ? 'border-border-prominent bg-prominent text-on-prominent'
+                    : 'border-border-subtle bg-subtle text-on-subtle',
+              )}
+            >
+              <span className="text-[9px] opacity-75">#{index + 1}</span>
+              <span className="font-display text-sm font-bold">{entry.digit}</span>
+              {entry.isKnockout ? <X className="h-3 w-3" /> : null}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="flex min-h-[40px] items-center rounded-lg border border-border-subtle bg-subtle/50 px-3 text-[10px] text-on-subtle [@media(max-height:520px)]:min-h-[32px]">
+          Draw from the live market. Unique digits build the return; a repeat ends the run.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SyncResultDetails({
+  history,
+  collectedCount,
+  returnAmount,
+  netPL,
+}: {
+  history: DrawnDigit[];
+  collectedCount: number;
+  returnAmount: number;
+  netPL: number;
+}) {
+  const knockout = history.at(-1)?.isKnockout ? history.at(-1) : null;
+
+  return (
+    <div className="space-y-3 text-left">
+      <div className="grid grid-cols-2 gap-2 rounded-lg bg-subtle p-2.5 text-center">
+        <div>
+          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Returned</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+            {formatCredits(returnAmount)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Unique digits</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+            {collectedCount}/10
+          </p>
+        </div>
+      </div>
+      {knockout ? (
+        <p className="rounded-lg bg-semantic-loss/10 px-3 py-2 text-xs text-semantic-loss">
+          Digit <span className="font-display font-bold">{knockout.digit}</span> repeated on draw {history.length}.
+        </p>
+      ) : null}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          Final sequence
+        </p>
+        <div className="scrollbar-hide flex gap-1.5 overflow-x-auto pb-1">
+          {history.map((entry, index) => (
+            <span
+              key={`${entry.tick.epoch}-${index}`}
+              className={cn(
+                'flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg border font-display text-xs font-bold tabular-nums',
+                entry.isKnockout
+                  ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
+                  : 'border-border-subtle bg-subtle text-on-prominent',
+              )}
+            >
+              {entry.digit}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="sr-only">Net profit or loss: {netPL} credits.</p>
+    </div>
+  );
+}
+
+function SyncDock({
+  isLandscape,
+  gameState,
+  stake,
+  maxStake,
+  balance,
+  isDrawing,
+  drawNumber,
+  nextRisk,
+  cashOutValue,
+  netPL,
+  onStakeChange,
+  onStart,
+  onDraw,
+  onCashOut,
+}: {
+  isLandscape: boolean;
+  gameState: DigitCollectState;
+  stake: number;
+  maxStake: number;
+  balance: number;
+  isDrawing: boolean;
+  drawNumber: number;
+  nextRisk: number;
+  cashOutValue: number;
+  netPL: number;
+  onStakeChange: (stake: number) => void;
+  onStart: () => void;
+  onDraw: () => void;
+  onCashOut: () => void;
+}) {
+  const idle = gameState === 'idle';
+  const collecting = gameState === 'collecting';
+  const effectiveMax = Math.max(10, Math.min(maxStake, balance));
+  const startDisabled = stake > balance || balance <= 0;
+  const netDescription = netPL > 0
+    ? `net profit ${formatCredits(netPL)} credits`
+    : netPL < 0
+      ? `net loss ${formatCredits(Math.abs(netPL))} credits`
+      : 'break even';
+
+  const startButton = (
+    <Button
+      variant="primary"
+      className="min-h-[44px] w-full"
+      disabled={startDisabled}
+      onClick={onStart}
+      aria-label={`Start round with ${formatCredits(stake)} credit stake`}
+    >
+      <span>Start round</span>
+      <span className="ml-1 text-xs opacity-80">· {formatCredits(stake)} credits</span>
+    </Button>
+  );
+
+  const roundActions = collecting ? (
+    <>
+      <Button
+        variant="primary"
+        className="min-h-[44px]"
+        disabled={isDrawing}
+        aria-busy={isDrawing}
+        aria-label={isDrawing ? 'Waiting for the next live tick' : `Draw next with ${(nextRisk * 100).toFixed(0)} percent repeat risk`}
+        onClick={onDraw}
+      >
+        <span className="flex flex-col items-center leading-tight">
+          <span>{isDrawing ? 'Waiting for tick…' : 'Draw next'}</span>
+          {!isDrawing ? (
+            <span className="text-[9px] font-normal opacity-75">
+              {(nextRisk * 100).toFixed(0)}% repeat risk
+            </span>
+          ) : null}
+        </span>
+      </Button>
+      <Button
+        variant="secondary"
+        className="min-h-[44px]"
+        disabled={drawNumber === 0 || isDrawing}
+        aria-label={`Cash out ${formatCredits(cashOutValue)} credits, ${netDescription}`}
+        onClick={onCashOut}
+      >
+        <span className="flex flex-col items-center leading-tight">
+          <span>Cash out</span>
+          <span className="text-[9px] font-normal opacity-75">
+            {formatCredits(cashOutValue)} credits
+          </span>
+        </span>
+      </Button>
+    </>
+  ) : null;
+
+  if (!isLandscape) {
+    return (
+      <StakeDock
+        stake={stake}
+        max={maxStake}
+        balance={balance}
+        onStakeChange={onStakeChange}
+        stakeDisabled={!idle}
+        showSlider={idle}
+        actions={
+          idle ? startButton : collecting ? <div className="grid grid-cols-2 gap-2">{roundActions}</div> : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="grid min-h-[60px] grid-cols-[44px_minmax(100px,0.7fr)_44px_minmax(220px,1.3fr)] items-center gap-2 px-4 py-2">
+      <Button
+        variant="primary"
+        size="icon"
+        aria-label="Decrease stake"
+        disabled={!idle || stake <= 10}
+        onClick={() => onStakeChange(Math.max(10, stake - 10))}
+        className="min-h-[44px] min-w-[44px]"
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+      <div className="min-w-0 text-center">
+        <p className="text-[9px] text-on-subtle">{idle ? 'Stake' : 'Locked stake'}</p>
+        <p className="truncate font-display text-xl font-bold leading-tight tabular-nums text-on-prominent">
+          {formatCredits(stake)} <span className="font-body text-xs font-normal text-on-subtle">Credits</span>
+        </p>
+      </div>
+      <Button
+        variant="primary"
+        size="icon"
+        aria-label="Increase stake"
+        disabled={!idle || stake >= effectiveMax}
+        onClick={() => onStakeChange(Math.min(effectiveMax, stake + 10))}
+        className="min-h-[44px] min-w-[44px]"
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+      {idle ? startButton : collecting ? (
+        <div className="grid grid-cols-2 gap-2">{roundActions}</div>
+      ) : (
+        <div />
+      )}
+    </div>
+  );
 }
 
 export function DigitCollectGame() {
@@ -51,10 +493,14 @@ export function DigitCollectGame() {
   const payoutTable = getPayoutTable();
   const nextKnockoutProb = getKnockoutProbability(drawNumber + 1);
   const potentialWin = stake * currentMultiplier;
+  const currentNetPL = potentialWin - stake;
   const maxStake = Math.max(10, Math.min(balance, 5000));
   const showResultOverlay =
     lastResult !== null &&
     (gameState === 'cashed_out' || gameState === 'knocked_out');
+  const resultReturn = lastResult?.won ? lastResult.amount : 0;
+  const resultNetPL = lastResult ? resultReturn - stake : 0;
+  const resultTier = resultNetPL > 0 ? 'win' : resultNetPL < 0 ? 'loss' : 'push';
 
   const startGame = useCallback(() => {
     if (!placeBet(stake)) return;
@@ -223,149 +669,69 @@ export function DigitCollectGame() {
           )
         }
         play={
-          <div className="flex flex-col flex-1 min-h-0 px-4 py-3">
-            <div className="shrink-0 rounded-xl border border-border-subtle bg-subtle px-4 py-3">
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <p className="body-xs text-on-subtle uppercase">Multiplier</p>
-                  <motion.p
-                    key={currentMultiplier}
-                    initial={{ scale: 1.04, opacity: 0.5 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className={`font-display font-bold text-semantic-win tabular-nums ${
-                      isLandscape ? 'text-3xl' : 'text-4xl'
-                    }`}
-                  >
-                    {currentMultiplier.toFixed(2)}x
-                  </motion.p>
-                </div>
-                <div className="pb-1 text-right">
-                  <p className="text-xs font-semibold text-on-prominent tabular-nums">{collected.size} of 10 collected</p>
-                  <p className="mt-0.5 text-[10px] text-on-subtle tabular-nums">Next draw risk {(nextKnockoutProb * 100).toFixed(0)}%</p>
-                </div>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border-subtle">
-                <div
-                  className="h-full rounded-full bg-semantic-win transition-[width] duration-300"
-                  style={{ width: `${collected.size * 10}%` }}
+          <div className="scrollbar-hide flex min-h-0 flex-1 overflow-y-auto px-4 py-3 [@media(max-height:520px)]:py-2">
+            <div className="my-auto grid w-full gap-3 [@media(max-height:520px)]:grid-cols-[minmax(0,0.9fr)_minmax(280px,1.1fr)] [@media(max-height:520px)]:items-center">
+              <div className="min-w-0 space-y-3 [@media(max-height:520px)]:space-y-2">
+                <PositionPanel
+                  gameState={gameState}
+                  multiplier={currentMultiplier}
+                  cashOutValue={potentialWin}
+                  netPL={currentNetPL}
+                  collectedCount={collected.size}
+                  nextRisk={nextKnockoutProb}
                 />
+                <DrawTrail history={history} />
+                {error ? <GameNotice tone="danger">{error}</GameNotice> : null}
+              </div>
+              <div className="mx-auto w-full max-w-[360px]">
+                <DigitBoard collected={collected} history={history} />
               </div>
             </div>
-
-            <div
-              className="flex-1 min-h-0 grid grid-cols-5 content-center mx-auto w-full max-w-[360px]"
-              style={{ gap: 'clamp(4px, 2vw, 10px)' }}
-            >
-              {Array.from({ length: 10 }, (_, i) => {
-                const isCollected = collected.has(i);
-                const lastDrawn = history.length > 0 && history[history.length - 1].digit === i;
-                const wasKnockout = lastDrawn && history[history.length - 1].isKnockout;
-
-                return (
-                  <motion.div
-                    key={i}
-                    whileTap={{ scale: 0.97 }}
-                    className={`relative flex aspect-square items-center justify-center rounded-xl border text-xl sm:text-2xl font-display font-bold tabular-nums ${
-                      wasKnockout
-                        ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
-                        : isCollected
-                          ? 'border-semantic-win/20 bg-semantic-win/10 text-semantic-win'
-                          : 'border-border-subtle bg-subtle text-on-subtle'
-                    }`}
-                    animate={
-                      wasKnockout
-                        ? { x: [0, -4, 4, -4, 4, 0] }
-                        : lastDrawn && isCollected
-                          ? { scale: [1, 1.06, 1] }
-                          : {}
-                    }
-                  >
-                    {i}
-                    {isCollected ? (
-                      <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-current" aria-hidden />
-                    ) : null}
-                  </motion.div>
-                );
-              })}
-            </div>
-
-            {error ? (
-              <div className="shrink-0 mt-2">
-                <GameNotice tone="danger">{error}</GameNotice>
-              </div>
-            ) : null}
           </div>
         }
         dock={
-          <StakeDock
+          <SyncDock
+            isLandscape={isLandscape}
+            gameState={gameState}
             stake={stake}
-            max={maxStake}
+            maxStake={maxStake}
             balance={balance}
+            isDrawing={isDrawing}
+            drawNumber={drawNumber}
+            nextRisk={nextKnockoutProb}
+            cashOutValue={potentialWin}
+            netPL={currentNetPL}
             onStakeChange={setStake}
-            stakeDisabled={gameState !== 'idle'}
-            showSlider={gameState === 'idle'}
-            footer={
-              gameState === 'collecting' ? (
-                <>
-                  Cash out:{' '}
-                  <span className="font-display font-semibold text-semantic-win tabular-nums">
-                    {potentialWin.toFixed(0)}
-                  </span>{' '}
-                  credits
-                </>
-              ) : undefined
-            }
-            actions={
-              <>
-                {gameState === 'idle' ? (
-                  <Button
-                    variant="primary"
-                    className="w-full min-h-[44px]"
-                    disabled={stake > balance || balance <= 0}
-                    onClick={startGame}
-                  >
-                    Start round
-                  </Button>
-                ) : null}
-                {gameState === 'collecting' ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="primary"
-                      className="min-h-[44px]"
-                      disabled={isDrawing}
-                      aria-busy={isDrawing}
-                      onClick={drawNext}
-                    >
-                      {isDrawing ? 'Waiting…' : 'Draw next'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="min-h-[44px]"
-                      disabled={drawNumber === 0 || isDrawing}
-                      onClick={cashOut}
-                    >
-                      Cash out
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            }
+            onStart={startGame}
+            onDraw={drawNext}
+            onCashOut={cashOut}
           />
         }
       />
 
       <ResultOverlay
         open={showResultOverlay}
-        won={lastResult?.won ?? false}
-        title={lastResult?.won ? 'Run closed' : 'Duplicate digit'}
+        won={resultNetPL > 0}
+        tier={resultTier}
+        title={lastResult?.won ? 'Position closed' : 'Duplicate digit'}
         subtitle={
           lastResult?.won
-            ? 'You collected your multiplier payout.'
-            : 'The round ended before cash-out.'
+            ? `Returned ${formatCredits(resultReturn)} credits from ${collected.size} unique digit${collected.size === 1 ? '' : 's'}.`
+            : `The repeat ended the run after ${collected.size} unique digit${collected.size === 1 ? '' : 's'}.`
         }
-        amount={lastResult?.won ? lastResult.amount : stake}
-        amountLabel="credits"
+        amount={lastResult ? Math.abs(resultNetPL) : undefined}
+        amountLabel="net"
         onDismiss={reset}
+        details={
+          lastResult ? (
+            <SyncResultDetails
+              history={history}
+              collectedCount={collected.size}
+              returnAmount={resultReturn}
+              netPL={resultNetPL}
+            />
+          ) : undefined
+        }
         primaryAction={{ label: 'Play again', onClick: reset }}
       />
     </GameShell>
