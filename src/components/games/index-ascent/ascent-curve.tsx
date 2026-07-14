@@ -94,7 +94,7 @@ export function AscentCurve({
         preserveAspectRatio="none"
         className="absolute inset-0 h-full w-full"
         role="img"
-        aria-label={`Stepped position return chart, ${Math.max(curve.length - 1, 0)} ticks survived, current multiplier ${chart.current.toFixed(2)} times${autoCashoutTarget ? `, auto exit ${autoCashoutTarget.toFixed(2)} times` : ''}`}
+        aria-label={`Stepped position return chart, ${Math.max(curve.length - 1, 0)} ticks survived, current multiplier ${chart.current.toFixed(3)} times${autoCashoutTarget ? `, auto exit ${autoCashoutTarget.toFixed(2)} times` : ''}`}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -203,7 +203,7 @@ export function AscentCurve({
           transform: `translate(-100%, ${currentLabelBelow ? '45%' : '-145%'})`,
         }}
       >
-        {chart.current.toFixed(2)}×
+        {chart.current.toFixed(3)}×
       </span>
 
       {chart.xTickValues.map((tick) => (

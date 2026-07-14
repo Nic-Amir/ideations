@@ -295,7 +295,7 @@ function PositionChart({
         {marketCrashes.length > 0 ? (
           <div className="scrollbar-hide flex min-w-0 gap-1 overflow-x-auto" aria-label="Recent market corrections">
             {marketCrashes.slice(0, 3).map((value, index) => (
-              <span key={`${index}-${value}`} className="shrink-0 rounded-full border border-border-subtle bg-subtle px-2 py-1 text-[8px] font-semibold tabular-nums text-on-subtle">↘ {value.toFixed(2)}×</span>
+              <span key={`${index}-${value}`} className="shrink-0 rounded-full border border-border-subtle bg-subtle px-2 py-1 text-[8px] font-semibold tabular-nums text-on-subtle">↘ {value.toFixed(3)}×</span>
             ))}
           </div>
         ) : null}
@@ -304,7 +304,7 @@ function PositionChart({
       <div className="grid grid-cols-[1.15fr_1fr_1fr] border-b border-border-subtle bg-subtle/45 px-3 py-2 [@media(max-height:520px)]:py-1.5">
         <div>
           <p className="text-[8px] uppercase tracking-wide text-on-subtle">Current return</p>
-          <p className="font-display text-2xl font-bold leading-none tabular-nums text-on-prominent [@media(max-height:520px)]:text-lg">{multiplier.toFixed(2)}×</p>
+          <p className="font-display text-2xl font-bold leading-none tabular-nums text-on-prominent [@media(max-height:520px)]:text-lg">{multiplier.toFixed(3)}×</p>
         </div>
         <div className="border-l border-border-subtle pl-3">
           <p className="text-[8px] uppercase tracking-wide text-on-subtle">Position value</p>
@@ -378,8 +378,8 @@ function AscentDock({
   const exitDisabled = multiplier < MIN_CASHOUT_MULTIPLIER && ticksSurvived < 1;
   const effectiveMax = Math.max(10, Math.min(maxStake, balance));
   const action = flying ? (
-    <Button variant="primary" className="min-h-[52px] w-full" disabled={exitDisabled} onClick={onExit} aria-label={`Exit now at ${multiplier.toFixed(2)} times for ${formatCredits(returnAmount)} credits, net ${netPL > 0 ? 'profit' : netPL < 0 ? 'loss' : 'break even'} ${formatCredits(Math.abs(netPL))} credits`}>
-      <span className="flex flex-col items-center leading-tight"><span>Exit now · {multiplier.toFixed(2)}×</span><span className="text-[9px] font-normal opacity-80">Return {formatCredits(returnAmount)} · Net {netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</span></span>
+    <Button variant="primary" className="min-h-[52px] w-full" disabled={exitDisabled} onClick={onExit} aria-label={`Exit now at ${multiplier.toFixed(3)} times for ${formatCredits(returnAmount)} credits, net ${netPL > 0 ? 'profit' : netPL < 0 ? 'loss' : 'break even'} ${formatCredits(Math.abs(netPL))} credits`}>
+      <span className="flex flex-col items-center leading-tight"><span>Exit now · {multiplier.toFixed(3)}×</span><span className="text-[9px] font-normal opacity-80">Return {formatCredits(returnAmount)} · Net {netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</span></span>
     </Button>
   ) : (
     <Button variant="primary" className="min-h-[52px] w-full" disabled={entryDisabled} onClick={onEnter} aria-label={`Enter position with ${formatCredits(stake)} credit stake`}>
@@ -415,7 +415,7 @@ function ResultDetails({ result, symbol, ticksSurvived }: { result: AscentRoundR
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <span className="text-on-subtle">Market</span><span className="text-right font-semibold text-on-prominent">{info.name}</span>
         <span className="text-on-subtle">Stake</span><span className="text-right font-display font-semibold tabular-nums text-on-prominent">{formatCredits(result.stake)}</span>
-        <span className="text-on-subtle">Exit multiplier</span><span className="text-right font-display font-semibold tabular-nums text-on-prominent">{result.multiplier.toFixed(2)}×</span>
+        <span className="text-on-subtle">Exit multiplier</span><span className="text-right font-display font-semibold tabular-nums text-on-prominent">{result.multiplier.toFixed(3)}×</span>
         <span className="text-on-subtle">Net P/L</span><span className={cn('text-right font-display font-bold tabular-nums', netPL > 0 ? 'text-semantic-win' : netPL < 0 ? 'text-semantic-loss' : 'text-on-prominent')}>{netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</span>
       </div>
     </div>
@@ -495,7 +495,7 @@ export function IndexAscentGame() {
           {roundHistory.map((round) => {
             const netPL = (round.outcome === 'cashed_out' ? round.winAmount : 0) - round.stake;
             return (
-              <div key={round.id} className="flex items-center justify-between rounded-lg bg-subtle px-3 py-2 text-xs text-on-subtle"><span>Round {round.id}</span><span className="font-display tabular-nums text-on-prominent">{round.multiplier.toFixed(2)}×</span><span className={netPL > 0 ? 'text-semantic-win' : netPL < 0 ? 'text-semantic-loss' : 'text-on-prominent'}>{netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</span></div>
+              <div key={round.id} className="flex items-center justify-between rounded-lg bg-subtle px-3 py-2 text-xs text-on-subtle"><span>Round {round.id}</span><span className="font-display tabular-nums text-on-prominent">{round.multiplier.toFixed(3)}×</span><span className={netPL > 0 ? 'text-semantic-win' : netPL < 0 ? 'text-semantic-loss' : 'text-on-prominent'}>{netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</span></div>
             );
           })}
         </div>
@@ -550,7 +550,7 @@ export function IndexAscentGame() {
         won={resultNetPL > 0}
         tier={resultTier}
         title={lastResult?.outcome === 'cashed_out' ? 'Position closed' : 'Index corrected'}
-        subtitle={lastResult?.outcome === 'cashed_out' ? `Exited at ${lastResult.multiplier.toFixed(2)}×.` : `The market corrected at ${lastResult?.multiplier.toFixed(2)}×.`}
+        subtitle={lastResult?.outcome === 'cashed_out' ? `Exited at ${lastResult.multiplier.toFixed(3)}×.` : `The market corrected at ${lastResult?.multiplier.toFixed(3)}×.`}
         amount={lastResult ? Math.round(Math.abs(resultNetPL)) : undefined}
         amountLabel="net"
         onDismiss={reset}
