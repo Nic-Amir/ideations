@@ -18,6 +18,8 @@ export interface ResultOverlayProps {
   autoDismissMs?: number;
   primaryAction?: { label: string; onClick: () => void };
   tier?: ResultTier;
+  /** Optional structured result content shown below the amount. */
+  details?: React.ReactNode;
   /** Show a thin depleting bar indicating time until auto-dismiss. */
   showAutoDismissBar?: boolean;
 }
@@ -70,6 +72,7 @@ export function ResultOverlay({
   autoDismissMs = 0,
   primaryAction,
   tier,
+  details,
   showAutoDismissBar = false,
 }: ResultOverlayProps) {
   const resolvedTier = tier ?? (won ? 'win' : 'loss');
@@ -86,18 +89,21 @@ export function ResultOverlay({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay px-4"
+          className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-overlay px-4 py-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={primaryAction ? undefined : onDismiss}
         >
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
             initial={{ scale: 0.94, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.94, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs"
+            className="my-auto w-full max-w-xs"
           >
             <Card className="border border-border-subtle shadow-sm">
               <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
@@ -129,6 +135,7 @@ export function ResultOverlay({
                     ) : null}
                   </p>
                 ) : null}
+                {details ? <div className="w-full">{details}</div> : null}
                 {primaryAction ? (
                   <Button variant="primary" className="w-full min-h-[44px]" onClick={primaryAction.onClick}>
                     {primaryAction.label}

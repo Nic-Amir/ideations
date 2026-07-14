@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Play, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { GameShell } from '@/components/games/shared/game-shell';
@@ -15,7 +14,9 @@ import { useDerby, type DerbyResult } from '@/hooks/use-derby';
 import {
   BET_MODES,
   getBetModeSpec,
+  type BetModeSpec,
   type BetMode,
+  type PickPricing,
   type RaceCard,
 } from '@/lib/games/derby';
 
@@ -126,7 +127,7 @@ function ModePicker({
           disabled={disabled}
           onClick={() => onChange(spec.id)}
           className={cn(
-            'flex-1 rounded-md px-1 py-1.5 text-xs font-semibold transition-colors min-h-[32px]',
+            'flex-1 rounded-md px-1 py-1.5 text-[11px] font-semibold transition-colors min-h-[44px]',
             mode === spec.id
               ? 'bg-prominent text-on-prominent shadow-sm'
               : 'text-on-subtle hover:text-on-prominent',
@@ -166,7 +167,7 @@ function OrderToggle({
           disabled={disabled}
           onClick={() => onChange(opt.value)}
           className={cn(
-            'flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors min-h-[32px]',
+            'flex-1 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors min-h-[40px]',
             ordered === opt.value
               ? 'bg-prominent text-on-prominent shadow-sm'
               : 'text-on-subtle hover:text-on-prominent',
@@ -200,10 +201,10 @@ function SelectionSlots({
           <div
             key={i}
             className={cn(
-              'flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border text-xs font-semibold',
+              'flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border px-1 text-[11px] font-semibold',
               filled
                 ? 'border-border-prominent bg-subtle text-on-prominent'
-                : 'border-dashed border-border-subtle text-on-subtle',
+                : 'border-border-subtle bg-prominent text-on-subtle',
             )}
           >
             {ordered ? <span className="text-on-subtle">{i + 1}.</span> : null}
@@ -265,6 +266,113 @@ function OutcomeStrip({
   );
 }
 
+function SportsbookSlip({
+  card,
+  spec,
+  selection,
+  ordered,
+  pricing,
+  stake,
+  canTrade,
+  onClear,
+  onStart,
+}: {
+  card: RaceCard;
+  spec: BetModeSpec;
+  selection: number[];
+  ordered: boolean;
+  pricing: PickPricing | null;
+  stake: number;
+  canTrade: boolean;
+  onClear: () => void;
+  onStart: () => void;
+}) {
+  const remaining = spec.picks - selection.length;
+  const returnAmount = pricing ? Math.round(stake * pricing.multiplier) : 0;
+  const netProfit = Math.max(0, returnAmount - stake);
+
+  return (
+    <div className="mx-4 mb-2 shrink-0 rounded-xl border border-border-subtle bg-subtle/50 p-3 shadow-sm">
+      <div className="mb-2 flex min-h-[32px] items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Bet slip</p>
+          <p className="text-xs font-semibold text-on-prominent">
+            {spec.label}{spec.orderable && ordered ? ' · exact order' : ''}
+            <span className="ml-1 font-normal text-on-subtle">{selection.length}/{spec.picks} selected</span>
+          </p>
+        </div>
+        {selection.length > 0 ? (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Clear selection"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-prominent text-on-subtle transition-colors hover:text-on-prominent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+
+      <SelectionSlots
+        card={card}
+        selection={selection}
+        picks={spec.picks}
+        ordered={spec.orderable && ordered}
+      />
+
+      {remaining > 0 ? (
+        <p className="mt-2 text-center text-xs text-on-subtle">
+          Select {remaining} more runner{remaining === 1 ? '' : 's'} from the market above.
+        </p>
+      ) : pricing ? (
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-prominent px-3 py-2 text-center">
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Odds</p>
+              <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+                {pricing.multiplier >= 1000
+                  ? `${Math.round(pricing.multiplier).toLocaleString()}×`
+                  : `${pricing.multiplier.toFixed(2)}×`}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Return</p>
+              <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+                {returnAmount.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Profit</p>
+              <p className="font-display text-sm font-bold tabular-nums text-semantic-win">
+                +{netProfit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={!canTrade}
+            onClick={onStart}
+            className={cn(
+              'mt-2 flex min-h-[52px] w-full items-center justify-between rounded-xl bg-primary px-4 text-on-prominent-static-inverse',
+              !canTrade && 'opacity-40',
+              canTrade && 'active:scale-[0.98]',
+            )}
+          >
+            <span className="flex items-center gap-2 font-display text-base font-bold">
+              <Play className="h-5 w-5 fill-current" />
+              Start race
+            </span>
+            <span className="text-right text-xs font-semibold tabular-nums">
+              Stake {stake.toLocaleString()}
+              <span className="block text-[10px] opacity-80">Return {returnAmount.toLocaleString()}</span>
+            </span>
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function resultCopy(result: DerbyResult, card: RaceCard): { title: string; subtitle: string } {
   const winnerName = card.horses[result.finishOrder[0]].name;
   const spec = getBetModeSpec(result.pick.mode);
@@ -310,6 +418,45 @@ function ordinal(n: number): string {
             ? 'rd'
             : 'th';
   return `${n}${suffix}`;
+}
+
+function FinishDetails({ card, result }: { card: RaceCard; result: DerbyResult }) {
+  const topFive = result.finishOrder.slice(0, 5);
+  const pickedOutsideTopFive = result.pick.horses.filter((horse) => !topFive.includes(horse));
+
+  const finishRow = (horse: number, position: number, isPlayerPick: boolean) => (
+    <div
+      key={`${position}-${horse}`}
+      className={cn(
+        'grid grid-cols-[24px_12px_1fr_auto] items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+        isPlayerPick ? 'bg-primary/10 text-on-prominent' : 'bg-subtle text-on-subtle',
+      )}
+    >
+      <span className="font-display font-bold tabular-nums">{position}</span>
+      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: card.horses[horse].silks }} />
+      <span className="truncate font-medium">{card.horses[horse].name}</span>
+      {isPlayerPick ? <span className="text-[9px] font-bold uppercase tracking-wide text-primary">Your pick</span> : null}
+    </div>
+  );
+
+  return (
+    <div className="max-h-[min(300px,35vh)] space-y-2 overflow-y-auto pr-1 text-left">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Top five finish</p>
+      <div className="space-y-1">
+        {topFive.map((horse, index) => finishRow(horse, index + 1, result.pick.horses.includes(horse)))}
+      </div>
+      {pickedOutsideTopFive.length > 0 ? (
+        <div className="border-t border-border-subtle pt-2">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Your remaining picks</p>
+          <div className="space-y-1">
+            {pickedOutsideTopFive.map((horse) =>
+              finishRow(horse, result.finishOrder.indexOf(horse) + 1, true),
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function DerbyGame() {
@@ -358,39 +505,117 @@ export function DerbyGame() {
   const showChart = !idle && path !== null && view === 'chart';
 
   const copy = result ? resultCopy(result, card) : { title: '', subtitle: '' };
-  const potentialPayout =
-    pricing !== null ? Math.round(stake * pricing.multiplier) : 0;
+  const boardOdds = mode === 'place' ? card.placeOdds : card.winOdds;
+  const boardOddsLabel =
+    mode === 'place' ? 'Place odds' : mode === 'winner' ? 'Win odds' : 'Win ref.';
+  const raceProgress = Math.min(100, (visibleTick / card.ticks) * 100);
 
-  const finishTop5 = result
-    ? result.finishOrder
-        .slice(0, 5)
-        .map((h, i) => `${i + 1}. ${card.horses[h].name}`)
-        .join('  ·  ')
-    : '';
+  const drawNewRace = () => {
+    setView('chart');
+    newRace();
+  };
+
+  const showNextRace = () => {
+    setView('chart');
+    dismissResult();
+  };
 
   return (
     <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<OutcomeStrip {...windowStats} />}
         play={
-          <div className="flex flex-col flex-1 min-h-0">
+          <div
+            className={cn(
+              'flex flex-1 min-h-0 flex-col',
+              idle ? 'scrollbar-hide overflow-y-auto' : 'overflow-hidden',
+            )}
+          >
             {playError ? (
               <div className="px-4 pt-3">
                 <GameNotice tone="danger">{playError}</GameNotice>
               </div>
             ) : null}
 
+            {idle ? (
+              <div className="shrink-0 space-y-2 border-b border-border-subtle px-4 py-2">
+                <div className="flex min-h-[44px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Market</p>
+                    <p className="truncate text-sm font-semibold text-on-prominent">{spec.label} · {spec.tag}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={drawNewRace}
+                    aria-label="Draw a new race card"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-subtle text-on-subtle transition-colors hover:text-on-prominent"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </button>
+                </div>
+                <ModePicker mode={mode} onChange={setMode} disabled={!idle} />
+                {spec.orderable ? (
+                  <div className="flex items-center gap-2">
+                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Order</span>
+                    <OrderToggle ordered={ordered} onChange={setOrdered} disabled={!idle} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!idle && path ? (
+              <div className="shrink-0 border-b border-border-subtle px-3 pt-1.5 pb-2">
+                <LeaderboardStrip
+                  card={card}
+                  liveRanks={liveRanks}
+                  selection={pickedHorses}
+                  statusLabel={finished || settled ? 'Finish' : 'Live'}
+                />
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between text-[10px] font-semibold text-on-subtle tabular-nums">
+                      <span>{inFinalStretch && !settled ? 'Final stretch' : settled ? 'Race complete' : `Tick ${visibleTick}/${card.ticks}`}</span>
+                      <span>{ticksLeft !== null && ticksLeft > 0 ? `${ticksLeft} to go` : 'Photo finish'}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border-subtle">
+                      <div
+                        className={cn('h-full rounded-full transition-[width] duration-200', inFinalStretch ? 'bg-semantic-warning' : 'bg-primary')}
+                        style={{ width: `${raceProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 rounded-lg border border-border-subtle bg-subtle p-0.5">
+                    {(['chart', 'track'] as const).map((nextView) => (
+                      <button
+                        key={nextView}
+                        type="button"
+                        onClick={() => setView(nextView)}
+                        aria-pressed={view === nextView}
+                        className={cn(
+                          'min-h-[36px] rounded-md px-3 text-[10px] font-semibold capitalize transition-colors',
+                          view === nextView ? 'bg-prominent text-on-prominent shadow-sm' : 'text-on-subtle hover:text-on-prominent',
+                        )}
+                      >
+                        {nextView}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {/* Full-bleed play surface — odds board while idle, price chart
                 (or track lanes) once the race is on */}
-            <div className="relative flex-1 min-h-[300px]">
+            <div
+              className={cn(
+                'relative flex-1',
+                idle
+                  ? 'min-h-[220px]'
+                  : 'mx-3 my-2 min-h-[280px] overflow-hidden rounded-xl border border-border-subtle bg-subtle/20',
+              )}
+            >
               {showChart && path ? (
                 <div className="flex h-full flex-col">
-                  <LeaderboardStrip
-                    card={card}
-                    liveRanks={liveRanks}
-                    selection={pickedHorses}
-                    statusLabel={finished || settled ? 'Finish' : 'Live'}
-                  />
                   <DerbyChart
                     card={card}
                     path={path}
@@ -412,184 +637,53 @@ export function DerbyGame() {
                   selectable={idle}
                   inFinalStretch={inFinalStretch}
                   finished={finished || settled}
+                  mode={mode}
+                  odds={boardOdds}
+                  oddsLabel={boardOddsLabel}
                 />
               )}
-
-              {/* Chart/Track view toggle, once there is a race to look at */}
-              {!idle && path ? (
-                <div className="absolute right-2 top-1.5 flex rounded-lg border border-border-subtle bg-card/90 p-0.5 backdrop-blur-sm">
-                  {(['chart', 'track'] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setView(v)}
-                      aria-pressed={view === v}
-                      className={cn(
-                        'rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors',
-                        view === v
-                          ? 'bg-prominent text-on-prominent shadow-sm'
-                          : 'text-on-subtle hover:text-on-prominent',
-                      )}
-                    >
-                      {v === 'chart' ? 'Chart' : 'Track'}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              {running && ticksLeft !== null ? (
-                <div className="pointer-events-none absolute left-1/2 top-9 -translate-x-1/2">
-                  <span
-                    className={cn(
-                      'rounded-full border border-border-subtle bg-card/90 px-3 py-1 text-xs font-semibold backdrop-blur-sm tabular-nums',
-                      inFinalStretch
-                        ? 'border-semantic-warning text-semantic-warning'
-                        : 'text-on-prominent',
-                    )}
-                  >
-                    {ticksLeft > 0
-                      ? inFinalStretch
-                        ? `Final stretch — ${ticksLeft} tick${ticksLeft === 1 ? '' : 's'}`
-                        : `${ticksLeft} ticks to the line`
-                      : 'Photo finish…'}
-                  </span>
-                </div>
-              ) : null}
             </div>
 
-            {/* Bet slip under the track */}
-            <div className="shrink-0 space-y-2 p-4 pt-2">
-              {idle ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-                      Bet type
-                    </span>
-                    <div className="flex-1">
-                      <ModePicker mode={mode} onChange={setMode} disabled={!idle} />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={newRace}
-                      aria-label="Draw a new race card"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-subtle text-on-subtle transition-colors hover:text-on-prominent"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
+            {idle ? (
+              <SportsbookSlip
+                card={card}
+                spec={spec}
+                selection={selection}
+                ordered={ordered}
+                pricing={pricing}
+                stake={stake}
+                canTrade={canTrade}
+                onClear={clearSelection}
+                onStart={startRace}
+              />
+            ) : (
+              <div className="mx-4 mb-2 shrink-0 rounded-xl border border-border-subtle bg-subtle/60 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Locked position</p>
+                    <p className="truncate text-xs font-semibold text-on-prominent">
+                      {spec.label}{spec.orderable && ordered ? ' · exact order' : ''}
+                    </p>
                   </div>
-
-                  {spec.orderable ? (
-                    <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-                      Order
-                    </span>
-                      <OrderToggle
-                        ordered={ordered}
-                        onChange={setOrdered}
-                        disabled={!idle}
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-                      Picks
-                    </span>
-                    <div className="flex-1">
-                      <SelectionSlots
-                        card={card}
-                        selection={selection}
-                        picks={spec.picks}
-                        ordered={spec.orderable && ordered}
-                      />
-                    </div>
-                    {selection.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={clearSelection}
-                        aria-label="Clear selection"
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-subtle text-on-subtle transition-colors hover:text-on-prominent"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </div>
-                </>
-              ) : null}
-
-              {/* Start CTA / locked-bet summary */}
-              {idle ? (
-                selectionComplete ? (
-                  <motion.button
-                    type="button"
-                    disabled={!canTrade}
-                    onClick={startRace}
-                    animate={canTrade ? { scale: [1, 1.015, 1] } : { scale: 1 }}
-                    transition={
-                      canTrade
-                        ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }
-                        : { duration: 0.2 }
-                    }
-                    className={cn(
-                      'flex min-h-[60px] w-full items-center justify-between rounded-xl px-4 py-2',
-                      'bg-semantic-win text-on-prominent-static-inverse shadow-lg',
-                      !canTrade && 'opacity-40',
-                      canTrade && 'active:scale-[0.98]',
-                    )}
-                  >
-                    <span className="flex items-center gap-2 font-display text-base font-bold">
-                      <Play className="h-5 w-5 fill-current" />
-                      Start race
-                      <span className="text-xs font-semibold opacity-80">
-                        {spec.label}
-                        {spec.orderable && ordered ? ' · exact order' : ''}
-                      </span>
-                    </span>
-                    {pricing !== null ? (
-                      <span className="text-right">
-                        <span className="font-display text-xl font-bold tabular-nums">
-                          {pricing.multiplier >= 1000
-                            ? `${Math.round(pricing.multiplier).toLocaleString()}×`
-                            : `${pricing.multiplier.toFixed(2)}×`}
-                        </span>
-                        <span className="block text-[10px] tabular-nums opacity-90">
-                          Pays {potentialPayout.toLocaleString()}
-                        </span>
-                      </span>
-                    ) : null}
-                  </motion.button>
-                ) : (
-                  <div className="flex min-h-[60px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-subtle px-4 py-2 text-sm font-semibold text-on-subtle">
-                    Pick {spec.picks - selection.length} more horse
-                    {spec.picks - selection.length === 1 ? '' : 's'} on the board
-                    above, then start the race here
-                  </div>
-                )
-              ) : (
-                <div className="flex min-h-[44px] w-full items-center justify-between rounded-xl border border-border-subtle bg-subtle px-4 py-2">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-on-prominent">
-                    {running ? 'Racing —' : 'Finished —'} {spec.label}
-                    {spec.orderable && ordered ? ' (exact order)' : ''}
-                    <span className="flex items-center gap-0.5">
-                      {pickedHorses.map((h) => (
-                        <span
-                          key={h}
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: card.horses[h].silks }}
-                        />
-                      ))}
-                    </span>
-                  </span>
-                  {pricing !== null ? (
-                    <span className="text-xs font-bold tabular-nums text-on-prominent">
+                  {pricing ? (
+                    <span className="font-display text-sm font-bold tabular-nums text-on-prominent">
                       {pricing.multiplier >= 1000
                         ? `${Math.round(pricing.multiplier).toLocaleString()}×`
                         : `${pricing.multiplier.toFixed(2)}×`}
                     </span>
                   ) : null}
                 </div>
-              )}
-            </div>
+                <div className="scrollbar-hide mt-2 flex gap-1.5 overflow-x-auto">
+                  {pickedHorses.map((horse, index) => (
+                    <span key={horse} className="flex shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-prominent px-2 py-1 text-[10px] font-semibold text-on-prominent">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: card.horses[horse].silks }} />
+                      {spec.orderable ? `${index + 1}. ` : ''}{card.horses[horse].name}
+                      <span className="text-on-subtle">#{liveRanks.indexOf(horse) + 1}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         }
         dock={
@@ -618,14 +712,13 @@ export function DerbyGame() {
         open={showOverlay}
         won={result?.outcome === 'win'}
         title={copy.title}
-        subtitle={result ? `${copy.subtitle} — ${finishTop5}` : copy.subtitle}
+        subtitle={copy.subtitle}
         amount={result?.outcome === 'win' ? result.netPL : result?.stake}
-        amountLabel="credits"
+        amountLabel={result?.outcome === 'win' ? 'net' : 'lost'}
         tier={result?.outcome === 'win' ? 'win' : 'loss'}
-        onDismiss={dismissResult}
-        autoDismissMs={6000}
-        showAutoDismissBar
-        primaryAction={{ label: 'Next race', onClick: dismissResult }}
+        onDismiss={showNextRace}
+        details={result ? <FinishDetails card={card} result={result} /> : undefined}
+        primaryAction={{ label: 'Next race', onClick: showNextRace }}
       />
     </GameShell>
   );

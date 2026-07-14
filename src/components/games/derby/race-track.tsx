@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { RaceCard, RacePath } from '@/lib/games/derby';
+import type { BetMode, RaceCard, RacePath } from '@/lib/games/derby';
 
 interface RaceTrackProps {
   card: RaceCard;
@@ -18,6 +18,9 @@ interface RaceTrackProps {
   inFinalStretch: boolean;
   /** True once the race has crossed the line (settle pause / overlay). */
   finished: boolean;
+  mode: BetMode;
+  odds: number[];
+  oddsLabel: string;
   className?: string;
 }
 
@@ -38,28 +41,46 @@ export function LeaderboardStrip({
   selection: number[];
   statusLabel: string;
 }) {
+  const leaders = liveRanks.slice(0, 3);
+  const selectedOutsideLeaders = selection.filter((horse) => !leaders.includes(horse));
+
+  const rankChip = (horse: number, position: number, isSelectionOnly = false) => {
+    const pickSlot = selection.indexOf(horse);
+    return (
+      <span
+        key={`${isSelectionOnly ? 'pick' : 'leader'}-${horse}`}
+        className={cn(
+          'flex shrink-0 items-center gap-1 rounded-full border bg-subtle px-2 py-1 text-[10px] font-semibold tabular-nums transition-colors',
+          pickSlot >= 0
+            ? 'border-border-prominent text-on-prominent'
+            : 'border-border-subtle text-on-subtle',
+        )}
+      >
+        <span className="font-bold text-on-prominent">#{position + 1}</span>
+        <span
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: card.horses[horse].silks }}
+        />
+        <span className="max-w-[92px] truncate">{card.horses[horse].name}</span>
+        {pickSlot >= 0 ? <span className="text-primary">P{pickSlot + 1}</span> : null}
+      </span>
+    );
+  };
+
   return (
-    <div className="scrollbar-hide flex items-center gap-1 overflow-x-auto px-2 py-1.5">
+    <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto py-1.5">
       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
         {statusLabel}
       </span>
-      {liveRanks.slice(0, 5).map((horse, position) => (
-        <span
-          key={horse}
-          className={cn(
-            'flex min-w-0 items-center gap-1 rounded-full border border-border-subtle bg-subtle px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors',
-            selection.includes(horse) && 'border-border-prominent text-on-prominent',
-            !selection.includes(horse) && 'text-on-subtle',
-          )}
-        >
-          <span className="text-on-subtle">{position + 1}</span>
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: card.horses[horse].silks }}
-          />
-          <span className="truncate">{card.horses[horse].name}</span>
+      {leaders.map((horse, position) => rankChip(horse, position))}
+      {selectedOutsideLeaders.length > 0 ? (
+        <span className="ml-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          Your picks
         </span>
-      ))}
+      ) : null}
+      {selectedOutsideLeaders.map((horse) =>
+        rankChip(horse, liveRanks.indexOf(horse), true),
+      )}
     </div>
   );
 }
@@ -74,10 +95,26 @@ export function RaceTrack({
   selectable,
   inFinalStretch,
   finished,
+  mode,
+  odds,
+  oddsLabel,
   className,
 }: RaceTrackProps) {
   const running = path !== null;
   const totalTicks = card.ticks;
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board || running) return;
+    const update = () => {
+      setShowScrollHint(board.scrollTop + board.clientHeight < board.scrollHeight - 4);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(board);
+    return () => observer.disconnect();
+  }, [card.id, running]);
 
   /**
    * Lane progress per horse: time carries every horse toward the finish
@@ -113,39 +150,41 @@ export function RaceTrack({
   const revealedTick = Math.min(visibleTick, totalTicks);
 
   return (
-    <div className={cn('flex h-full w-full flex-col', className)}>
-      {running ? (
-        <LeaderboardStrip
-          card={card}
-          liveRanks={liveRanks}
-          selection={selection}
-          statusLabel={finished ? 'Finish' : 'Live'}
-        />
-      ) : (
-        <div className="grid grid-cols-[36px_1fr_64px] items-center border-y border-border-subtle bg-subtle/70 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+    <div className={cn('relative flex h-full w-full flex-col', className)}>
+      {!running ? (
+        <div className="grid grid-cols-[40px_1fr_74px] items-center border-y border-border-subtle bg-subtle/70 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
           <span>Post</span>
-          <span>Horse</span>
-          <span className="text-right">Win odds</span>
+          <span>Runner · form</span>
+          <span className="text-right">{oddsLabel}</span>
         </div>
-      )}
+      ) : null}
 
       {/* Lanes */}
       <div
+        ref={boardRef}
+        onScroll={() => {
+          const board = boardRef.current;
+          if (board) {
+            setShowScrollHint(board.scrollTop + board.clientHeight < board.scrollHeight - 4);
+          }
+        }}
         className={cn(
           'relative flex-1 min-h-0',
-          !running && 'scrollbar-hide overflow-y-auto [@media(max-height:520px)]:overflow-y-visible',
+          !running && 'scrollbar-hide overflow-y-auto',
           inFinalStretch && !finished && 'bg-semantic-warning/5',
         )}
       >
         {/* Finish line */}
-        <div
-          className={cn(
-            'absolute inset-y-0 w-px border-r border-dashed border-border-prominent opacity-50',
-            inFinalStretch && 'opacity-90',
-          )}
-          style={{ left: `${FINISH_X * 100}%` }}
-          aria-hidden
-        />
+        {running ? (
+          <div
+            className={cn(
+              'absolute inset-y-0 w-px border-r border-dashed border-border-prominent opacity-50',
+              inFinalStretch && 'opacity-90',
+            )}
+            style={{ left: `${FINISH_X * 100}%` }}
+            aria-hidden
+          />
+        ) : null}
 
         <div className={cn('flex flex-col', running ? 'h-full' : 'min-h-full')}>
           {card.horses.map((horse) => {
@@ -161,13 +200,13 @@ export function RaceTrack({
                 disabled={!selectable}
                 onClick={() => onToggleHorse(horse.index)}
                 aria-pressed={isPicked}
-                aria-label={`${horse.name}, winner pays ${card.winOdds[horse.index].toFixed(2)}`}
+                aria-label={`${horse.name}, ${oddsLabel.toLowerCase()} ${odds[horse.index].toFixed(2)}`}
                 className={cn(
                   'relative border-b border-border-subtle/40 text-left last:border-b-0',
-                  running ? 'flex-1 min-h-0' : 'h-9 shrink-0',
+                  running ? 'flex-1 min-h-0' : 'h-11 shrink-0',
                   selectable && 'cursor-pointer hover:bg-subtle/60',
                   !selectable && 'cursor-default',
-                  isPicked && 'bg-subtle',
+                  isPicked && 'bg-primary/5 ring-1 ring-inset ring-primary/20',
                 )}
               >
                 {/* Horse chip — slides along the lane during the race. Near
@@ -207,22 +246,28 @@ export function RaceTrack({
 
                 {/* Idle: right-aligned odds-board info */}
                 {!running ? (
-                  <div className="absolute inset-y-0 left-10 right-2 grid grid-cols-[1fr_64px] items-center gap-2">
+                  <div className="absolute inset-y-0 left-10 right-2 grid grid-cols-[1fr_74px] items-center gap-2">
                     <span
                       className={cn(
-                        'truncate text-[11px] font-semibold',
+                        'min-w-0 text-[11px] font-semibold',
                         isPicked ? 'text-on-prominent' : 'text-on-subtle',
                       )}
                     >
-                      {horse.name}
-                      {isPicked ? (
-                        <span className="ml-1 rounded bg-prominent px-1 text-[9px] text-on-prominent">
-                          P{slot + 1}
-                        </span>
-                      ) : null}
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate">{horse.name}</span>
+                        {isPicked ? (
+                          <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold text-on-prominent-static-inverse">
+                            Pick {slot + 1}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block truncate text-[9px] font-normal text-on-subtle">
+                        {horse.form}
+                        {mode === 'place' ? ' · top 3 market' : ''}
+                      </span>
                     </span>
-                    <span className="w-12 text-right text-[11px] font-bold tabular-nums text-on-prominent">
-                      {card.winOdds[horse.index].toFixed(2)}×
+                    <span className="text-right text-xs font-bold tabular-nums text-on-prominent">
+                      {odds[horse.index].toFixed(2)}×
                     </span>
                   </div>
                 ) : null}
@@ -231,6 +276,11 @@ export function RaceTrack({
           })}
         </div>
       </div>
+      {!running && showScrollHint ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-12 items-end justify-center bg-gradient-to-t from-prominent via-prominent/80 to-transparent pb-1.5 text-[10px] font-semibold text-on-subtle">
+          Scroll for all 16 runners
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -16,7 +16,9 @@ interface DerbyChartProps {
   className?: string;
 }
 
-const PAD = { top: 26, right: 74, bottom: 18, left: 12 };
+const PAD = { top: 18, right: 98, bottom: 18, left: 16 };
+const MIN_VISIBLE_TICKS = 6;
+const MIN_HALF_RANGE = 3;
 
 function buildLineD(
   prices: number[],
@@ -73,21 +75,22 @@ export function DerbyChart({
 
     // Y-axis spans every revealed price across the whole field, plus the
     // start line, so lines never clip as the race spreads out.
-    let yMin = s0;
-    let yMax = s0;
+    let yMin = s0 - MIN_HALF_RANGE;
+    let yMax = s0 + MIN_HALF_RANGE;
     for (const series of path.prices) {
       for (let t = 0; t <= revealed; t++) {
         if (series[t] < yMin) yMin = series[t];
         if (series[t] > yMax) yMax = series[t];
       }
     }
-    const margin = Math.max((yMax - yMin) * 0.12, 1e-9);
+    const margin = Math.max((yMax - yMin) * 0.08, 1e-9);
     yMin -= margin;
     yMax += margin;
 
     const plotW = W - PAD.left - PAD.right;
     const plotH = H - PAD.top - PAD.bottom;
-    const xScale = (i: number) => PAD.left + (i / Math.max(totalTicks, 1)) * plotW;
+    const visibleDomain = Math.max(revealed, MIN_VISIBLE_TICKS);
+    const xScale = (i: number) => PAD.left + (i / visibleDomain) * plotW;
     const yScale = (p: number) =>
       PAD.top + plotH - ((p - yMin) / (yMax - yMin)) * plotH;
 
@@ -127,12 +130,21 @@ export function DerbyChart({
         isPicked: pickedSet.has(h),
       }))
       .sort((a, b) => a.y - b.y);
-    const MIN_GAP = 14;
+    const MIN_GAP = 20;
+    const minY = chart.plotTop + 6;
+    const maxY = chart.plotBottom - 14;
+    for (const label of raw) label.y = Math.max(minY, Math.min(maxY, label.y));
     for (let i = 1; i < raw.length; i++) {
       if (raw[i].y - raw[i - 1].y < MIN_GAP) raw[i].y = raw[i - 1].y + MIN_GAP;
     }
+    if (raw.length > 0 && raw[raw.length - 1].y > maxY) {
+      raw[raw.length - 1].y = maxY;
+      for (let i = raw.length - 2; i >= 0; i--) {
+        raw[i].y = Math.min(raw[i].y, raw[i + 1].y - MIN_GAP);
+      }
+    }
     return raw;
-  }, [pickedHorses, leader, chart.lines, pickedSet]);
+  }, [pickedHorses, leader, chart.lines, chart.plotTop, chart.plotBottom, pickedSet]);
 
   return (
     <div ref={containerRef} className={cn('h-full w-full', className)}>
@@ -143,6 +155,18 @@ export function DerbyChart({
         role="img"
         aria-label="Race price chart"
       >
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={ratio}
+            x1={chart.plotLeft}
+            y1={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            x2={chart.plotRight}
+            y2={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            className="stroke-border-subtle opacity-50"
+            strokeWidth={0.75}
+            strokeDasharray="2 5"
+          />
+        ))}
         {/* Start line at 100 */}
         <line
           x1={chart.plotLeft}
@@ -162,18 +186,17 @@ export function DerbyChart({
         </text>
 
         {/* Finish line */}
-        <line
-          x1={chart.finishX}
-          y1={chart.plotTop}
-          x2={chart.finishX}
-          y2={chart.plotBottom}
-          className={cn(
-            'stroke-border-prominent',
-            finished ? 'opacity-90' : 'opacity-40',
-          )}
-          strokeWidth={1}
-          strokeDasharray="3 3"
-        />
+        {finished ? (
+          <line
+            x1={chart.finishX}
+            y1={chart.plotTop}
+            x2={chart.finishX}
+            y2={chart.plotBottom}
+            className="stroke-border-prominent opacity-90"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        ) : null}
 
         {/* Field: unpicked horses dimmed under the picked lines */}
         {chart.lines
@@ -184,10 +207,10 @@ export function DerbyChart({
               d={l.d}
               fill="none"
               stroke={l.horse.silks}
-              strokeWidth={1}
+              strokeWidth={liveRanks.slice(0, 3).includes(l.horse.index) ? 1.5 : 1}
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={l.horse.index === leader ? 0.55 : 0.18}
+              opacity={liveRanks.slice(0, 3).includes(l.horse.index) ? 0.48 : 0.12}
             />
           ))}
 
@@ -243,14 +266,6 @@ export function DerbyChart({
           </g>
         ))}
 
-        {/* Tick progress readout */}
-        <text
-          x={chart.plotLeft}
-          y={16}
-          className="fill-on-subtle text-[10px] font-body tabular-nums"
-        >
-          Tick {chart.revealed}/{totalTicks}
-        </text>
       </svg>
     </div>
   );
