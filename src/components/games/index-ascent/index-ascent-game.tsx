@@ -209,23 +209,16 @@ function PositionTicket({
 
 function LivePositionPanel({
   info,
-  multiplier,
   stake,
   ticksSurvived,
   autoCashout,
 }: {
   info: CrashSymbolInfo;
-  multiplier: number;
   stake: number;
   ticksSurvived: number;
   autoCashout: number | null;
 }) {
-  const returnAmount = stake * multiplier;
-  const netPL = returnAmount - stake;
   const perTickRisk = getPerTickCrashProbability(info.avgTicksPerCrash);
-  const targetProgress = autoCashout
-    ? Math.max(0, Math.min(100, ((multiplier - 1) / (autoCashout - 1)) * 100))
-    : null;
 
   return (
     <section aria-label="Live position" className="rounded-xl border border-border-subtle bg-subtle/65 p-3 shadow-sm [@media(max-height:520px)]:p-2.5">
@@ -237,34 +230,24 @@ function LivePositionPanel({
         <span className="rounded-full bg-semantic-win/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-semantic-win">Live</span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 [@media(max-height:520px)]:mt-2">
+      <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-prominent px-2 py-2 text-center [@media(max-height:520px)]:mt-2">
         <div>
-          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Multiplier</p>
-          <motion.p key={multiplier.toFixed(2)} initial={{ opacity: 0.6, scale: 1.03 }} animate={{ opacity: 1, scale: 1 }} className="font-display text-2xl font-bold leading-none tabular-nums text-on-prominent">{multiplier.toFixed(2)}×</motion.p>
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Locked stake</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">{formatCredits(stake)}</p>
         </div>
-        <div className="border-l border-border-subtle pl-2">
-          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Position value</p>
-          <p className="mt-1 font-display text-base font-bold tabular-nums text-on-prominent">{formatCredits(returnAmount)}</p>
-          <p className="text-[8px] text-on-subtle">credits</p>
+        <div className="border-x border-border-subtle px-2">
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Survived</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">{ticksSurvived} ticks</p>
         </div>
-        <div className="border-l border-border-subtle pl-2">
-          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Net P/L</p>
-          <p className={cn('mt-1 font-display text-base font-bold tabular-nums', netPL > 0 ? 'text-semantic-win' : netPL < 0 ? 'text-semantic-loss' : 'text-on-prominent')}>{netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</p>
-          <p className="text-[8px] text-on-subtle">credits</p>
+        <div>
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Protection</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">{autoCashout ? `${autoCashout.toFixed(2)}×` : 'Manual'}</p>
         </div>
       </div>
 
-      <div className="mt-3 border-t border-border-subtle pt-2 [@media(max-height:520px)]:mt-2">
-        <div className="flex items-center justify-between text-[10px] font-semibold tabular-nums">
-          <span className="flex items-center gap-1.5 text-on-prominent"><ShieldCheck className="h-3.5 w-3.5 text-semantic-win" />{ticksSurvived} tick{ticksSurvived === 1 ? '' : 's'} survived</span>
-          <span className="text-semantic-loss">{percent(perTickRisk, perTickRisk < 0.01 ? 2 : 1)} correction / tick</span>
-        </div>
-        {targetProgress !== null ? (
-          <div className="mt-2">
-            <div className="mb-1 flex justify-between text-[9px] tabular-nums text-on-subtle"><span>Target progress</span><span>{targetProgress.toFixed(0)}% · {autoCashout!.toFixed(2)}×</span></div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-border-subtle"><div className="h-full rounded-full bg-semantic-warning transition-[width] duration-300" style={{ width: `${targetProgress}%` }} /></div>
-          </div>
-        ) : null}
+      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold tabular-nums">
+        <span className="flex items-center gap-1.5 text-on-prominent"><ShieldCheck className="h-3.5 w-3.5 text-semantic-win" />Position is locked</span>
+        <span className="text-semantic-loss">{percent(perTickRisk, perTickRisk < 0.01 ? 2 : 1)} risk / tick</span>
       </div>
     </section>
   );
@@ -273,39 +256,81 @@ function LivePositionPanel({
 function PositionChart({
   curve,
   phase,
+  info,
+  stake,
+  multiplier,
+  ticksSurvived,
   autoCashout,
   marketStreak,
   marketCrashes,
 }: {
   curve: number[];
   phase: IndexAscentState;
+  info: CrashSymbolInfo;
+  stake: number;
+  multiplier: number;
+  ticksSurvived: number;
   autoCashout: number | null;
   marketStreak: number;
   marketCrashes: number[];
 }) {
+  const positionValue = stake * multiplier;
+  const netPL = positionValue - stake;
+  const perTickRisk = getPerTickCrashProbability(info.avgTicksPerCrash);
+  const targetProgress = autoCashout
+    ? Math.max(0, Math.min(100, ((multiplier - 1) / (autoCashout - 1)) * 100))
+    : null;
+  const statusLabel = phase === 'flying' ? 'Live' : phase === 'crashed' ? 'Corrected' : phase === 'cashed_out' ? 'Closed' : 'Preview';
+
   return (
-    <section aria-label="Position return" className="relative flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-prominent [@media(max-height:520px)]:min-h-[180px]">
-      <div className="flex min-h-[42px] items-center gap-2 border-b border-border-subtle px-3">
-        <div className="mr-auto shrink-0">
+    <section aria-label="Position return" className="relative flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-prominent [@media(max-height:520px)]:min-h-[180px]">
+      <div className="flex min-h-[38px] items-center gap-2 border-b border-border-subtle px-3 [@media(max-height:520px)]:min-h-[32px]">
+        <div className="mr-auto flex min-w-0 items-center gap-2">
+          <div className="shrink-0">
           <p className="text-[9px] font-semibold uppercase tracking-wide text-on-subtle">Position return</p>
-          <p className="text-[10px] font-medium tabular-nums text-on-prominent">Market run {marketStreak} ticks</p>
+            <p className="text-[9px] font-medium tabular-nums text-on-prominent [@media(max-height:520px)]:hidden">Survival runway</p>
+          </div>
+          <span className={cn('rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide', phase === 'flying' ? 'bg-semantic-win/10 text-semantic-win' : phase === 'crashed' ? 'bg-semantic-loss/10 text-semantic-loss' : 'bg-subtle text-on-subtle')}>{statusLabel}</span>
         </div>
         {marketCrashes.length > 0 ? (
           <div className="scrollbar-hide flex min-w-0 gap-1 overflow-x-auto" aria-label="Recent market corrections">
-            {marketCrashes.slice(0, 5).map((value, index) => (
-              <span key={`${index}-${value}`} className="shrink-0 rounded-full border border-border-subtle bg-subtle px-2 py-1 text-[9px] font-semibold tabular-nums text-on-subtle">{value.toFixed(2)}×</span>
+            {marketCrashes.slice(0, 3).map((value, index) => (
+              <span key={`${index}-${value}`} className="shrink-0 rounded-full border border-border-subtle bg-subtle px-2 py-1 text-[8px] font-semibold tabular-nums text-on-subtle">↘ {value.toFixed(2)}×</span>
             ))}
           </div>
-        ) : (
-          <span className="text-[9px] text-on-subtle">No recent corrections</span>
-        )}
+        ) : null}
       </div>
-      <div className="relative min-h-0 flex-1">
+
+      <div className="grid grid-cols-[1.15fr_1fr_1fr] border-b border-border-subtle bg-subtle/45 px-3 py-2 [@media(max-height:520px)]:py-1.5">
+        <div>
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Current return</p>
+          <p className="font-display text-2xl font-bold leading-none tabular-nums text-on-prominent [@media(max-height:520px)]:text-lg">{multiplier.toFixed(2)}×</p>
+        </div>
+        <div className="border-l border-border-subtle pl-3">
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Position value</p>
+          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">{formatCredits(positionValue)}</p>
+          <p className="text-[8px] text-on-subtle [@media(max-height:520px)]:hidden">credits</p>
+        </div>
+        <div className="border-l border-border-subtle pl-3">
+          <p className="text-[8px] uppercase tracking-wide text-on-subtle">Net P/L</p>
+          <p className={cn('font-display text-sm font-bold tabular-nums', netPL > 0 ? 'text-semantic-win' : netPL < 0 ? 'text-semantic-loss' : 'text-on-prominent')}>{netPL > 0 ? '+' : netPL < 0 ? '−' : ''}{formatCredits(Math.abs(netPL))}</p>
+          <p className="text-[8px] text-on-subtle [@media(max-height:520px)]:hidden">credits</p>
+        </div>
+      </div>
+
+      {targetProgress !== null ? (
+        <div className="border-b border-border-subtle px-3 py-1.5 [@media(max-height:520px)]:hidden">
+          <div className="mb-1 flex justify-between text-[8px] font-medium tabular-nums text-on-subtle"><span>Target progress</span><span>{targetProgress.toFixed(0)}% to {autoCashout!.toFixed(2)}×</span></div>
+          <div className="h-1 overflow-hidden rounded-full bg-border-subtle"><div className="h-full rounded-full bg-semantic-warning transition-[width] duration-300" style={{ width: `${targetProgress}%` }} /></div>
+        </div>
+      ) : null}
+
+      <div className="relative min-h-[145px] flex-1 [@media(max-height:520px)]:min-h-0">
         <AscentCurve curve={curve} phase={phase} autoCashoutTarget={autoCashout} className="absolute inset-0" />
         {phase === 'idle' ? (
-          <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-lg bg-card/80 px-3 py-2 text-center backdrop-blur-sm">
-            <p className="text-xs font-semibold text-on-prominent">Position starts at the 1.00× entry line</p>
-            <p className="mt-0.5 text-[10px] text-on-subtle">Each surviving tick moves the return path toward your exit.</p>
+          <div className="pointer-events-none absolute inset-x-[18%] top-1/2 -translate-y-1/2 rounded-lg border border-border-subtle bg-card/90 px-3 py-2 text-center shadow-sm backdrop-blur-sm [@media(max-height:520px)]:hidden">
+            <p className="text-[10px] font-semibold text-on-prominent">Your return advances one step per surviving tick</p>
+            <p className="mt-0.5 text-[9px] text-on-subtle">Enter a position to start the runway.</p>
           </div>
         ) : null}
         <AnimatePresence>
@@ -313,6 +338,11 @@ function PositionChart({
             <motion.div className="absolute inset-0 bg-semantic-loss/15" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0.4] }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} />
           ) : null}
         </AnimatePresence>
+      </div>
+
+      <div className="flex min-h-[26px] items-center justify-between gap-3 border-t border-border-subtle px-3 text-[9px] font-medium tabular-nums text-on-subtle [@media(max-height:520px)]:hidden">
+        <span className="text-semantic-loss">{percent(perTickRisk, perTickRisk < 0.01 ? 2 : 1)} correction risk every tick</span>
+        <span>Position {ticksSurvived} · Market run {marketStreak}</span>
       </div>
     </section>
   );
@@ -503,12 +533,12 @@ export function IndexAscentGame() {
             <div className="grid min-h-0 w-full grid-rows-[auto_minmax(260px,1fr)] gap-3 [@media(max-height:520px)]:grid-cols-[minmax(245px,0.9fr)_minmax(300px,1.1fr)] [@media(max-height:520px)]:grid-rows-1">
               <div className="min-w-0">
                 {flying ? (
-                  <LivePositionPanel info={info} multiplier={multiplier} stake={stake} ticksSurvived={ticksSurvived} autoCashout={autoCashout} />
+                  <LivePositionPanel info={info} stake={stake} ticksSurvived={ticksSurvived} autoCashout={autoCashout} />
                 ) : (
                   <PositionTicket symbol={symbol} onSymbolChange={setSymbol} autoExitMode={autoExitMode} presetTarget={presetTarget} customTarget={customTarget} onAutoExitModeChange={setAutoExitMode} onPresetTargetChange={handlePresetTarget} onCustomTargetChange={setCustomTarget} customTargetValid={customTargetValid} target={autoCashout} stake={stake} />
                 )}
               </div>
-              <PositionChart curve={curve} phase={phase} autoCashout={autoCashout} marketStreak={marketStreak} marketCrashes={marketCrashes} />
+              <PositionChart curve={curve} phase={phase} info={info} stake={stake} multiplier={multiplier} ticksSurvived={ticksSurvived} autoCashout={autoCashout} marketStreak={marketStreak} marketCrashes={marketCrashes} />
             </div>
           </div>
         }
