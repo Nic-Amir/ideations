@@ -13,7 +13,9 @@ export function GameViewport({ market, play, dock, className }: GameViewportProp
   return (
     <div className={cn('flex flex-col flex-1 min-h-0 overflow-hidden', className)}>
       {market ? <div className="shrink-0">{market}</div> : null}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{play}</div>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col [@media(max-height:520px)]:overflow-y-auto [@media(max-height:520px)]:overscroll-contain scrollbar-hide">
+        {play}
+      </div>
       <div className="shrink-0 border-t border-border-subtle bg-prominent pb-safe">
         {dock}
       </div>

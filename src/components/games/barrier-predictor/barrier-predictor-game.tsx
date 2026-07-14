@@ -331,7 +331,7 @@ export function BarrierPredictorGame() {
             ) : null}
 
             {/* Full-bleed play surface — the corridor chart is the star */}
-            <div className="relative flex-1 min-h-[220px]">
+            <div className="relative mx-3 mt-2 flex-1 min-h-[220px] overflow-hidden rounded-xl border border-border-subtle bg-subtle/30">
               <PredictorChart
                 path={path}
                 visibleTick={visibleTick}
@@ -356,7 +356,7 @@ export function BarrierPredictorGame() {
             </div>
 
             {/* Trade surface: settings + pick buttons under the chart edge */}
-            <div className="shrink-0 space-y-2 p-4 pt-2">
+            <div className="shrink-0 space-y-2 p-4 pt-3">
               {idle ? (
                 <>
                   <div className="flex gap-2">

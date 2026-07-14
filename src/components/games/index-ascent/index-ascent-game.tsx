@@ -197,17 +197,17 @@ export function IndexAscentGame() {
               </div>
             ) : null}
 
-            <div className="relative flex-1 min-h-0 rounded-lg border border-border-subtle bg-subtle overflow-hidden">
+            <div className="relative flex-1 min-h-[220px] rounded-xl border border-border-subtle bg-prominent overflow-hidden">
               <AscentCurve curve={curve} phase={phase} className="absolute inset-0" />
 
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="absolute left-3 top-3 rounded-lg border border-border-subtle bg-card/90 px-3 py-2 shadow-sm backdrop-blur-sm">
                 <p className="body-xs text-on-subtle uppercase">Return</p>
                 <motion.p
                   key={`${phase}-${multiplier.toFixed(2)}`}
                   initial={{ scale: 1.04, opacity: 0.6 }}
                   animate={{ scale: 1, opacity: 1 }}
                   className={`font-display font-bold tabular-nums ${
-                    isLandscape ? 'text-4xl' : 'text-6xl'
+                    isLandscape ? 'text-3xl' : 'text-4xl'
                   } ${
                     phase === 'crashed'
                       ? 'text-semantic-loss'
@@ -218,17 +218,24 @@ export function IndexAscentGame() {
                 >
                   {multiplier.toFixed(2)}x
                 </motion.p>
-                {flying ? (
-                  <p className="mt-1 text-xs text-on-subtle tabular-nums">
-                    {ticksSurvived} ticks
-                    {autoCashout ? ` • auto @ ${autoCashout}x` : ''}
-                  </p>
-                ) : phase === 'idle' ? (
-                  <p className="mt-1 text-xs text-on-subtle">
-                    Enter to open on the next ticks
-                  </p>
-                ) : null}
               </div>
+
+              <div className="absolute right-3 top-3 rounded-full border border-border-subtle bg-card/90 px-2.5 py-1 text-[10px] text-on-subtle shadow-sm backdrop-blur-sm tabular-nums">
+                {flying
+                  ? `${ticksSurvived} tick${ticksSurvived === 1 ? '' : 's'}${autoCashout ? ` · auto ${autoCashout}x` : ''}`
+                  : phase === 'idle'
+                    ? 'Waiting to enter'
+                    : phase === 'cashed_out'
+                      ? 'Position closed'
+                      : 'Index corrected'}
+              </div>
+
+              {phase === 'idle' ? (
+                <div className="absolute inset-x-4 bottom-5 text-center">
+                  <p className="text-sm font-medium text-on-prominent">Your return builds one tick at a time</p>
+                  <p className="mt-1 text-xs text-on-subtle">Enter now, then exit before the next correction.</p>
+                </div>
+              ) : null}
 
               <AnimatePresence>
                 {phase === 'crashed' ? (
@@ -243,55 +250,51 @@ export function IndexAscentGame() {
               </AnimatePresence>
             </div>
 
-            <div className="shrink-0 mt-2 flex items-center justify-center gap-1.5">
-              {CRASH_SYMBOLS.map((s) => (
+            <div className="shrink-0 mt-2 space-y-1.5 rounded-lg border border-border-subtle bg-subtle p-1.5">
+              <div className="flex items-center gap-1">
+                <span className="w-16 shrink-0 pl-1 text-[10px] uppercase tracking-wide text-on-subtle">Index</span>
+                {CRASH_SYMBOLS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={flying}
+                    onClick={() => setSymbol(s.id)}
+                    className={`min-h-[32px] flex-1 rounded-md border px-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      symbol === s.id
+                        ? 'border-border-prominent bg-prominent text-on-prominent shadow-sm'
+                        : 'border-transparent text-on-subtle'
+                    }`}
+                  >
+                    {s.name.replace('Crash ', '')}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-16 shrink-0 pl-1 text-[10px] uppercase tracking-wide text-on-subtle">Auto exit</span>
                 <button
-                  key={s.id}
                   type="button"
                   disabled={flying}
-                  onClick={() => setSymbol(s.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
-                    symbol === s.id
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'border-border-subtle bg-subtle text-on-subtle'
+                  onClick={() => setAutoCashout(null)}
+                  className={`min-h-[32px] flex-1 rounded-md text-xs font-display tabular-nums transition-colors disabled:opacity-50 ${
+                    autoCashout === null ? 'bg-prominent text-on-prominent shadow-sm' : 'text-on-subtle'
                   }`}
                 >
-                  {s.name}
+                  Off
                 </button>
-              ))}
-            </div>
-
-            <div className="shrink-0 mt-2 flex items-center justify-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-on-subtle">
-                Auto exit
-              </span>
-              <button
-                type="button"
-                disabled={flying}
-                onClick={() => setAutoCashout(null)}
-                className={`rounded px-2 py-1 text-xs font-display tabular-nums transition-colors disabled:opacity-50 ${
-                  autoCashout === null
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-subtle text-on-subtle'
-                }`}
-              >
-                Off
-              </button>
-              {AUTO_CASHOUT_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  disabled={flying}
-                  onClick={() => setAutoCashout(preset)}
-                  className={`rounded px-2 py-1 text-xs font-display tabular-nums transition-colors disabled:opacity-50 ${
-                    autoCashout === preset
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-subtle text-on-subtle'
-                  }`}
-                >
-                  {preset}x
-                </button>
-              ))}
+                {AUTO_CASHOUT_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    disabled={flying}
+                    onClick={() => setAutoCashout(preset)}
+                    className={`min-h-[32px] flex-1 rounded-md text-xs font-display tabular-nums transition-colors disabled:opacity-50 ${
+                      autoCashout === preset ? 'bg-prominent text-on-prominent shadow-sm' : 'text-on-subtle'
+                    }`}
+                  >
+                    {preset}x
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         }

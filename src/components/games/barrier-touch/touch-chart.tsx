@@ -168,6 +168,18 @@ export function TouchChart({
         role="img"
         aria-label="Barrier touch price chart"
       >
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={ratio}
+            x1={chart.plotLeft}
+            x2={chart.plotRight}
+            y1={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            y2={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            className="stroke-border-subtle opacity-50"
+            strokeWidth={0.75}
+            strokeDasharray="2 5"
+          />
+        ))}
         {/* Sequence: shade only the side the story needs next */}
         {isSequence && requiredNow === 'upper' ? (
           <rect

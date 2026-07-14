@@ -224,27 +224,36 @@ export function DigitCollectGame() {
         }
         play={
           <div className="flex flex-col flex-1 min-h-0 px-4 py-3">
-            <div className="text-center shrink-0 mb-3">
-              <p className="body-xs text-on-subtle uppercase">Multiplier</p>
-              <motion.p
-                key={currentMultiplier}
-                initial={{ scale: 1.04, opacity: 0.5 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className={`font-display font-bold text-semantic-win tabular-nums ${
-                  isLandscape ? 'text-3xl' : 'text-5xl'
-                }`}
-              >
-                {currentMultiplier.toFixed(2)}x
-              </motion.p>
-              {!isLandscape ? (
-                <p className="mt-1 text-xs text-on-subtle">
-                  {collected.size}/10 • risk {(nextKnockoutProb * 100).toFixed(0)}%
-                </p>
-              ) : null}
+            <div className="shrink-0 rounded-xl border border-border-subtle bg-subtle px-4 py-3">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="body-xs text-on-subtle uppercase">Multiplier</p>
+                  <motion.p
+                    key={currentMultiplier}
+                    initial={{ scale: 1.04, opacity: 0.5 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className={`font-display font-bold text-semantic-win tabular-nums ${
+                      isLandscape ? 'text-3xl' : 'text-4xl'
+                    }`}
+                  >
+                    {currentMultiplier.toFixed(2)}x
+                  </motion.p>
+                </div>
+                <div className="pb-1 text-right">
+                  <p className="text-xs font-semibold text-on-prominent tabular-nums">{collected.size} of 10 collected</p>
+                  <p className="mt-0.5 text-[10px] text-on-subtle tabular-nums">Next draw risk {(nextKnockoutProb * 100).toFixed(0)}%</p>
+                </div>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border-subtle">
+                <div
+                  className="h-full rounded-full bg-semantic-win transition-[width] duration-300"
+                  style={{ width: `${collected.size * 10}%` }}
+                />
+              </div>
             </div>
 
             <div
-              className="flex-1 min-h-0 grid grid-cols-5 gap-1 sm:gap-2 content-center mx-auto w-full max-w-[320px]"
+              className="flex-1 min-h-0 grid grid-cols-5 content-center mx-auto w-full max-w-[360px]"
               style={{ gap: 'clamp(4px, 2vw, 10px)' }}
             >
               {Array.from({ length: 10 }, (_, i) => {
@@ -256,7 +265,7 @@ export function DigitCollectGame() {
                   <motion.div
                     key={i}
                     whileTap={{ scale: 0.97 }}
-                    className={`flex aspect-square items-center justify-center rounded-lg border text-lg sm:text-2xl font-display font-bold tabular-nums ${
+                    className={`relative flex aspect-square items-center justify-center rounded-xl border text-xl sm:text-2xl font-display font-bold tabular-nums ${
                       wasKnockout
                         ? 'border-semantic-loss/40 bg-semantic-loss/10 text-semantic-loss'
                         : isCollected
@@ -272,6 +281,9 @@ export function DigitCollectGame() {
                     }
                   >
                     {i}
+                    {isCollected ? (
+                      <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-current" aria-hidden />
+                    ) : null}
                   </motion.div>
                 );
               })}

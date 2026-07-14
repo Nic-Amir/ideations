@@ -126,6 +126,18 @@ export function RaceChart({
         role="img"
         aria-label="Race price chart"
       >
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={ratio}
+            x1={PAD.left}
+            x2={W - PAD.right}
+            y1={PAD.top + ratio * (H - PAD.top - PAD.bottom)}
+            y2={PAD.top + ratio * (H - PAD.top - PAD.bottom)}
+            className="stroke-border-subtle opacity-50"
+            strokeWidth={0.75}
+            strokeDasharray="2 5"
+          />
+        ))}
         {/* Winner color wash across the chart at settlement */}
         {barrierFlash && chart.winnerHead ? (
           <rect

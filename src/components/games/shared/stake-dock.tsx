@@ -38,7 +38,7 @@ export function StakeDock({
   const incDisabled = stakeDisabled || stake >= effectiveMax;
 
   return (
-    <div className={cn('flex flex-col gap-3 px-4 pt-3', className)}>
+    <div className={cn('flex flex-col gap-3 px-4 pt-3 [@media(max-height:720px)]:gap-2 [@media(max-height:720px)]:pt-2', className)}>
       <div className="flex items-center justify-between gap-2">
         <Button
           variant="primary"

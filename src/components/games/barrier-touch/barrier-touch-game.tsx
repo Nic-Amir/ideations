@@ -515,7 +515,7 @@ export function BarrierTouchGame() {
             ) : null}
 
             {/* Full-bleed play surface — the touch chart is the star */}
-            <div className="relative flex-1 min-h-[220px]">
+            <div className="relative mx-3 mt-2 flex-1 min-h-[220px] overflow-hidden rounded-xl border border-border-subtle bg-subtle/30">
               <TouchChart
                 mode={mode}
                 path={path}
@@ -545,7 +545,7 @@ export function BarrierTouchGame() {
             </div>
 
             {/* Trade surface: mode + settings + pick buttons under the chart */}
-            <div className="shrink-0 space-y-2 p-4 pt-2">
+            <div className="shrink-0 space-y-2 p-4 pt-3">
               {idle ? (
                 <>
                   <ModeToggle mode={mode} onChange={setMode} disabled={!canTrade} />

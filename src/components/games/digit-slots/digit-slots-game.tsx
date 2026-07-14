@@ -302,7 +302,7 @@ export function DigitSlotsGame() {
         }
         play={
           <div className="flex flex-col flex-1 min-h-0 items-center justify-center px-4 py-3 gap-3">
-            <div className="flex items-center justify-between w-full max-w-xs">
+            <div className="flex items-center justify-between w-full max-w-sm">
               <span className="body-xs text-on-subtle uppercase">Reels</span>
               {session ? (
                 <SessionProgress completed={session.completed} total={session.total} />
@@ -311,10 +311,14 @@ export function DigitSlotsGame() {
               )}
             </div>
 
-            <div className="flex justify-center gap-2 sm:gap-3">
-              {reels.map((digit, idx) => (
-                <Reel key={idx} digit={digit} isSpinning={phase === 'spinning' && digit === null} />
-              ))}
+            <div className="relative w-full max-w-sm rounded-2xl border border-border-subtle bg-subtle/60 px-4 py-6 shadow-sm">
+              <div className="pointer-events-none absolute inset-x-2 top-1/2 h-px bg-semantic-warning/30" aria-hidden />
+              <div className="relative flex justify-center gap-2 sm:gap-3">
+                {reels.map((digit, idx) => (
+                  <Reel key={idx} digit={digit} isSpinning={phase === 'spinning' && digit === null} />
+                ))}
+              </div>
+              <p className="mt-3 text-center text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Live digit payline</p>
             </div>
 
             {result && phase !== 'spinning' && phase !== 'idle' ? (

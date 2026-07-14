@@ -130,6 +130,18 @@ export function PredictorChart({
         role="img"
         aria-label="Barrier predictor price chart"
       >
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={ratio}
+            x1={chart.plotLeft}
+            x2={chart.plotRight}
+            y1={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            y2={chart.plotTop + ratio * (chart.plotBottom - chart.plotTop)}
+            className="stroke-border-subtle opacity-50"
+            strokeWidth={0.75}
+            strokeDasharray="2 5"
+          />
+        ))}
         {/* Touched-barrier color wash across the chart at settlement */}
         {flashSide ? (
           <rect

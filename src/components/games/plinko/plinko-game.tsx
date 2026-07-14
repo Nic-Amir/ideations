@@ -45,17 +45,17 @@ const HINT_KEY = 'ideations-plinko-hint-seen';
 
 function PlinkoFirstHint({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onDismiss}
-      className="absolute inset-0 z-10 flex items-center justify-center bg-overlay/40 p-4"
-      aria-label="Dismiss hint"
-    >
-      <span className="plinko-hint-pill">
-        Press Drop to send a path down the wall — where it lands is what you
-        get paid.
-      </span>
-    </button>
+    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center">
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="plinko-hint-pill pointer-events-auto flex items-center gap-2"
+        aria-label="Dismiss hint"
+      >
+        <span>Drop a path. Its landing band sets your payout.</span>
+        <X className="size-3.5 shrink-0" aria-hidden />
+      </button>
+    </div>
   );
 }
 
@@ -86,7 +86,7 @@ function PlinkoModeChip({
             disabled={disabled}
             onClick={() => onChange(id)}
             className={cn(
-              'rounded-full px-2.5 py-1 text-[10px] font-semibold transition-colors min-h-[24px]',
+              'rounded-full px-3 py-1 text-[10px] font-semibold transition-colors min-h-[32px]',
               value === id
                 ? 'bg-prominent text-on-prominent shadow-sm'
                 : 'text-on-subtle hover:text-on-prominent',

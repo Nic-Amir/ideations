@@ -462,8 +462,8 @@ export function DerbyGame() {
               {idle ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="w-4 shrink-0 text-center text-[10px] font-bold text-on-subtle">
-                      1
+                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+                      Bet type
                     </span>
                     <div className="flex-1">
                       <ModePicker mode={mode} onChange={setMode} disabled={!idle} />
@@ -480,7 +480,9 @@ export function DerbyGame() {
 
                   {spec.orderable ? (
                     <div className="flex items-center gap-2">
-                      <span className="w-4 shrink-0" aria-hidden />
+                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+                      Order
+                    </span>
                       <OrderToggle
                         ordered={ordered}
                         onChange={setOrdered}
@@ -490,8 +492,8 @@ export function DerbyGame() {
                   ) : null}
 
                   <div className="flex items-center gap-2">
-                    <span className="w-4 shrink-0 text-center text-[10px] font-bold text-on-subtle">
-                      2
+                    <span className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+                      Picks
                     </span>
                     <div className="flex-1">
                       <SelectionSlots
@@ -558,7 +560,6 @@ export function DerbyGame() {
                   </motion.button>
                 ) : (
                   <div className="flex min-h-[60px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-subtle px-4 py-2 text-sm font-semibold text-on-subtle">
-                    <span className="w-4 shrink-0 text-center text-[10px] font-bold">3</span>
                     Pick {spec.picks - selection.length} more horse
                     {spec.picks - selection.length === 1 ? '' : 's'} on the board
                     above, then start the race here

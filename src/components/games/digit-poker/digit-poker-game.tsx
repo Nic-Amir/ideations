@@ -33,7 +33,8 @@ function PokerCard({
   return (
     <motion.button
       onClick={canHold ? onToggleHold : undefined}
-      className={`relative flex flex-col items-center justify-center rounded-md border-2 transition-all w-[clamp(3rem,18vw,4rem)] h-[clamp(4.5rem,28vw,6rem)] min-h-[44px] ${
+      aria-pressed={held}
+      className={`relative flex flex-col items-center justify-center rounded-lg border-2 shadow-sm transition-all w-[clamp(3rem,18vw,4rem)] h-[clamp(4.75rem,28vw,6.5rem)] min-h-[44px] ${
         held
           ? 'border-primary bg-primary/10'
           : 'border-border-subtle bg-card hover:border-border-prominent'
@@ -56,7 +57,10 @@ function PokerCard({
           ) : null}
         </>
       ) : (
-        <span className="text-xl text-on-subtle">?</span>
+        <>
+          <span className="absolute inset-1.5 rounded-md border border-border-subtle bg-subtle" aria-hidden />
+          <span className="relative text-xl font-display font-bold text-on-subtle">?</span>
+        </>
       )}
     </motion.button>
   );
@@ -301,8 +305,13 @@ export function DigitPokerGame() {
           )
         }
         play={
-          <div className="flex flex-col flex-1 min-h-0 items-center justify-center px-4 py-3 gap-4">
-            <div className="flex justify-center gap-2 w-full max-w-md">
+          <div className="flex flex-col flex-1 min-h-0 items-center justify-center px-4 py-3 gap-3">
+            <div className="w-full max-w-md rounded-xl border border-border-subtle bg-subtle/60 px-2 py-4">
+              <div className="mb-3 flex items-center justify-between px-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">Five-tick hand</span>
+                <span className="text-[10px] text-on-subtle">Tap a card to hold</span>
+              </div>
+              <div className="flex justify-center gap-2 w-full">
               {hand.map((digit, idx) => (
                 <PokerCard
                   key={idx}
@@ -314,6 +323,7 @@ export function DigitPokerGame() {
                   isNew={isNewCards[idx]}
                 />
               ))}
+              </div>
             </div>
 
             <p className="text-center text-sm text-on-subtle max-w-xs">
@@ -329,7 +339,7 @@ export function DigitPokerGame() {
               ) : gameState === 'drawing' ? (
                 'Cards fill one tick at a time…'
               ) : gameState === 'idle' ? (
-                'Tap dealt cards to hold before drawing.'
+                'Deal five live digits, keep the strongest cards, then draw once.'
               ) : null}
             </p>
 

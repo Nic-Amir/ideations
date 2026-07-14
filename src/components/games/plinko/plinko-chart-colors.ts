@@ -43,9 +43,9 @@ export function getChartPadding(rightStripWidth: number) {
   // Extra top clearance keeps the canvas-drawn PAYOUT header and top band
   // label from sitting under the on-chart mode chip / streak badge overlay,
   // which is DOM-positioned in the same top-right corner.
-  return { top: 44, right: rightStripWidth, bottom: 32, left: 56 };
+  return { top: 48, right: rightStripWidth, bottom: 32, left: 44 };
 }
 
 export function getPayoutStripWidth(chartWidth: number): number {
-  return chartWidth < 480 ? 62 : 78;
+  return chartWidth < 480 ? 72 : 84;
 }

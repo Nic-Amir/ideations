@@ -39,7 +39,7 @@ export function LeaderboardStrip({
   statusLabel: string;
 }) {
   return (
-    <div className="flex items-center gap-1 overflow-hidden px-2 py-1.5">
+    <div className="scrollbar-hide flex items-center gap-1 overflow-x-auto px-2 py-1.5">
       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
         {statusLabel}
       </span>
@@ -114,18 +114,26 @@ export function RaceTrack({
 
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
-      {/* Live top-5 leaderboard strip */}
-      <LeaderboardStrip
-        card={card}
-        liveRanks={liveRanks}
-        selection={selection}
-        statusLabel={running ? (finished ? 'Finish' : 'Live') : 'Post'}
-      />
+      {running ? (
+        <LeaderboardStrip
+          card={card}
+          liveRanks={liveRanks}
+          selection={selection}
+          statusLabel={finished ? 'Finish' : 'Live'}
+        />
+      ) : (
+        <div className="grid grid-cols-[36px_1fr_64px] items-center border-y border-border-subtle bg-subtle/70 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          <span>Post</span>
+          <span>Horse</span>
+          <span className="text-right">Win odds</span>
+        </div>
+      )}
 
       {/* Lanes */}
       <div
         className={cn(
           'relative flex-1 min-h-0',
+          !running && 'scrollbar-hide overflow-y-auto [@media(max-height:520px)]:overflow-y-visible',
           inFinalStretch && !finished && 'bg-semantic-warning/5',
         )}
       >
@@ -139,7 +147,7 @@ export function RaceTrack({
           aria-hidden
         />
 
-        <div className="flex h-full flex-col">
+        <div className={cn('flex flex-col', running ? 'h-full' : 'min-h-full')}>
           {card.horses.map((horse) => {
             const slot = selection.indexOf(horse.index);
             const isPicked = slot >= 0;
@@ -155,7 +163,8 @@ export function RaceTrack({
                 aria-pressed={isPicked}
                 aria-label={`${horse.name}, winner pays ${card.winOdds[horse.index].toFixed(2)}`}
                 className={cn(
-                  'relative flex-1 min-h-0 border-b border-border-subtle/40 text-left last:border-b-0',
+                  'relative border-b border-border-subtle/40 text-left last:border-b-0',
+                  running ? 'flex-1 min-h-0' : 'h-9 shrink-0',
                   selectable && 'cursor-pointer hover:bg-subtle/60',
                   !selectable && 'cursor-default',
                   isPicked && 'bg-subtle',
@@ -198,7 +207,7 @@ export function RaceTrack({
 
                 {/* Idle: right-aligned odds-board info */}
                 {!running ? (
-                  <div className="absolute inset-y-0 right-2 flex items-center gap-2">
+                  <div className="absolute inset-y-0 left-10 right-2 grid grid-cols-[1fr_64px] items-center gap-2">
                     <span
                       className={cn(
                         'truncate text-[11px] font-semibold',
@@ -211,9 +220,6 @@ export function RaceTrack({
                           P{slot + 1}
                         </span>
                       ) : null}
-                    </span>
-                    <span className="hidden text-[9px] text-on-subtle sm:inline">
-                      {horse.form}
                     </span>
                     <span className="w-12 text-right text-[11px] font-bold tabular-nums text-on-prominent">
                       {card.winOdds[horse.index].toFixed(2)}×
