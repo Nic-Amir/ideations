@@ -131,7 +131,8 @@ export type GameIconKey =
   | 'barrier-race'
   | 'barrier-predictor'
   | 'barrier-touch'
-  | 'synthetic-derby';
+  | 'synthetic-derby'
+  | 'digit-derby';
 
 export type GameTrack = 'roadmap' | 'other';
 

@@ -148,6 +148,23 @@ export const GAMES: GameInfo[] = [
     track: 'other',
     iconKey: 'synthetic-derby',
   },
+  {
+    slug: 'digit-derby',
+    name: 'Digit Derby',
+    shortName: 'Digits',
+    description:
+      'Ten digits race on live ticks. Each streamed last digit advances that runner — bet which digit wins the race.',
+    shortPitch: 'Bet which live digit wins the race.',
+    category: 'Race',
+    risk: 'Medium',
+    sessionLength: '15-60 sec',
+    mechanics:
+      'Pick a digit 0–9. Live ticks advance that digit’s runner; first to the finish line wins.',
+    marketSource: 'Deriv live ticks',
+    status: 'Live',
+    track: 'other',
+    iconKey: 'digit-derby',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

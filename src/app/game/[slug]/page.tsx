@@ -73,6 +73,14 @@ const DerbyGame = dynamic(
   { ssr: false, loading: () => <GameLoading /> },
 );
 
+const DigitDerbyGame = dynamic(
+  () =>
+    import('@/components/games/digit-derby/digit-derby-game').then(
+      (m) => m.DigitDerbyGame,
+    ),
+  { ssr: false, loading: () => <GameLoading /> },
+);
+
 function GameLoading() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-prominent">
@@ -91,6 +99,7 @@ const GAME_COMPONENTS: Record<string, React.ComponentType> = {
   'barrier-predictor': BarrierPredictorGame,
   'barrier-touch': BarrierTouchGame,
   'synthetic-derby': DerbyGame,
+  'digit-derby': DigitDerbyGame,
 };
 
 export default function GamePage({
