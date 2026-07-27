@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDerivClient } from '@/lib/deriv/provider';
 import type { ParsedTick, ConnectionStatus } from '@/types';
+import type { FeedSource } from '@/lib/deriv/client';
 
 const TICK_TIMEOUT_MS = 15_000;
 
@@ -55,6 +56,17 @@ export function useDerivConnection() {
   }, [client]);
 
   return status;
+}
+
+export function useFeedSource(): FeedSource {
+  const client = useDerivClient();
+  const [source, setSource] = useState<FeedSource>(() => client.getFeedSource());
+
+  useEffect(() => {
+    return client.onFeedSourceChange(setSource);
+  }, [client]);
+
+  return source;
 }
 
 export function useNextTick(symbol: string): () => Promise<ParsedTick> {

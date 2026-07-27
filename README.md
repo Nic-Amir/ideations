@@ -23,7 +23,6 @@ A proof-of-concept web application that reimagines gambling as a market-driven e
 
 ```bash
 # Install dependencies
-cd web
 npm install
 
 # Set up environment (uses demo app_id by default)
@@ -41,6 +40,16 @@ npm run build
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Feed mode
+
+Digit games stream ticks from Deriv by default (`NEXT_PUBLIC_FEED_MODE=auto`). In regions where Deriv returns no active symbols (e.g. Malaysia), the client automatically switches to a labeled **Demo feed** (~1 Hz local ticks) so games stay playable.
+
+| `NEXT_PUBLIC_FEED_MODE` | Behavior |
+| --- | --- |
+| `auto` (default) | Try Deriv; fall back to demo if symbols unavailable |
+| `live` | Deriv only — no mock |
+| `mock` | Local demo ticks only |
 
 ## Project Structure
 

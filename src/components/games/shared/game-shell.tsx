@@ -37,6 +37,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useMounted } from '@/hooks/use-mounted';
 import { useIsDesktop } from '@/hooks/use-media-query';
+import { useFeedSource } from '@/hooks/use-tick-stream';
 import { GameInfoDrawer, type GameInfoSection } from './game-info-drawer';
 import { SUPPORTED_SYMBOLS } from '@/types';
 import type { DerivSymbol } from '@/types';
@@ -58,6 +59,7 @@ export function GameShell({
   const { selectedIndex, setSelectedIndex, soundEnabled, setSoundEnabled } =
     useSettingsStore();
   const { balance, resetBalance } = useBalanceStore();
+  const feedSource = useFeedSource();
   const [resetOpen, setResetOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [symbolDrawerOpen, setSymbolDrawerOpen] = useState(false);
@@ -147,6 +149,15 @@ export function GameShell({
             </>
           }
         />
+
+        {feedSource === 'demo' ? (
+          <div
+            role="status"
+            className="shrink-0 border-b border-semantic-warning/20 bg-semantic-warning/10 px-4 py-2 text-center text-xs text-semantic-warning"
+          >
+            Demo feed — Deriv markets unavailable in this region.
+          </div>
+        ) : null}
 
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">{children}</div>
 

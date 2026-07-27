@@ -274,8 +274,11 @@ export function DigitDerbyGame() {
       label: 'Feed',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p>Settlement uses live Deriv ticks — no synthetic fallback.</p>
-          <p>If the market is unavailable, starting a race is disabled.</p>
+          <p>
+            Settlement prefers live Deriv ticks. If markets are unavailable in
+            your region, a labeled demo feed (~1 Hz) keeps the game playable.
+          </p>
+          <p>Starting a race stays disabled until ticks arrive.</p>
         </div>
       ),
     },
