@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import {
   DIGIT_COUNT,
   DIGIT_DERBY_CONFIG,
+  DIGIT_SILKS,
   emptyCounts,
   isValidDigit,
   applyTick,
@@ -21,6 +22,11 @@ describe('Digit Derby config', () => {
     expect(DIGIT_DERBY_CONFIG.maxTicks).toBe(120);
     expect(DIGIT_DERBY_CONFIG.winProbability).toBe(0.1);
     expect(DIGIT_COUNT).toBe(10);
+  });
+
+  test('DIGIT_SILKS covers every runner', () => {
+    expect(DIGIT_SILKS).toHaveLength(DIGIT_COUNT);
+    expect(new Set(DIGIT_SILKS).size).toBe(DIGIT_COUNT);
   });
 
   test('offered odds use Digits commission formula 1/(P+c)', () => {

@@ -13,6 +13,10 @@ export function useTickStream(symbol: string) {
   const maxTicks = 100;
 
   useEffect(() => {
+    // Drop the previous symbol's ticks so callers don't treat a stale feed as ready.
+    setLatestTick(null);
+    setTicks([]);
+
     const unsubscribe = client.subscribe(symbol, (tick) => {
       setLatestTick(tick);
       setTicks((prev) => {

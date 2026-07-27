@@ -42,6 +42,12 @@ export interface DigitDerbyHistoryEntry {
   winner: number | null;
 }
 
+interface RaceContext {
+  pick: number;
+  stake: number;
+  counts: DigitCounts;
+}
+
 export function useDigitDerby() {
   const { selectedIndex } = useSettingsStore();
   const { balance, placeBet, addWinnings } = useBalanceStore();
@@ -61,11 +67,14 @@ export function useDigitDerby() {
   const [highlightedTicks, setHighlightedTicks] = useState<ParsedTick[]>([]);
   const [lastConsumedTick, setLastConsumedTick] = useState<ParsedTick | null>(null);
   const [extractionKey, setExtractionKey] = useState(0);
+  const [winningDigit, setWinningDigit] = useState<number | null>(null);
 
   const phaseRef = useRef<DigitDerbyPhase>('idle');
   const runningRef = useRef(false);
+  const settledRef = useRef(false);
+  const raceIdRef = useRef(0);
+  const raceContextRef = useRef<RaceContext | null>(null);
   const addWinningsRef = useRef(addWinnings);
-  const tradeStakeRef = useRef(stake);
 
   useEffect(() => {
     addWinningsRef.current = addWinnings;
@@ -77,12 +86,17 @@ export function useDigitDerby() {
 
   const multiplier = useMemo(() => offeredOdds(), []);
   const maxStake = Math.max(10, Math.min(balance, 5000));
-  const marketReady = ticks.length > 0 || lastConsumedTick !== null;
+  // Symbol-scoped: useTickStream clears ticks on switch; do not trust lastConsumedTick alone.
+  const marketReady = ticks.length > 0;
   const finishOrder = useMemo(() => rankDigits(counts), [counts]);
   const inFinalStretch = useMemo(
     () => phase === 'running' && isFinalStretch(counts),
     [phase, counts],
   );
+  const raceProgress = useMemo(() => {
+    const lead = Math.max(0, ...counts);
+    return Math.min(100, (lead / DIGIT_DERBY_CONFIG.finishCount) * 100);
+  }, [counts]);
 
   const canStart =
     phase === 'idle' &&
@@ -92,28 +106,21 @@ export function useDigitDerby() {
     balance > 0 &&
     marketReady;
 
-  const selectDigit = useCallback((digit: number) => {
-    if (phaseRef.current !== 'idle') return;
-    setPlayError(null);
-    setPick((prev) => (prev === digit ? null : digit));
-  }, []);
-
-  const dismissResult = useCallback(() => {
-    setResult(null);
-    setCounts(emptyCounts());
-    setTickCount(0);
-    setLockedMultiplier(null);
-    setLockedPick(null);
-    setHighlightedTicks([]);
-    setLastConsumedTick(null);
-    setExtractionKey(0);
-    setPlayError(null);
-    phaseRef.current = 'idle';
-    setPhase('idle');
+  const pushHistory = useCallback((entry: DigitDerbyHistoryEntry) => {
+    setHistory((prev) => [entry, ...prev].slice(0, 100));
   }, []);
 
   const finalize = useCallback(
-    (settlement: DigitDerbySettlement, racePick: number, winner: number | null, order: number[], raceStake: number) => {
+    (
+      settlement: DigitDerbySettlement,
+      racePick: number,
+      winner: number | null,
+      order: number[],
+      raceStake: number,
+    ) => {
+      if (settledRef.current) return false;
+      settledRef.current = true;
+
       if (settlement.payout > 0) {
         addWinningsRef.current(settlement.payout);
       }
@@ -130,24 +137,95 @@ export function useDigitDerby() {
       };
 
       setResult(entry);
-      setHistory((prev) => [
-        {
-          outcome: settlement.outcome,
-          payout: settlement.payout,
-          stake: raceStake,
-          multiplier: settlement.multiplier,
-          pick: racePick,
-          winner,
-        },
-        ...prev,
-      ].slice(0, 100));
+      pushHistory({
+        outcome: settlement.outcome,
+        payout: settlement.payout,
+        stake: raceStake,
+        multiplier: settlement.multiplier,
+        pick: racePick,
+        winner,
+      });
 
       runningRef.current = false;
+      raceContextRef.current = null;
       phaseRef.current = 'settled';
       setPhase('settled');
+      return true;
     },
-    [],
+    [pushHistory],
   );
+
+  // Abort + refund on symbol change or unmount mid-race (Index Ascent pattern).
+  useEffect(() => {
+    setHighlightedTicks([]);
+    setLastConsumedTick(null);
+    setExtractionKey(0);
+
+    return () => {
+      if (!runningRef.current || settledRef.current) return;
+      const ctx = raceContextRef.current;
+      if (!ctx) return;
+
+      runningRef.current = false;
+      raceIdRef.current += 1;
+      settledRef.current = true;
+      useBalanceStore.getState().addWinnings(ctx.stake);
+      raceContextRef.current = null;
+
+      const refundResult: DigitDerbyResult = {
+        outcome: 'refund',
+        payout: ctx.stake,
+        stake: ctx.stake,
+        netPL: 0,
+        multiplier: 1,
+        pick: ctx.pick,
+        winner: null,
+        finishOrder: rankDigits(ctx.counts),
+      };
+
+      setPlayError('Race cancelled — market changed. Stake refunded.');
+      setResult(refundResult);
+      pushHistory({
+        outcome: 'refund',
+        payout: ctx.stake,
+        stake: ctx.stake,
+        multiplier: 1,
+        pick: ctx.pick,
+        winner: null,
+      });
+      phaseRef.current = 'settled';
+      setPhase('settled');
+      setWinningDigit(null);
+    };
+  }, [selectedIndex, pushHistory]);
+
+  const selectDigit = useCallback((digit: number) => {
+    if (phaseRef.current !== 'idle') return;
+    setPlayError(null);
+    setPick((prev) => (prev === digit ? null : digit));
+  }, []);
+
+  const clearPick = useCallback(() => {
+    if (phaseRef.current !== 'idle') return;
+    setPick(null);
+    setPlayError(null);
+  }, []);
+
+  const dismissResult = useCallback(() => {
+    setResult(null);
+    setCounts(emptyCounts());
+    setTickCount(0);
+    setLockedMultiplier(null);
+    setLockedPick(null);
+    setHighlightedTicks([]);
+    setLastConsumedTick(null);
+    setExtractionKey(0);
+    setWinningDigit(null);
+    setPlayError(null);
+    settledRef.current = false;
+    phaseRef.current = 'idle';
+    setPhase('idle');
+  }, []);
 
   const startRace = useCallback(async () => {
     if (phaseRef.current !== 'idle') return;
@@ -162,6 +240,7 @@ export function useDigitDerby() {
 
     setPlayError(null);
     setResult(null);
+    setWinningDigit(null);
 
     const currentStake = stake;
     if (!placeBet(currentStake)) {
@@ -169,9 +248,15 @@ export function useDigitDerby() {
       return;
     }
 
-    tradeStakeRef.current = currentStake;
     const racePick = pick;
     const raceMultiplier = multiplier;
+    const raceId = ++raceIdRef.current;
+    settledRef.current = false;
+    raceContextRef.current = {
+      pick: racePick,
+      stake: currentStake,
+      counts: emptyCounts(),
+    };
 
     setLockedPick(racePick);
     setLockedMultiplier(raceMultiplier);
@@ -191,10 +276,30 @@ export function useDigitDerby() {
     try {
       while (runningRef.current && ticksSeen < DIGIT_DERBY_CONFIG.maxTicks) {
         const tick = await getNextTick();
-        if (!runningRef.current) return;
+
+        if (
+          raceId !== raceIdRef.current ||
+          !runningRef.current ||
+          settledRef.current
+        ) {
+          // Cleanup already refunded, or race was superseded — do not pay again.
+          if (!settledRef.current && raceContextRef.current) {
+            finalize(
+              settleRefund(currentStake),
+              racePick,
+              null,
+              rankDigits(raceCounts),
+              currentStake,
+            );
+          }
+          return;
+        }
 
         raceCounts = applyTick(raceCounts, tick.lastDigit);
         ticksSeen += 1;
+        if (raceContextRef.current) {
+          raceContextRef.current = { ...raceContextRef.current, counts: raceCounts };
+        }
 
         setCounts(raceCounts);
         setTickCount(ticksSeen);
@@ -204,29 +309,49 @@ export function useDigitDerby() {
 
         const winner = findWinner(raceCounts);
         if (winner !== null) {
+          setWinningDigit(winner);
           const settlement = settleWinner(
             racePick,
             winner,
             currentStake,
             raceMultiplier,
           );
-          finalize(settlement, racePick, winner, rankDigits(raceCounts), currentStake);
+          finalize(
+            settlement,
+            racePick,
+            winner,
+            rankDigits(raceCounts),
+            currentStake,
+          );
           return;
         }
       }
 
-      // Soft timeout — full refund
-      if (runningRef.current) {
-        const settlement = settleRefund(currentStake);
-        finalize(settlement, racePick, null, rankDigits(raceCounts), currentStake);
+      if (
+        raceId === raceIdRef.current &&
+        runningRef.current &&
+        !settledRef.current
+      ) {
+        finalize(
+          settleRefund(currentStake),
+          racePick,
+          null,
+          rankDigits(raceCounts),
+          currentStake,
+        );
       }
     } catch (err) {
-      // Feed failure mid-race — refund stake
-      const settlement = settleRefund(currentStake);
+      if (settledRef.current || raceId !== raceIdRef.current) return;
       setPlayError(
         err instanceof Error ? err.message : 'Market unavailable during race.',
       );
-      finalize(settlement, racePick, null, rankDigits(raceCounts), currentStake);
+      finalize(
+        settleRefund(currentStake),
+        racePick,
+        null,
+        rankDigits(raceCounts),
+        currentStake,
+      );
     }
   }, [pick, marketReady, stake, placeBet, multiplier, getNextTick, finalize]);
 
@@ -249,13 +374,16 @@ export function useDigitDerby() {
     marketReady,
     finishOrder,
     inFinalStretch,
+    raceProgress,
     finishCount: DIGIT_DERBY_CONFIG.finishCount,
     maxTicks: DIGIT_DERBY_CONFIG.maxTicks,
     ticks,
     highlightedTicks,
     lastConsumedTick,
     extractionKey,
+    winningDigit,
     selectDigit,
+    clearPick,
     startRace,
     dismissResult,
   };

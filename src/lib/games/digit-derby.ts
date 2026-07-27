@@ -28,6 +28,20 @@ export const DIGIT_DERBY_CONFIG: DigitDerbyConfig = {
   winProbability: 0.1,
 };
 
+/** Per-digit silks — distinct hues for race identity (pick uses primary ring). */
+export const DIGIT_SILKS = [
+  '#f43f5e',
+  '#fb923c',
+  '#facc15',
+  '#a3e635',
+  '#34d399',
+  '#2dd4bf',
+  '#38bdf8',
+  '#818cf8',
+  '#c084fc',
+  '#f472b6',
+] as const;
+
 export type DigitCounts = number[];
 
 export type DigitDerbyOutcome = 'win' | 'lose' | 'refund';
