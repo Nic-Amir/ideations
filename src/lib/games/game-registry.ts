@@ -153,13 +153,13 @@ export const GAMES: GameInfo[] = [
     name: 'Digit Derby',
     shortName: 'Digits',
     description:
-      'Ten digits race on live ticks. Each streamed last digit advances that runner — bet which digit wins the race.',
-    shortPitch: 'Bet which live digit wins the race.',
+      'Ten digits race on live ticks. Trade Outright, Top 3, Pair, Trio, Top 5, Spread (Long vs Short), or Margin (Photo / Wide / Blowout) — settle against the finish leaderboard.',
+    shortPitch: 'Digit contracts including Spread and Margin on a live finish board.',
     category: 'Race',
     risk: 'Medium',
     sessionLength: '15-60 sec',
     mechanics:
-      'Pick a digit 0–9. Live ticks advance that digit’s runner; first to the finish line wins.',
+      'Pick a contract, fill your ticket (digits or a margin threshold), open a position. Live ticks advance runners; first to the finish line ranks the board.',
     marketSource: 'Deriv live ticks',
     status: 'Live',
     track: 'other',

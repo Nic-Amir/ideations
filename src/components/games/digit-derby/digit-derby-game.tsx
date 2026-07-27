@@ -17,136 +17,454 @@ import {
   DigitRaceTrack,
 } from '@/components/games/digit-derby/digit-race-track';
 import { DigitPickGrid } from '@/components/games/digit-derby/digit-pick-grid';
-import { DIGIT_DERBY_CONFIG, DIGIT_SILKS } from '@/lib/games/digit-derby';
+import {
+  DIGIT_BET_MODES,
+  DIGIT_DERBY_CONFIG,
+  DIGIT_SILKS,
+  MARGIN_THRESHOLDS,
+  getDigitBetModeSpec,
+  offeredOddsFromProbability,
+  winningLead,
+  type DigitBetMode,
+  type DigitBetModeSpec,
+  type DigitDerbyPick,
+  type MarginThreshold,
+  type PickPricing,
+} from '@/lib/games/digit-derby';
 import { cn } from '@/lib/utils';
 
-function SportsbookSlip({
-  pick,
-  multiplier,
+function marginThresholdLabel(threshold: MarginThreshold): string {
+  return (
+    MARGIN_THRESHOLDS.find((t) => t.threshold === threshold)?.label ?? 'Margin'
+  );
+}
+
+function slotLabel(mode: DigitBetMode, index: number, ordered: boolean): string | null {
+  if (mode === 'spread') return index === 0 ? 'Long' : 'Short';
+  if (ordered) return `${index + 1}.`;
+  return null;
+}
+
+function ModePicker({
+  mode,
+  onChange,
+  disabled,
+}: {
+  mode: DigitBetMode;
+  onChange: (mode: DigitBetMode) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Contract type"
+      className="scrollbar-hide flex gap-1.5 overflow-x-auto"
+    >
+      {DIGIT_BET_MODES.map((m) => {
+        const active = m.id === mode;
+        return (
+          <button
+            key={m.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(m.id)}
+            className={cn(
+              'shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors',
+              active
+                ? 'border-primary bg-primary text-on-prominent-static-inverse'
+                : 'border-border-subtle bg-subtle text-on-subtle hover:text-on-prominent',
+              disabled && 'opacity-60',
+            )}
+          >
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function OrderToggle({
+  ordered,
+  onChange,
+  disabled,
+}: {
+  ordered: boolean;
+  onChange: (ordered: boolean) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-border-subtle bg-subtle p-0.5">
+      {(
+        [
+          { value: false, label: 'Basket' },
+          { value: true, label: 'Exact' },
+        ] as const
+      ).map((opt) => (
+        <button
+          key={opt.label}
+          type="button"
+          disabled={disabled}
+          aria-pressed={ordered === opt.value}
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            'min-h-[32px] flex-1 rounded-md px-3 text-[10px] font-semibold transition-colors',
+            ordered === opt.value
+              ? 'bg-prominent text-on-prominent shadow-sm'
+              : 'text-on-subtle hover:text-on-prominent',
+            disabled && 'opacity-60',
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SelectionSlots({
+  mode,
+  selection,
+  picks,
+  ordered,
+}: {
+  mode: DigitBetMode;
+  selection: number[];
+  picks: number;
+  ordered: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {Array.from({ length: picks }, (_, i) => {
+        const digit = selection[i];
+        const filled = digit !== undefined;
+        const label = slotLabel(mode, i, ordered);
+        return (
+          <span
+            key={i}
+            className={cn(
+              'flex h-8 min-w-[2.5rem] items-center justify-center gap-1 rounded-lg border px-2 text-xs font-semibold tabular-nums',
+              filled
+                ? 'border-border-prominent bg-prominent text-on-prominent'
+                : 'border-dashed border-border-subtle bg-subtle text-on-subtle',
+            )}
+          >
+            {label ? (
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-on-subtle">
+                {label}
+              </span>
+            ) : null}
+            {filled ? (
+              <>
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: DIGIT_SILKS[digit] }}
+                />
+                {digit}
+              </>
+            ) : (
+              'Pick'
+            )}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function MarginThresholdPicker({
+  selected,
+  stake,
+  onSelect,
+  disabled,
+}: {
+  selected: MarginThreshold | null;
+  stake: number;
+  onSelect: (threshold: MarginThreshold) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Margin threshold"
+      className="flex flex-col gap-2"
+    >
+      {MARGIN_THRESHOLDS.map((chip) => {
+        const active = selected === chip.threshold;
+        const p =
+          chip.threshold === 1
+            ? DIGIT_DERBY_CONFIG.marginPhotoP
+            : chip.threshold === 2
+              ? DIGIT_DERBY_CONFIG.marginWideP
+              : DIGIT_DERBY_CONFIG.marginBlowoutP;
+        const mult = offeredOddsFromProbability(p);
+        const returnAmount = Math.round(stake * mult);
+        return (
+          <button
+            key={chip.threshold}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onSelect(chip.threshold)}
+            className={cn(
+              'flex min-h-[52px] items-center justify-between rounded-xl border px-4 text-left transition-colors',
+              active
+                ? 'border-primary bg-primary/10 text-on-prominent'
+                : 'border-border-subtle bg-prominent text-on-subtle hover:text-on-prominent',
+              disabled && 'opacity-60',
+            )}
+          >
+            <span>
+              <span className="block font-display text-sm font-bold text-on-prominent">
+                {chip.label}
+              </span>
+              <span className="text-[10px] text-on-subtle">{chip.tag}</span>
+            </span>
+            <span className="text-right">
+              <span className="block font-display text-sm font-bold tabular-nums text-on-prominent">
+                {mult.toFixed(2)}×
+              </span>
+              <span className="text-[10px] tabular-nums text-on-subtle">
+                Return {returnAmount.toLocaleString()}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TicketSlip({
+  mode,
+  spec,
+  selection,
+  marginThreshold,
+  ordered,
+  pricing,
   stake,
   canStart,
   onClear,
   onStart,
 }: {
-  pick: number;
-  multiplier: number;
+  mode: DigitBetMode;
+  spec: DigitBetModeSpec;
+  selection: number[];
+  marginThreshold: MarginThreshold | null;
+  ordered: boolean;
+  pricing: PickPricing | null;
   stake: number;
   canStart: boolean;
   onClear: () => void;
   onStart: () => void;
 }) {
-  const returnAmount = Math.round(stake * multiplier);
+  const isMargin = mode === 'margin';
+  const remaining = isMargin
+    ? marginThreshold
+      ? 0
+      : 1
+    : spec.picks - selection.length;
+  const returnAmount = pricing ? Math.round(stake * pricing.multiplier) : 0;
   const netProfit = Math.max(0, returnAmount - stake);
+  const hasSelection = isMargin ? marginThreshold !== null : selection.length > 0;
+  const selectionSummary = isMargin
+    ? marginThreshold
+      ? marginThresholdLabel(marginThreshold)
+      : 'No threshold'
+    : `${selection.length}/${spec.picks} selected`;
 
   return (
     <div className="mx-1 mb-1 shrink-0 rounded-xl border border-border-subtle bg-subtle/50 p-3 shadow-sm">
       <div className="mb-2 flex min-h-[32px] items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-            Bet slip
+            Ticket
           </p>
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-on-prominent">
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: DIGIT_SILKS[pick] }}
-            />
-            Digit {pick}
-            <span className="font-normal text-on-subtle">· Winner</span>
+          <p className="text-xs font-semibold text-on-prominent">
+            {spec.label}
+            {spec.orderable ? (ordered ? ' · Exact' : ' · Basket') : ''}
+            <span className="ml-1 font-normal text-on-subtle">
+              {selectionSummary}
+            </span>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="Clear selection"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-prominent text-on-subtle transition-colors hover:text-on-prominent"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {hasSelection ? (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Clear selection"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-prominent text-on-subtle transition-colors hover:text-on-prominent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 rounded-lg bg-prominent px-3 py-2 text-center">
-        <div>
-          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Odds</p>
-          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
-            {multiplier.toFixed(2)}×
-          </p>
-        </div>
-        <div>
-          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Return</p>
-          <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
-            {returnAmount.toLocaleString()}
-          </p>
-        </div>
-        <div>
-          <p className="text-[9px] uppercase tracking-wide text-on-subtle">Profit</p>
-          <p className="font-display text-sm font-bold tabular-nums text-semantic-win">
-            +{netProfit.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        disabled={!canStart}
-        onClick={onStart}
-        className={cn(
-          'mt-2 flex min-h-[52px] w-full items-center justify-between rounded-xl bg-primary px-4 text-on-prominent-static-inverse',
-          !canStart && 'opacity-40',
-          canStart && 'active:scale-[0.98]',
-        )}
-      >
-        <span className="flex items-center gap-2 font-display text-base font-bold">
-          <Play className="h-5 w-5 fill-current" />
-          Start race
-        </span>
-        <span className="text-right text-xs font-semibold tabular-nums">
-          Stake {stake.toLocaleString()}
-          <span className="block text-[10px] opacity-80">
-            Return {returnAmount.toLocaleString()}
+      {isMargin ? (
+        <div className="flex flex-wrap gap-1.5">
+          <span
+            className={cn(
+              'flex h-8 min-w-[2.5rem] items-center justify-center rounded-lg border px-3 text-xs font-semibold',
+              marginThreshold
+                ? 'border-border-prominent bg-prominent text-on-prominent'
+                : 'border-dashed border-border-subtle bg-subtle text-on-subtle',
+            )}
+          >
+            {marginThreshold
+              ? marginThresholdLabel(marginThreshold)
+              : 'Pick threshold'}
           </span>
-        </span>
-      </button>
+        </div>
+      ) : (
+        <SelectionSlots
+          mode={mode}
+          selection={selection}
+          picks={spec.picks}
+          ordered={spec.orderable && ordered}
+        />
+      )}
+
+      {remaining > 0 ? (
+        <p className="mt-2 text-center text-xs text-on-subtle">
+          {isMargin
+            ? 'Select Photo, Wide, or Blowout above.'
+            : `Select ${remaining} more digit${remaining === 1 ? '' : 's'} from the board.`}
+        </p>
+      ) : pricing ? (
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-prominent px-3 py-2 text-center">
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Payout</p>
+              <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+                {pricing.multiplier.toFixed(2)}×
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Return</p>
+              <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
+                {returnAmount.toLocaleString()}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-wide text-on-subtle">Profit</p>
+              <p className="font-display text-sm font-bold tabular-nums text-semantic-win">
+                +{netProfit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={!canStart}
+            onClick={onStart}
+            className={cn(
+              'mt-2 flex min-h-[52px] w-full items-center justify-between rounded-xl bg-primary px-4 text-on-prominent-static-inverse',
+              !canStart && 'opacity-40',
+              canStart && 'active:scale-[0.98]',
+            )}
+          >
+            <span className="flex items-center gap-2 font-display text-base font-bold">
+              <Play className="h-5 w-5 fill-current" />
+              Open position
+            </span>
+            <span className="text-right text-xs font-semibold tabular-nums">
+              Size {stake.toLocaleString()}
+              <span className="block text-[10px] opacity-80">
+                Return {returnAmount.toLocaleString()}
+              </span>
+            </span>
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function LockedPickChip({
+function LockedPositionChip({
   pick,
-  rank,
-  count,
+  finishOrder,
+  counts,
   finishCount,
   multiplier,
 }: {
-  pick: number;
-  rank: number;
-  count: number;
+  pick: DigitDerbyPick;
+  finishOrder: number[];
+  counts: number[];
   finishCount: number;
   multiplier: number;
 }) {
+  const spec = getDigitBetModeSpec(pick.mode);
+  const lead =
+    finishOrder.length >= 2 ? winningLead(counts, finishOrder) : null;
+
   return (
-    <div className="mx-1 flex shrink-0 items-center gap-3 rounded-xl border border-border-subtle bg-subtle/60 px-3 py-2">
-      <span
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold text-black/80 ring-2 ring-border-prominent"
-        style={{ backgroundColor: DIGIT_SILKS[pick] }}
-      >
-        {pick}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-          Your pick · locked
-        </p>
-        <p className="font-display text-sm font-bold tabular-nums text-on-prominent">
-          #{rank} · {count}/{finishCount}
-          <span className="ml-2 text-on-subtle">{multiplier.toFixed(2)}×</span>
-        </p>
+    <div className="mx-1 flex shrink-0 flex-col gap-2 rounded-xl border border-border-subtle bg-subtle/60 px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+            Locked position
+          </p>
+          <p className="truncate text-xs font-semibold text-on-prominent">
+            {spec.label}
+            {spec.orderable ? (pick.ordered ? ' · Exact' : ' · Basket') : ''}
+            {pick.mode === 'margin' && pick.marginThreshold
+              ? ` · ${marginThresholdLabel(pick.marginThreshold)}`
+              : ''}
+          </p>
+        </div>
+        <span className="font-display text-sm font-bold tabular-nums text-on-prominent">
+          {multiplier.toFixed(2)}×
+        </span>
       </div>
+      {pick.mode === 'margin' ? (
+        <div className="flex items-center gap-2 text-[10px] font-semibold text-on-subtle">
+          <span className="rounded-full border border-border-subtle bg-prominent px-2 py-1 text-on-prominent">
+            {pick.marginThreshold
+              ? marginThresholdLabel(pick.marginThreshold)
+              : 'Margin'}
+          </span>
+          {lead !== null ? (
+            <span className="tabular-nums">
+              Lead {lead} · 1st {counts[finishOrder[0]]}/{finishCount}
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <div className="scrollbar-hide flex gap-1.5 overflow-x-auto">
+          {pick.digits.map((digit, index) => (
+            <span
+              key={`${digit}-${index}`}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-border-subtle bg-prominent px-2 py-1 text-[10px] font-semibold text-on-prominent"
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: DIGIT_SILKS[digit] }}
+              />
+              {pick.mode === 'spread'
+                ? index === 0
+                  ? 'Long '
+                  : 'Short '
+                : pick.ordered
+                  ? `${index + 1}. `
+                  : ''}
+              {digit}
+              <span className="text-on-subtle">
+                #{finishOrder.indexOf(digit) + 1} · {counts[digit]}/{finishCount}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function FinishDetails({ result }: { result: DigitDerbyResult }) {
   const topFive = result.finishOrder.slice(0, 5);
-  const pickOutside = topFive.includes(result.pick) ? null : result.pick;
+  const pickSet = new Set(result.pick.digits);
+  const picksOutside = result.pick.digits.filter((d) => !topFive.includes(d));
 
   const finishRow = (digit: number, position: number, isPlayerPick: boolean) => (
     <div
@@ -164,7 +482,7 @@ function FinishDetails({ result }: { result: DigitDerbyResult }) {
       <span className="truncate font-medium">Digit {digit}</span>
       {isPlayerPick ? (
         <span className="text-[9px] font-bold uppercase tracking-wide text-primary">
-          Your pick
+          Ticket
         </span>
       ) : null}
     </div>
@@ -176,20 +494,79 @@ function FinishDetails({ result }: { result: DigitDerbyResult }) {
         Top five finish
       </p>
       <div className="space-y-1">
-        {topFive.map((digit, index) =>
-          finishRow(digit, index + 1, digit === result.pick),
-        )}
+        {topFive.map((digit, index) => finishRow(digit, index + 1, pickSet.has(digit)))}
       </div>
-      {pickOutside !== null ? (
+      {picksOutside.length > 0 ? (
         <div className="border-t border-border-subtle pt-2">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-            Your pick
+            Remaining ticket
           </p>
-          {finishRow(pickOutside, result.finishOrder.indexOf(pickOutside) + 1, true)}
+          <div className="space-y-1">
+            {picksOutside.map((digit) =>
+              finishRow(digit, result.finishOrder.indexOf(digit) + 1, true),
+            )}
+          </div>
         </div>
       ) : null}
     </div>
   );
+}
+
+function resultCopy(result: DigitDerbyResult): { title: string; subtitle: string } {
+  const spec = getDigitBetModeSpec(result.pick.mode);
+  const modeName =
+    result.pick.mode === 'margin' && result.pick.marginThreshold
+      ? `${marginThresholdLabel(result.pick.marginThreshold)} Margin`
+      : result.pick.ordered
+        ? `Exact ${spec.label}`
+        : spec.label;
+  const winner = result.winner;
+
+  if (result.outcome === 'refund') {
+    return {
+      title: 'Position refunded',
+      subtitle: 'Stake returned — timeout or market issue',
+    };
+  }
+
+  if (result.pick.mode === 'spread') {
+    const [longDigit, shortDigit] = result.pick.digits;
+    if (result.outcome === 'win') {
+      return {
+        title: `Digit ${longDigit} beats ${shortDigit}`,
+        subtitle: `Your spread paid ${result.multiplier.toFixed(2)}×`,
+      };
+    }
+    return {
+      title: `Digit ${shortDigit} finishes ahead`,
+      subtitle: 'Your long did not lead the short',
+    };
+  }
+
+  if (result.pick.mode === 'margin') {
+    if (result.outcome === 'win') {
+      return {
+        title: `${modeName} hits`,
+        subtitle: `Your margin ticket paid ${result.multiplier.toFixed(2)}×`,
+      };
+    }
+    return {
+      title: winner !== null ? `Digit ${winner} leads the board` : 'Margin misses',
+      subtitle: `Your ${modeName.toLowerCase()} did not land`,
+    };
+  }
+
+  if (result.outcome === 'win') {
+    return {
+      title: winner !== null ? `Digit ${winner} leads the board` : 'Ticket hits',
+      subtitle: `Your ${modeName.toLowerCase()} paid ${result.multiplier.toFixed(2)}×`,
+    };
+  }
+
+  return {
+    title: winner !== null ? `Digit ${winner} leads the board` : 'Ticket misses',
+    subtitle: `Your ${modeName.toLowerCase()} did not land`,
+  };
 }
 
 function overlayAmount(result: DigitDerbyResult): number {
@@ -201,14 +578,22 @@ function overlayAmount(result: DigitDerbyResult): number {
 export function DigitDerbyGame() {
   const {
     phase,
-    pick,
+    mode,
+    setMode,
+    ordered,
+    setOrdered,
+    selection,
+    marginThreshold,
+    setMarginThreshold,
     stake,
     setStake,
     counts,
     tickCount,
     lockedMultiplier,
     lockedPick,
-    multiplier,
+    pricing,
+    spec,
+    selectionComplete,
     result,
     playError,
     balance,
@@ -224,16 +609,16 @@ export function DigitDerbyGame() {
     lastConsumedTick,
     extractionKey,
     winningDigit,
-    selectDigit,
-    clearPick,
+    toggleDigit,
+    clearSelection,
     startRace,
     dismissResult,
   } = useDigitDerby();
 
-  const displayMultiplier = lockedMultiplier ?? multiplier;
-  const displayPick = lockedPick ?? pick;
   const idle = phase === 'idle';
   const racing = phase === 'running' || phase === 'settled';
+  const displayPicks = lockedPick?.digits ?? selection;
+  const isMargin = mode === 'margin';
 
   const infoSections: GameInfoSection[] = [
     {
@@ -241,12 +626,19 @@ export function DigitDerbyGame() {
       label: 'How to play',
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
-          <p>Pick a digit from 0 to 9, set your stake, and start the race.</p>
           <p>
-            Each live tick advances the digit that matches its last digit. First
-            to {finishCount} wins.
+            Choose a contract — Outright, Top 3, Pair, Trio, Top 5, Spread, or
+            Margin — then build a ticket.
           </p>
-          <p>You win if the digit you picked finishes first.</p>
+          <p>
+            Pair / Trio / Top 5 support Basket (any order) or Exact (sequence
+            must match ranks). Spread picks Long vs Short. Margin calls the
+            winning lead: Photo (1), Wide (≥2), or Blowout (≥3).
+          </p>
+          <p>
+            Each live tick advances that last digit. First to {finishCount}{' '}
+            finishes first; the board ranks by collected counts.
+          </p>
         </div>
       ),
     },
@@ -256,15 +648,11 @@ export function DigitDerbyGame() {
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
           <p>
-            Under uniform last digits, each runner has a 10% chance to win.
+            Ranking markets use combinatorial fair odds under a uniform
+            finish-order model. Margin uses Monte Carlo lead probs. All prices
+            add a {DIGIT_DERBY_CONFIG.commission * 100}% commission.
           </p>
-          <p>
-            Offered odds use a {DIGIT_DERBY_CONFIG.commission * 100}% commission:{' '}
-            <span className="font-display tabular-nums text-on-prominent">
-              {multiplier.toFixed(2)}×
-            </span>{' '}
-            for every digit. Multiplier locks when you start.
-          </p>
+          <p>Multiplier locks when you open the position.</p>
           <p>Timeout or feed failure mid-race refunds your stake.</p>
         </div>
       ),
@@ -278,7 +666,7 @@ export function DigitDerbyGame() {
             Settlement prefers live Deriv ticks. If markets are unavailable in
             your region, a labeled demo feed (~1 Hz) keeps the game playable.
           </p>
-          <p>Starting a race stays disabled until ticks arrive.</p>
+          <p>Opening a position stays disabled until ticks arrive.</p>
         </div>
       ),
     },
@@ -303,9 +691,23 @@ export function DigitDerbyGame() {
             result.stake > 0 ? result.payout / result.stake : 0,
           )
         : ('loss' as const);
+  const copy = result ? resultCopy(result) : null;
 
-  const pickRank =
-    displayPick !== null ? finishOrder.indexOf(displayPick) + 1 : 0;
+  const dockFooter = idle
+    ? selectionComplete && pricing
+      ? canStart
+        ? `${spec.label}${
+            isMargin && marginThreshold
+              ? ` · ${marginThresholdLabel(marginThreshold)}`
+              : ''
+          } · ${pricing.multiplier.toFixed(2)}×`
+        : 'Waiting for live ticks'
+      : isMargin
+        ? 'Select Photo, Wide, or Blowout'
+        : `Select ${spec.picks} digit${spec.picks === 1 ? '' : 's'} for ${spec.label}`
+    : phase === 'running'
+      ? 'Position open'
+      : undefined;
 
   return (
     <GameShell infoSections={infoSections} showSymbolPicker>
@@ -326,13 +728,28 @@ export function DigitDerbyGame() {
         }
         play={
           <div className="flex min-h-0 flex-1 flex-col gap-2 px-3 py-2">
+            {idle ? (
+              <div className="shrink-0 space-y-2">
+                <ModePicker mode={mode} onChange={setMode} disabled={!idle} />
+                {spec.orderable ? (
+                  <OrderToggle
+                    ordered={ordered}
+                    onChange={setOrdered}
+                    disabled={!idle}
+                  />
+                ) : (
+                  <p className="text-[10px] text-on-subtle">{spec.tag}</p>
+                )}
+              </div>
+            ) : null}
+
             {racing ? (
               <>
                 <div className="shrink-0">
                   <DigitLeaderboardStrip
                     finishOrder={finishOrder}
                     counts={counts}
-                    pick={displayPick}
+                    picks={displayPicks}
                     statusLabel={statusLabel}
                   />
                   <div className="mt-1 flex items-center gap-3">
@@ -369,7 +786,7 @@ export function DigitDerbyGame() {
                     counts={counts}
                     finishCount={finishCount}
                     finishOrder={finishOrder}
-                    lockedPick={lockedPick}
+                    lockedPicks={lockedPick?.digits ?? []}
                     lastAdvancedDigit={lastConsumedTick?.lastDigit ?? null}
                     winningDigit={winningDigit}
                     finished={phase === 'settled'}
@@ -378,10 +795,10 @@ export function DigitDerbyGame() {
                 </div>
 
                 {lockedPick !== null && lockedMultiplier !== null ? (
-                  <LockedPickChip
+                  <LockedPositionChip
                     pick={lockedPick}
-                    rank={pickRank}
-                    count={counts[lockedPick] ?? 0}
+                    finishOrder={finishOrder}
+                    counts={counts}
                     finishCount={finishCount}
                     multiplier={lockedMultiplier}
                   />
@@ -389,30 +806,40 @@ export function DigitDerbyGame() {
               </>
             ) : (
               <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border-subtle bg-subtle/40 p-3">
-                <DigitPickGrid
-                  pick={pick}
-                  multiplier={multiplier}
-                  onSelectDigit={selectDigit}
-                  disabled={!idle}
-                />
+                {isMargin ? (
+                  <MarginThresholdPicker
+                    selected={marginThreshold}
+                    stake={stake}
+                    onSelect={setMarginThreshold}
+                    disabled={!idle}
+                  />
+                ) : (
+                  <DigitPickGrid
+                    selection={selection}
+                    ordered={spec.orderable && ordered}
+                    maxPicks={spec.picks}
+                    multiplier={pricing?.multiplier ?? null}
+                    modeLabel={spec.label}
+                    onToggleDigit={toggleDigit}
+                    disabled={!idle}
+                  />
+                )}
               </div>
             )}
 
-            {idle && pick !== null ? (
-              <SportsbookSlip
-                pick={pick}
-                multiplier={multiplier}
+            {idle ? (
+              <TicketSlip
+                mode={mode}
+                spec={spec}
+                selection={selection}
+                marginThreshold={marginThreshold}
+                ordered={ordered}
+                pricing={pricing}
                 stake={stake}
                 canStart={canStart}
-                onClear={clearPick}
+                onClear={clearSelection}
                 onStart={() => void startRace()}
               />
-            ) : null}
-
-            {idle && pick === null ? (
-              <p className="text-center text-sm text-on-subtle">
-                Pick a digit, then start the race.
-              </p>
             ) : null}
 
             {playError ? <GameNotice tone="danger">{playError}</GameNotice> : null}
@@ -431,17 +858,7 @@ export function DigitDerbyGame() {
             onStakeChange={setStake}
             stakeDisabled={!idle}
             showSlider={idle}
-            footer={
-              idle
-                ? pick !== null
-                  ? canStart
-                    ? `Digit ${pick} · ${multiplier.toFixed(2)}×`
-                    : 'Waiting for live ticks'
-                  : 'Tap a digit above to build your bet'
-                : phase === 'running'
-                  ? 'Race in progress'
-                  : undefined
-            }
+            footer={dockFooter}
             actions={
               <>
                 {phase === 'running' ? (
@@ -460,7 +877,7 @@ export function DigitDerbyGame() {
                     className="w-full min-h-[44px]"
                     onClick={dismissResult}
                   >
-                    Race again
+                    New ticket
                   </Button>
                 ) : null}
               </>
@@ -473,24 +890,12 @@ export function DigitDerbyGame() {
         open={overlayOpen}
         won={overlayWon}
         tier={overlayTier}
-        title={
-          result?.outcome === 'win'
-            ? `Digit ${result.winner} wins`
-            : result?.outcome === 'refund'
-              ? 'Race refunded'
-              : `Digit ${result?.winner ?? '—'} wins`
-        }
-        subtitle={
-          result?.outcome === 'win'
-            ? `Your pick ${result.pick} finished first · ${result.multiplier.toFixed(2)}×`
-            : result?.outcome === 'refund'
-              ? 'Stake returned — timeout or market issue'
-              : `Your pick was ${result?.pick} · better luck next race`
-        }
+        title={copy?.title ?? ''}
+        subtitle={copy?.subtitle}
         amount={result ? overlayAmount(result) : undefined}
         amountLabel="credits"
         onDismiss={dismissResult}
-        primaryAction={{ label: 'Race again', onClick: dismissResult }}
+        primaryAction={{ label: 'New ticket', onClick: dismissResult }}
         details={result ? <FinishDetails result={result} /> : null}
       />
     </GameShell>

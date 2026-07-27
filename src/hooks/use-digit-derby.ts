@@ -11,13 +11,19 @@ import {
   applyTick,
   findWinner,
   rankDigits,
-  offeredOdds,
-  settleWinner,
+  pricePick,
+  settleBet,
   settleRefund,
   isFinalStretch,
+  getDigitBetModeSpec,
+  isPickComplete,
+  type DigitBetMode,
+  type DigitDerbyPick,
   type DigitCounts,
   type DigitDerbySettlement,
   type DigitDerbyOutcome,
+  type MarginThreshold,
+  type PickPricing,
 } from '@/lib/games/digit-derby';
 
 export type DigitDerbyPhase = 'idle' | 'running' | 'settled';
@@ -28,7 +34,7 @@ export interface DigitDerbyResult {
   stake: number;
   netPL: number;
   multiplier: number;
-  pick: number;
+  pick: DigitDerbyPick;
   winner: number | null;
   finishOrder: number[];
 }
@@ -38,12 +44,12 @@ export interface DigitDerbyHistoryEntry {
   payout: number;
   stake: number;
   multiplier: number;
-  pick: number;
+  mode: DigitBetMode;
   winner: number | null;
 }
 
 interface RaceContext {
-  pick: number;
+  pick: DigitDerbyPick;
   stake: number;
   counts: DigitCounts;
 }
@@ -55,12 +61,17 @@ export function useDigitDerby() {
   const getNextTick = useNextTick(selectedIndex);
 
   const [phase, setPhase] = useState<DigitDerbyPhase>('idle');
-  const [pick, setPick] = useState<number | null>(null);
+  const [mode, setModeState] = useState<DigitBetMode>('outright');
+  const [ordered, setOrderedState] = useState(false);
+  const [selection, setSelection] = useState<number[]>([]);
+  const [marginThreshold, setMarginThresholdState] = useState<MarginThreshold | null>(
+    null,
+  );
   const [stake, setStake] = useState(100);
   const [counts, setCounts] = useState<DigitCounts>(() => emptyCounts());
   const [tickCount, setTickCount] = useState(0);
   const [lockedMultiplier, setLockedMultiplier] = useState<number | null>(null);
-  const [lockedPick, setLockedPick] = useState<number | null>(null);
+  const [lockedPick, setLockedPick] = useState<DigitDerbyPick | null>(null);
   const [result, setResult] = useState<DigitDerbyResult | null>(null);
   const [history, setHistory] = useState<DigitDerbyHistoryEntry[]>([]);
   const [playError, setPlayError] = useState<string | null>(null);
@@ -84,9 +95,28 @@ export function useDigitDerby() {
     phaseRef.current = phase;
   }, [phase]);
 
-  const multiplier = useMemo(() => offeredOdds(), []);
+  const spec = getDigitBetModeSpec(mode);
+
+  const currentPick: DigitDerbyPick = useMemo(
+    () => ({
+      mode,
+      ordered: spec.orderable && ordered,
+      digits: selection,
+      ...(mode === 'margin' && marginThreshold
+        ? { marginThreshold }
+        : {}),
+    }),
+    [mode, ordered, selection, marginThreshold, spec.orderable],
+  );
+
+  const selectionComplete = isPickComplete(currentPick);
+
+  const pricing: PickPricing | null = useMemo(() => {
+    if (!selectionComplete) return null;
+    return pricePick(currentPick);
+  }, [selectionComplete, currentPick]);
+
   const maxStake = Math.max(10, Math.min(balance, 5000));
-  // Symbol-scoped: useTickStream clears ticks on switch; do not trust lastConsumedTick alone.
   const marketReady = ticks.length > 0;
   const finishOrder = useMemo(() => rankDigits(counts), [counts]);
   const inFinalStretch = useMemo(
@@ -100,7 +130,8 @@ export function useDigitDerby() {
 
   const canStart =
     phase === 'idle' &&
-    pick !== null &&
+    selectionComplete &&
+    pricing !== null &&
     stake > 0 &&
     stake <= balance &&
     balance > 0 &&
@@ -113,7 +144,7 @@ export function useDigitDerby() {
   const finalize = useCallback(
     (
       settlement: DigitDerbySettlement,
-      racePick: number,
+      racePick: DigitDerbyPick,
       winner: number | null,
       order: number[],
       raceStake: number,
@@ -142,7 +173,7 @@ export function useDigitDerby() {
         payout: settlement.payout,
         stake: raceStake,
         multiplier: settlement.multiplier,
-        pick: racePick,
+        mode: racePick.mode,
         winner,
       });
 
@@ -155,7 +186,6 @@ export function useDigitDerby() {
     [pushHistory],
   );
 
-  // Abort + refund on symbol change or unmount mid-race (Index Ascent pattern).
   useEffect(() => {
     setHighlightedTicks([]);
     setLastConsumedTick(null);
@@ -190,7 +220,7 @@ export function useDigitDerby() {
         payout: ctx.stake,
         stake: ctx.stake,
         multiplier: 1,
-        pick: ctx.pick,
+        mode: ctx.pick.mode,
         winner: null,
       });
       phaseRef.current = 'settled';
@@ -199,15 +229,44 @@ export function useDigitDerby() {
     };
   }, [selectedIndex, pushHistory]);
 
-  const selectDigit = useCallback((digit: number) => {
+  const setMode = useCallback((next: DigitBetMode) => {
     if (phaseRef.current !== 'idle') return;
+    setModeState(next);
+    setSelection([]);
+    setOrderedState(false);
+    setMarginThresholdState(null);
     setPlayError(null);
-    setPick((prev) => (prev === digit ? null : digit));
   }, []);
 
-  const clearPick = useCallback(() => {
+  const setOrdered = useCallback((next: boolean) => {
     if (phaseRef.current !== 'idle') return;
-    setPick(null);
+    setOrderedState(next);
+  }, []);
+
+  const setMarginThreshold = useCallback((next: MarginThreshold) => {
+    if (phaseRef.current !== 'idle') return;
+    setPlayError(null);
+    setMarginThresholdState((prev) => (prev === next ? null : next));
+  }, []);
+
+  const toggleDigit = useCallback(
+    (digit: number) => {
+      if (phaseRef.current !== 'idle') return;
+      if (mode === 'margin') return;
+      setPlayError(null);
+      setSelection((prev) => {
+        if (prev.includes(digit)) return prev.filter((d) => d !== digit);
+        if (prev.length >= spec.picks) return prev;
+        return [...prev, digit];
+      });
+    },
+    [spec.picks, mode],
+  );
+
+  const clearSelection = useCallback(() => {
+    if (phaseRef.current !== 'idle') return;
+    setSelection([]);
+    setMarginThresholdState(null);
     setPlayError(null);
   }, []);
 
@@ -217,6 +276,8 @@ export function useDigitDerby() {
     setTickCount(0);
     setLockedMultiplier(null);
     setLockedPick(null);
+    setSelection([]);
+    setMarginThresholdState(null);
     setHighlightedTicks([]);
     setLastConsumedTick(null);
     setExtractionKey(0);
@@ -229,8 +290,12 @@ export function useDigitDerby() {
 
   const startRace = useCallback(async () => {
     if (phaseRef.current !== 'idle') return;
-    if (pick === null) {
-      setPlayError('Pick a digit to race.');
+    if (!selectionComplete || !pricing) {
+      setPlayError(
+        mode === 'margin'
+          ? 'Select a margin threshold (Photo, Wide, or Blowout).'
+          : `Select ${spec.picks} digit${spec.picks === 1 ? '' : 's'} for this contract.`,
+      );
       return;
     }
     if (!marketReady) {
@@ -248,8 +313,15 @@ export function useDigitDerby() {
       return;
     }
 
-    const racePick = pick;
-    const raceMultiplier = multiplier;
+    const racePick: DigitDerbyPick = {
+      mode,
+      ordered: spec.orderable && ordered,
+      digits: [...selection],
+      ...(mode === 'margin' && marginThreshold
+        ? { marginThreshold }
+        : {}),
+    };
+    const raceMultiplier = pricing.multiplier;
     const raceId = ++raceIdRef.current;
     settledRef.current = false;
     raceContextRef.current = {
@@ -282,7 +354,6 @@ export function useDigitDerby() {
           !runningRef.current ||
           settledRef.current
         ) {
-          // Cleanup already refunded, or race was superseded — do not pay again.
           if (!settledRef.current && raceContextRef.current) {
             finalize(
               settleRefund(currentStake),
@@ -310,19 +381,15 @@ export function useDigitDerby() {
         const winner = findWinner(raceCounts);
         if (winner !== null) {
           setWinningDigit(winner);
-          const settlement = settleWinner(
+          const order = rankDigits(raceCounts);
+          const settlement = settleBet(
             racePick,
-            winner,
+            order,
             currentStake,
             raceMultiplier,
+            raceCounts,
           );
-          finalize(
-            settlement,
-            racePick,
-            winner,
-            rankDigits(raceCounts),
-            currentStake,
-          );
+          finalize(settlement, racePick, winner, order, currentStake);
           return;
         }
       }
@@ -353,18 +420,40 @@ export function useDigitDerby() {
         currentStake,
       );
     }
-  }, [pick, marketReady, stake, placeBet, multiplier, getNextTick, finalize]);
+  }, [
+    selectionComplete,
+    pricing,
+    spec.picks,
+    spec.orderable,
+    marketReady,
+    stake,
+    placeBet,
+    mode,
+    ordered,
+    selection,
+    marginThreshold,
+    getNextTick,
+    finalize,
+  ]);
 
   return {
     phase,
-    pick,
+    mode,
+    setMode,
+    ordered,
+    setOrdered,
+    selection,
+    marginThreshold,
+    setMarginThreshold,
     stake,
     setStake,
     counts,
     tickCount,
     lockedMultiplier,
     lockedPick,
-    multiplier,
+    pricing,
+    spec,
+    selectionComplete,
     result,
     history,
     playError,
@@ -382,8 +471,8 @@ export function useDigitDerby() {
     lastConsumedTick,
     extractionKey,
     winningDigit,
-    selectDigit,
-    clearPick,
+    toggleDigit,
+    clearSelection,
     startRace,
     dismissResult,
   };

@@ -16,7 +16,7 @@ interface DigitRaceTrackProps {
   counts: DigitCounts;
   finishCount: number;
   finishOrder: number[];
-  lockedPick: number | null;
+  lockedPicks: number[];
   lastAdvancedDigit: number | null;
   winningDigit: number | null;
   finished: boolean;
@@ -27,15 +27,16 @@ interface DigitRaceTrackProps {
 export function DigitLeaderboardStrip({
   finishOrder,
   counts,
-  pick,
+  picks,
   statusLabel,
 }: {
   finishOrder: number[];
   counts: DigitCounts;
-  pick: number | null;
+  picks: number[];
   statusLabel: string;
 }) {
   const leaders = finishOrder.slice(0, 3);
+  const picksOutside = picks.filter((d) => !leaders.includes(d));
 
   return (
     <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto py-1.5">
@@ -43,7 +44,7 @@ export function DigitLeaderboardStrip({
         {statusLabel}
       </span>
       {leaders.map((digit, position) => {
-        const isPick = pick === digit;
+        const isPick = picks.includes(digit);
         return (
           <span
             key={digit}
@@ -64,20 +65,25 @@ export function DigitLeaderboardStrip({
           </span>
         );
       })}
-      {pick !== null && !leaders.includes(pick) ? (
+      {picksOutside.length > 0 ? (
         <>
           <span className="ml-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-            Your pick
+            Your picks
           </span>
-          <span className="flex shrink-0 items-center gap-1 rounded-full border border-border-prominent bg-primary/10 px-2 py-1 text-[10px] font-semibold tabular-nums text-on-prominent">
-            <span className="font-bold">#{finishOrder.indexOf(pick) + 1}</span>
+          {picksOutside.map((digit) => (
             <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: DIGIT_SILKS[pick] }}
-            />
-            <span>{pick}</span>
-            <span className="text-on-subtle">{counts[pick]}</span>
-          </span>
+              key={`pick-${digit}`}
+              className="flex shrink-0 items-center gap-1 rounded-full border border-border-prominent bg-primary/10 px-2 py-1 text-[10px] font-semibold tabular-nums text-on-prominent"
+            >
+              <span className="font-bold">#{finishOrder.indexOf(digit) + 1}</span>
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: DIGIT_SILKS[digit] }}
+              />
+              <span>{digit}</span>
+              <span className="text-on-subtle">{counts[digit]}</span>
+            </span>
+          ))}
         </>
       ) : null}
     </div>
@@ -88,7 +94,7 @@ export function DigitRaceTrack({
   counts,
   finishCount,
   finishOrder,
-  lockedPick,
+  lockedPicks,
   lastAdvancedDigit,
   winningDigit,
   finished,
@@ -99,6 +105,7 @@ export function DigitRaceTrack({
   const rankOf = new Map(finishOrder.map((digit, position) => [digit, position]));
   const leadCount = Math.max(0, ...counts);
   const toGo = Math.max(0, finishCount - leadCount);
+  const pickSet = new Set(lockedPicks);
 
   return (
     <div className={cn('relative flex h-full w-full flex-col', className)}>
@@ -112,10 +119,12 @@ export function DigitRaceTrack({
           <>
             Digit <span className="font-semibold text-on-prominent">{leader}</span> leads
             {toGo > 0 ? ` · ${toGo} to go` : ' · photo finish'}
-            {lockedPick !== null ? (
+            {lockedPicks.length > 0 ? (
               <span className="text-on-subtle">
-                {' — your pick '}
-                <span className="font-semibold text-on-prominent">{lockedPick}</span>
+                {' — ticket '}
+                <span className="font-semibold text-on-prominent">
+                  {lockedPicks.join(' · ')}
+                </span>
               </span>
             ) : null}
           </>
@@ -140,7 +149,7 @@ export function DigitRaceTrack({
 
         <div className="flex h-full flex-col">
           {Array.from({ length: DIGIT_COUNT }, (_, digit) => {
-            const isPicked = lockedPick === digit;
+            const isPicked = pickSet.has(digit);
             const rank = rankOf.get(digit) ?? digit;
             const isLeader = digit === leader;
             const isAdvanced = lastAdvancedDigit === digit;
