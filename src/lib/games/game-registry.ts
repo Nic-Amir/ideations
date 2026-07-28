@@ -165,6 +165,23 @@ export const GAMES: GameInfo[] = [
     track: 'other',
     iconKey: 'digit-derby',
   },
+  {
+    slug: 'synthetic-coupon',
+    name: 'Synthetic Coupon',
+    shortName: 'Coupon',
+    description:
+      'A synthetic bond in a fixed double-barrier corridor. Accrue a fixed-cash coupon each survived period — breach wipes the whole position. Cash out anytime for stake plus coupons.',
+    shortPitch: 'Accrue fixed coupons in the corridor. Cash out anytime — or lose it all on default.',
+    category: 'Survival',
+    risk: 'High',
+    sessionLength: '30 sec - 3 min',
+    mechanics:
+      'Stake equals notional. Enter a fixed corridor; each survived period T accrues a fixed-cash coupon on the position. Cash out anytime for stake plus accrued, or breach for a full wipe.',
+    marketSource: 'Client-side simulation',
+    status: 'Live',
+    track: 'other',
+    iconKey: 'synthetic-coupon',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

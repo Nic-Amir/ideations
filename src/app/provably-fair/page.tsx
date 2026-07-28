@@ -30,8 +30,8 @@ export default function ProvablyFairPage() {
           How Entropy Works
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
-          All games (except Volatility Plinko) use real-time tick data streamed
-          from the Deriv API. Each tick contains a financial quote (e.g.,{' '}
+          Digit and Crash games use real-time tick data streamed from the Deriv
+          API. Each tick contains a financial quote (e.g.,{' '}
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             6432.17
           </code>
@@ -45,6 +45,15 @@ export default function ProvablyFairPage() {
           uniformly distributed across 0–9, with each digit having a 10%
           probability. For Index Ascent, the index correction is the source of
           randomness.
+        </p>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Client-side simulation games (Volatility Plinko, Barrier Predictor /
+          Race / Touch, Synthetic Coupon, Synthetic Derby) generate paths with
+          driftless geometric Brownian motion and{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            crypto.getRandomValues()
+          </code>{' '}
+          — not Deriv last digits.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 font-display text-xs">
@@ -238,7 +247,7 @@ export default function ProvablyFairPage() {
           Game 4: Volatility Plinko
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
-          Unlike the other games, Volatility Plinko generates synthetic price
+          Unlike digit and Crash games, Volatility Plinko generates synthetic price
           paths client-side using Geometric Brownian Motion (GBM) with{' '}
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             crypto.getRandomValues()
@@ -249,6 +258,46 @@ export default function ProvablyFairPage() {
           <CardContent className="p-4 font-display text-xs text-on-subtle">
             <p>S(t+1) = S(t) × exp((μ − σ²/2)Δt + σ√(Δt) × Z)</p>
             <p className="mt-1">μ = 0 (no drift), σ = risk-dependent, Z = Box-Muller normal</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="heading-h3 font-display text-on-prominent">
+          Game 5: Synthetic Coupon
+        </h2>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          An open-ended corridor survival game. Stake equals notional inside a
+          fixed log-symmetric double barrier. Each survived period accrues a
+          fixed-cash coupon on the position. Cash out anytime (after the first
+          tick) for stake plus accrued coupons, or lose the whole position on
+          barrier breach.
+        </p>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Entropy is client-side driftless GBM with{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            crypto.getRandomValues()
+          </code>
+          , same family as Barrier Predictor. Coupon rate and corridor width
+          lock at entry so a one-period cash-out targets about a 2% house edge
+          (~98% RTP). Multi-period play with a fixed coupon compounds risk;
+          Monte Carlo tests validate the one-period anchor.
+        </p>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 text-xs text-on-subtle">
+            <p>
+              Money uses integer cents. Each round stores platform-shaped{' '}
+              <code className="text-on-prominent">locked_pricing</code> and{' '}
+              <code className="text-on-prominent">settlement_data</code> (status{' '}
+              <code className="text-on-prominent">WON</code> /{' '}
+              <code className="text-on-prominent">LOST</code>) for audit replay.
+            </p>
+            <p className="font-display">
+              C = k × stake · barriers from discrete no-touch first-passage ·
+              margin m ≈ 0.02
+            </p>
           </CardContent>
         </Card>
       </section>

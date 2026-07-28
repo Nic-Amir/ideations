@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideProps } from "lucide-react";
-import { Activity, ChevronsUpDown, Dice3, Flag, Hash, Repeat, Spade, Target, TrendingUp, Trophy } from "lucide-react";
+import { Activity, BadgePercent, ChevronsUpDown, Dice3, Flag, Hash, Repeat, Spade, Target, TrendingUp, Trophy } from "lucide-react";
 import type { GameIconKey } from "@/types";
 
 const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
@@ -15,6 +15,7 @@ const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
   "barrier-touch": Repeat,
   "synthetic-derby": Trophy,
   "digit-derby": Hash,
+  "synthetic-coupon": BadgePercent,
 };
 
 export function GameIcon({
