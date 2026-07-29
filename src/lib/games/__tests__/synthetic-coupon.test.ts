@@ -111,34 +111,44 @@ describe('round lifecycle', () => {
 });
 
 describe('cash-out gate', () => {
-  it('rejects cash-out before the first tick', () => {
-    const round = openCouponContract({
+  it('rejects cash-out before the first coupon', () => {
+    let round = openCouponContract({
       stakeUsdt: 10,
       entrySpot: 100_000,
       periodTicks: 10,
       distanceId: 'standard',
     });
+    const mid =
+      (round.contract.parameters.upper_barrier + round.contract.parameters.lower_barrier) / 2;
+    // Survived ticks but no coupon yet.
+    round = { ...round, prices: [...round.prices, mid, mid] };
     expect(canCashOutRound(round)).toBe(false);
     const rejected = settleCashOut(round);
     expect(rejected.contract.status).toBe('OPEN');
     expect(rejected.contract.settlement_data).toBeNull();
   });
 
-  it('allows cash-out after one survived tick', () => {
+  it('allows cash-out after the first coupon', () => {
     let state = openCouponContract({
       stakeUsdt: 10,
       entrySpot: 100_000,
       periodTicks: 10,
       distanceId: 'far',
     });
-    // Inject a safe in-corridor tick without GBM randomness.
     const mid =
       (state.contract.parameters.upper_barrier + state.contract.parameters.lower_barrier) / 2;
-    state = { ...state, prices: [...state.prices, mid] };
+    state = {
+      ...state,
+      prices: [...state.prices, mid],
+      accruedCents: state.contract.parameters.coupon_cents,
+      periodsCompleted: 1,
+    };
     expect(canCashOutRound(state)).toBe(true);
     const settled = settleCashOut(state);
     expect(settled.contract.status).toBe('WON');
-    expect(settled.contract.payout_amount).toBe(10);
+    expect(settled.contract.payout_amount).toBe(
+      centsToUsdt(1000 + state.contract.parameters.coupon_cents),
+    );
   });
 });
 

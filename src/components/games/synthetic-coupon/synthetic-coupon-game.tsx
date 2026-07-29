@@ -23,8 +23,8 @@ const INFO_SECTIONS: GameInfoSection[] = [
     content: (
       <p className="text-sm text-on-subtle">
         Stake into a fixed price corridor. Every survived period accrues a
-        fixed-cash coupon on your position. Cash out anytime for stake plus
-        coupons — or lose it all if price breaks a barrier.
+        fixed-cash coupon on your position. Cash out after the first coupon —
+        or lose it all if price breaks a barrier.
       </p>
     ),
   },
@@ -183,7 +183,7 @@ export function SyntheticCouponGame() {
     result?.outcome === 'cashed_out'
       ? `${result.periodsCompleted} coupon${result.periodsCompleted === 1 ? '' : 's'} · tick ${result.settleTick}`
       : `Broke ${result?.breachSide ?? 'a barrier'} on tick ${result?.settleTick ?? 0}`;
-  const cashOutHint = flying && !canCashOut ? 'Wait for the first tick' : null;
+  const cashOutHint = flying && !canCashOut ? 'Survive to the first coupon' : null;
 
   return (
     <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>

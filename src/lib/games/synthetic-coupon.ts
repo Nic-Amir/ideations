@@ -63,8 +63,8 @@ export const MAX_PATH_TICKS = 480;
 /** Soft horizon: auto cash-out if still alive (avoids unbounded sessions). */
 export const MAX_ROUND_TICKS = 360;
 export const PRICING_MODEL = 'synthetic_coupon_period_notouch_v1';
-/** Must survive at least one tick before cash-out (blocks free cancel). */
-export const MIN_TICKS_BEFORE_CASHOUT = 1;
+/** Must earn at least one coupon before cash-out (blocks free cancel + pre-coupon bail). */
+export const MIN_COUPONS_BEFORE_CASHOUT = 1;
 
 // --- Money (platform_standard §23.7) ----------------------------------------
 
@@ -313,7 +313,7 @@ export function ticksSurvived(state: CouponRoundState): number {
 export function canCashOutRound(state: CouponRoundState): boolean {
   return (
     state.contract.status === 'OPEN' &&
-    ticksSurvived(state) >= MIN_TICKS_BEFORE_CASHOUT
+    state.periodsCompleted >= MIN_COUPONS_BEFORE_CASHOUT
   );
 }
 
@@ -519,7 +519,7 @@ export function settleDefault(
 
 /**
  * Early cash-out: WON with payout = stake + accrued.
- * Rejects (returns unchanged) if still OPEN but below MIN_TICKS_BEFORE_CASHOUT,
+ * Rejects (returns unchanged) if still OPEN but before the first coupon,
  * unless `force` (auto horizon / shutdown).
  */
 export function settleCashOut(

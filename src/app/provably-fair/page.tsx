@@ -271,8 +271,8 @@ export default function ProvablyFairPage() {
         <p className="body-sm text-on-subtle leading-relaxed">
           An open-ended corridor survival game. Stake equals notional inside a
           fixed log-symmetric double barrier. Each survived period accrues a
-          fixed-cash coupon on the position. Cash out anytime (after the first
-          tick) for stake plus accrued coupons, or lose the whole position on
+          fixed-cash coupon on the position. Cash out after the first coupon
+          for stake plus accrued coupons, or lose the whole position on
           barrier breach.
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">

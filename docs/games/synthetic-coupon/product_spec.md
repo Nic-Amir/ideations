@@ -27,7 +27,7 @@
 
 **Default / Breach:** Price reaches or crosses U or L. Contract status → `LOST`; full position wipe.
 
-**Early Cash-Out:** Player settles while `OPEN`. Contract status → `WON`; `payout_amount` = stake + accrued (USDT).
+**Early Cash-Out:** Player settles while `OPEN` after at least one coupon. Contract status → `WON`; `payout_amount` = stake + accrued (USDT).
 
 **Entry Spot (S₀):** Synthetic price at placement. Barriers and pricing lock from S₀.
 
@@ -93,7 +93,7 @@ After each tick:
 2. Else if ticks since last coupon (or entry) reach `period_ticks` → accrue `C`, reset period counter  
 3. Else continue  
 
-Cash-out may occur between ticks while status is `OPEN`, after **at least one tick** has been survived (blocks free cancel at entry). Soft horizon: if still alive after `MAX_ROUND_TICKS` (360), the contract auto cash-outs (`WON`).
+Cash-out may occur between ticks while status is `OPEN`, after **at least one coupon** has accrued (blocks free cancel and pre-coupon bail). Soft horizon: if still alive after `MAX_ROUND_TICKS` (360), the contract auto cash-outs (`WON`).
 
 ### 4.4 Duration
 

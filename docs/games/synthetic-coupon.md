@@ -4,7 +4,7 @@ Locked product brief + playable ideations POC. Full mechanics and platform_stand
 
 ## Thesis
 
-Arcade-feel synthetic bond: stake enters a **price corridor** (double barrier). Survive each period `T` → accrue a **fixed-cash coupon**. Breach a barrier → **full position wipe**. Cash out anytime for stake + accrued coupons.
+Arcade-feel synthetic bond: stake enters a **price corridor** (double barrier). Survive each period `T` → accrue a **fixed-cash coupon**. Breach a barrier → **full position wipe**. Cash out after the first coupon for stake + accrued coupons.
 
 ## Locked structuring
 
@@ -13,7 +13,7 @@ Arcade-feel synthetic bond: stake enters a **price corridor** (double barrier). 
 | Notional vs stake | **Stake = notional** |
 | Coupon form | **Fixed cash per period** (`C = k × stake`) |
 | Default | **Full position wipe** |
-| Cash-out | **Anytime while alive after ≥1 tick** |
+| Cash-out | **After first coupon, then anytime while alive** |
 | Barrier style | **Fixed corridor from entry** |
 | Duration | **Open-ended** |
 
@@ -26,7 +26,7 @@ Coupons **accrue on the position** until cash-out. Contract statuses follow plat
 - Spec: `docs/games/synthetic-coupon/product_spec.md`
 - Fairness write-up: [`/provably-fair`](/provably-fair) (Game 5: Synthetic Coupon)
 
-Cash-out is allowed anytime after the first survived tick. Soft horizon auto cash-outs at 360 ticks.
+Cash-out is allowed after the first coupon accrues (then anytime while alive). Soft horizon auto cash-outs at 360 ticks.
 
 ## Platform standard (in mind)
 
