@@ -5,7 +5,7 @@ import { normalizePipSize } from '@/types';
 import {
   MOCK_TICK_INTERVAL_MS,
   seedQuoteForSymbol,
-  nextMockQuote,
+  nextMockQuoteForSymbol,
   buildMockTickPayload,
 } from '@/lib/deriv/mock-tick';
 
@@ -289,7 +289,7 @@ export class DerivClient {
 
   private emitMockTick(symbol: string): void {
     const prev = this.mockQuotes.get(symbol) ?? seedQuoteForSymbol(symbol);
-    const quote = nextMockQuote(prev);
+    const quote = nextMockQuoteForSymbol(symbol, prev);
     this.mockQuotes.set(symbol, parseFloat(quote));
     this.handleTick(buildMockTickPayload(symbol, quote));
   }
