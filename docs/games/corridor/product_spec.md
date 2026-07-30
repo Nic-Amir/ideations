@@ -190,14 +190,17 @@ On settle, emit `CONTRACT_SETTLED` with `outcome` `WON`/`LOST`, stake/payout in 
 ## 8. Frontend (platform_standard §25 + product)
 
 - Mobile-first column; sentence case  
-- Hero: **corridor path chart** with fixed U/L guides; **Inside / Outside tap zones on the chart** carrying live multipliers  
-- Duration + distance pickers under the board  
-- One gesture: tap a zone on the board → path runs → settle  
-- Running: tick progress bar + countdown; zones hidden  
+- Hero: **corridor path chart** (visual metaphor only — barriers + path)  
+- Equal pick cards — **Inside** (“Stay between barriers”) / **Outside** (“Touch either barrier”) with live multipliers  
+- Do **not** map Outside to top vs bottom chart bands (that reads as two bets)  
+- Duration + distance pickers under the picks  
+- One gesture: tap a pick card → path runs → settle  
+- Running: tick progress bar + countdown; picks hidden  
 - Result overlay + particles / sound (Box-O / Barrier Predictor spirit)  
 - Side colors are product sides (not win/loss); reserve semantic win/loss for settle and barrier flash  
 - Design tokens only (no hardcoded hex)  
-- **Do not** present primary CTA as “Buy Stay In / Buy Goes Out” under a chart---
+
+---
 
 ## 9. Ideations ↔ Mesh mapping
 

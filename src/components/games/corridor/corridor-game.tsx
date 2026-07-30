@@ -7,6 +7,7 @@ import { StakeDock } from '@/components/games/shared/stake-dock';
 import { ResultOverlay } from '@/components/games/shared/result-overlay';
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 import { CorridorChart } from '@/components/games/corridor/corridor-chart';
+import { CorridorPickStrip } from '@/components/games/corridor/corridor-pick-strip';
 import { useCorridor } from '@/hooks/use-corridor';
 import {
   DISTANCE_PRESETS,
@@ -24,9 +25,9 @@ const INFO_SECTIONS: GameInfoSection[] = [
     label: 'How it works',
     content: (
       <p className="text-sm text-on-subtle">
-        Price moves inside a fixed corridor for T ticks. Tap the Inside band if
-        you think it stays between the barriers. Tap Outside if you think it
-        touches either barrier first. Multipliers lock when you tap.
+        The chart shows a fixed price corridor. Tap Inside to bet the path stays
+        between both barriers for all ticks. Tap Outside to bet it touches either
+        barrier (above or below) first. Multipliers lock when you tap.
       </p>
     ),
   },
@@ -37,12 +38,12 @@ const INFO_SECTIONS: GameInfoSection[] = [
       <div className="space-y-2 text-sm text-on-subtle">
         <p>
           <span className="font-semibold text-on-prominent">Inside</span> wins
-          only if neither barrier is touched for the full duration. No-touch is
-          a win — not a refund.
+          only if neither barrier is touched for the full duration.
         </p>
         <p>
           <span className="font-semibold text-on-prominent">Outside</span> wins
-          on the first tick that reaches the upper or lower barrier.
+          on the first tick that reaches the upper or lower barrier — one side,
+          not two separate bets.
         </p>
         <p>There is no mid-path cash-out.</p>
       </div>
@@ -148,7 +149,7 @@ function SessionStrip({
   if (n === 0) {
     return (
       <p className="px-4 py-2 text-center text-xs text-on-subtle">
-        Stay in / Goes out — tap a zone on the board
+        Stay in / Goes out — tap Inside or Outside
       </p>
     );
   }
@@ -254,7 +255,7 @@ export function CorridorGame() {
               </div>
             ) : null}
 
-            <div className="relative mx-3 mt-2 min-h-[260px] flex-1 overflow-hidden rounded-xl border border-border-subtle bg-subtle/30">
+            <div className="relative mx-3 mt-2 min-h-[200px] flex-1 overflow-hidden rounded-xl border border-border-subtle bg-subtle/30">
               <CorridorChart
                 path={path}
                 visibleTick={visibleTick}
@@ -264,13 +265,6 @@ export function CorridorGame() {
                 entrySpot={entrySpot}
                 barrierFlash={barrierFlash}
                 touched={path?.touched ?? null}
-                interactive={idle}
-                canTrade={canTrade}
-                multStay={pricing.multStay}
-                multGoes={pricing.multGoes}
-                payoutStay={payoutStay}
-                payoutGoes={payoutGoes}
-                onTap={(side) => startRound(side)}
                 progress={progress}
                 pick={pick}
               />
@@ -289,6 +283,14 @@ export function CorridorGame() {
             <div className="shrink-0 space-y-2 p-4 pt-3">
               {idle ? (
                 <>
+                  <CorridorPickStrip
+                    multStay={pricing.multStay}
+                    multGoes={pricing.multGoes}
+                    payoutStay={payoutStay}
+                    payoutGoes={payoutGoes}
+                    canTrade={canTrade}
+                    onTap={(side) => startRound(side)}
+                  />
                   <div className="flex gap-2">
                     <DurationPicker ticks={ticks} onChange={setTicks} disabled={!canTrade} />
                     <DistancePicker
@@ -316,7 +318,7 @@ export function CorridorGame() {
             stakeDisabled={running || settled}
             footer={
               idle
-                ? 'Tap Inside or Outside on the board'
+                ? 'Outside wins if price hits either barrier'
                 : running
                   ? 'Round in progress'
                   : undefined
