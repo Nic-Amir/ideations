@@ -13,12 +13,9 @@ import {
   CORRIDOR_CONFIG,
   CORRIDOR_TICK_MS,
   CORRIDOR_SETTLE_MS,
-  DURATION_OPTIONS,
   IDLE_TICK_MS,
   PREVIEW_WINDOW,
-  centsToUsdt,
   getCorridorPricing,
-  getDistancePreset,
   nextIdleTick,
   openCorridorContract,
   settleCorridorContract,
@@ -94,15 +91,6 @@ export function useCorridor() {
     [ticks, distanceId],
   );
 
-  /** Live pricing for every duration column on the board. */
-  const columnPricing = useMemo(() => {
-    const map = {} as Record<DurationTicks, CorridorPricingView>;
-    for (const t of DURATION_OPTIONS) {
-      map[t] = getCorridorPricing(t, distanceId);
-    }
-    return map;
-  }, [distanceId]);
-
   const spot = previewPrices[previewPrices.length - 1];
   const idleBarriers = useMemo(
     () => ({
@@ -138,17 +126,12 @@ export function useCorridor() {
   }, [phase]);
 
   const startRound = useCallback(
-    (selected: CorridorPick, duration?: DurationTicks) => {
+    (selected: CorridorPick) => {
       if (phaseRef.current !== 'idle') return;
 
       setPlayError(null);
       setResult(null);
       setBarrierFlash(false);
-
-      const useTicks = duration ?? ticks;
-      if (duration !== undefined && duration !== ticks) {
-        setTicksState(duration);
-      }
 
       const currentStake = stakeRef.current;
       if (currentStake > balance || currentStake < 10) {
@@ -167,7 +150,7 @@ export function useCorridor() {
       const round = openCorridorContract({
         stakeUsdt: currentStake,
         pick: selected,
-        ticks: useTicks,
+        ticks,
         distanceId,
         entrySpot: spotRef.current,
       });
@@ -302,13 +285,6 @@ export function useCorridor() {
   const ticksLeft =
     phase === 'running' && path ? Math.max(path.settleTick - visibleTick, 0) : null;
 
-  const potentialPayoutStay = centsToUsdt(
-    Math.floor(Math.round(stake * 100) * pricing.multStay),
-  );
-  const potentialPayoutGoes = centsToUsdt(
-    Math.floor(Math.round(stake * 100) * pricing.multGoes),
-  );
-
   return {
     stake,
     setStake,
@@ -328,14 +304,10 @@ export function useCorridor() {
     maxStake,
     canTrade,
     pricing,
-    columnPricing,
     spot,
     idleBarriers,
     previewPrices,
     ticksLeft,
-    potentialPayoutStay,
-    potentialPayoutGoes,
-    distanceFactor: getDistancePreset(distanceId).factor,
     startRound,
     dismissResult,
     playAgain,

@@ -44,12 +44,19 @@ export const CORRIDOR_CONFIG: CorridorConfig = {
 export const DURATION_OPTIONS = [5, 10, 15] as const;
 export type DurationTicks = (typeof DURATION_OPTIONS)[number];
 
+/**
+ * Reference duration used to fix corridor width. Barriers calibrate so
+ * P(touch) ≈ 0.5 at Standard for this T; other durations keep the same
+ * width so longer T makes Goes easier / Stay harder.
+ */
+export const REF_TICKS = 10;
+
 export type DistancePresetId = 'near' | 'standard' | 'far';
 
 export interface DistancePreset {
   id: DistancePresetId;
   label: string;
-  /** Multiple of calibrated offset where P(touch) ≈ 0.5 at 1.0. */
+  /** Multiple of calibrated offset at REF_TICKS where P(touch) ≈ 0.5 at 1.0. */
   factor: number;
   tag: string;
 }
@@ -152,8 +159,8 @@ export function getCorridorPricing(
 
   const preset = getDistancePreset(distanceId);
   const mu = perTickDriftSigma(config);
-  // Match Barrier Predictor σ/√dt units for calibratedOffsetSigma / noTouchProbability.
-  const offsetSigma = calibratedOffsetSigma(ticks, mu) * preset.factor;
+  // Fixed corridor width: calibrate at REF_TICKS, then price first-passage over player T.
+  const offsetSigma = calibratedOffsetSigma(REF_TICKS, mu) * preset.factor;
   const pStay = noTouchProbability(offsetSigma, ticks, mu);
   const pGoes = 1 - pStay;
   const m = config.margin;

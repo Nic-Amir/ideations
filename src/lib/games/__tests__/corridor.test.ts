@@ -46,12 +46,23 @@ describe('pricing', () => {
     expect(locked.barrier_offset_log).toBeGreaterThan(0);
   });
 
-  it('calibrates standard distance near 50/50 Stay vs Goes', () => {
-    for (const ticks of DURATION_OPTIONS) {
-      const view = getCorridorPricing(ticks, 'standard');
-      expect(view.pStay).toBeCloseTo(0.5, 2);
-      expect(view.pGoes).toBeCloseTo(0.5, 2);
-    }
+  it('calibrates standard distance near 50/50 only at REF_TICKS', () => {
+    const atRef = getCorridorPricing(10, 'standard');
+    expect(atRef.pStay).toBeCloseTo(0.5, 2);
+    expect(atRef.pGoes).toBeCloseTo(0.5, 2);
+  });
+
+  it('keeps fixed corridor width across durations; longer T lowers pStay', () => {
+    const short = getCorridorPricing(5, 'standard');
+    const mid = getCorridorPricing(10, 'standard');
+    const long = getCorridorPricing(15, 'standard');
+
+    expect(short.offsetSigma).toBeCloseTo(mid.offsetSigma, 10);
+    expect(mid.offsetSigma).toBeCloseTo(long.offsetSigma, 10);
+    expect(short.pStay).toBeGreaterThan(mid.pStay);
+    expect(mid.pStay).toBeGreaterThan(long.pStay);
+    expect(short.multStay).toBeLessThan(long.multStay);
+    expect(short.multGoes).toBeGreaterThan(long.multGoes);
   });
 
   it('moves Stay/Goes odds in opposite directions with distance presets', () => {

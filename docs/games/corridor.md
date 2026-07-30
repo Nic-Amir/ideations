@@ -4,7 +4,7 @@ Locked product brief + playable ideations POC. Full mechanics and platform_stand
 
 ## Thesis
 
-Corridor is a fixed-duration double-barrier arcade: stake a notional, tap **Inside** or **Outside** on a scrolling time-strip column, and win if price stays between log-symmetric barriers for all `T` ticks (Stay in) or touches either barrier within `T` (Goes out). Fair odds come from Barrier Predictor’s discrete `noTouchProbability`; multipliers lock at place with house margin; no mid-path cash-out. Feel is Box-O DNA (spatial tap, live mults on the board, one gesture, settle FX) — not a trading-terminal binary form.
+Corridor is a fixed-duration double-barrier arcade: stake a notional, tap **Inside** or **Outside** under a corridor chart, and win if price stays between log-symmetric barriers for all `T` ticks (Stay in) or touches either barrier within `T` (Goes out). Fair odds come from Barrier Predictor’s discrete `noTouchProbability` on a fixed corridor width; multipliers lock at place with house margin; no mid-path cash-out. Feel is Box-O DNA (spatial tap, live mults on the board, one gesture, settle FX) — not a trading-terminal binary form.
 
 ## Locked structuring
 

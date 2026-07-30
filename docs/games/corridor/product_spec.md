@@ -104,12 +104,12 @@ Fixed maturity `T` ticks. Player selects from `{5, 10, 15}`.
 
 ### 4.5 Distance presets
 
-Barrier width is a multiple of the calibrated offset where P(touch) ≈ 0.5 at factor 1.0 (same family as Barrier Predictor):
+Barrier width is fixed for a distance preset: calibrate so P(touch) ≈ 0.5 at **reference T = 10** and factor 1.0, then apply the distance factor. Duration does **not** re-widen the corridor — longer T makes Stay harder / Goes easier at the same width.
 
 | Preset | Factor | Effect |
 | --- | --- | --- |
 | Near | 0.75 | Tighter corridor → Stay harder, Goes easier |
-| Standard | 1.0 | Balanced |
+| Standard | 1.0 | Balanced (~50/50 at T = 10) |
 | Far | 1.4 | Wider corridor → Stay easier, Goes harder |
 
 ---
@@ -119,12 +119,12 @@ Barrier width is a multiple of the calibrated offset where P(touch) ≈ 0.5 at f
 ### 5.1 Fair probabilities
 
 ```
-p_stay = noTouchProbability(offsetSigma, T)   // discrete first-passage grid
+offsetSigma = calibratedOffsetSigma(REF_TICKS=10) × distanceFactor
+p_stay = noTouchProbability(offsetSigma, T)   // discrete first-passage over player T
 p_goes = 1 − p_stay
 ```
 
-`offsetSigma = calibratedOffsetSigma(T) × distanceFactor`, with per-tick drift μ in σ units matching the GBM settlement loop (Barrier Predictor family).
-
+Per-tick drift μ in σ units matches the GBM settlement loop (Barrier Predictor family). Same `offsetSigma` for all T at a given distance; only the first-passage horizon `T` changes odds.
 ### 5.2 Multipliers
 
 Platform margin `m` (default **0.03**):
@@ -190,14 +190,14 @@ On settle, emit `CONTRACT_SETTLED` with `outcome` `WON`/`LOST`, stake/payout in 
 ## 8. Frontend (platform_standard §25 + product)
 
 - Mobile-first column; sentence case  
-- Hero: scrolling **time strip** — columns = future windows; each has Inside / Outside tap targets with **live multipliers**  
-- Stake dock + duration / distance controls  
-- One gesture: tap zone → path runs → settle  
+- Hero: **corridor path chart** with fixed U/L guides; **Inside / Outside tap zones on the chart** carrying live multipliers  
+- Duration + distance pickers under the board  
+- One gesture: tap a zone on the board → path runs → settle  
+- Running: tick progress bar + countdown; zones hidden  
 - Result overlay + particles / sound (Box-O / Barrier Predictor spirit)  
+- Side colors are product sides (not win/loss); reserve semantic win/loss for settle and barrier flash  
 - Design tokens only (no hardcoded hex)  
-- **Do not** present primary CTA as “Buy Stay In / Buy Goes Out” under a chart
-
----
+- **Do not** present primary CTA as “Buy Stay In / Buy Goes Out” under a chart---
 
 ## 9. Ideations ↔ Mesh mapping
 
