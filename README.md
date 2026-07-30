@@ -7,7 +7,7 @@ A proof-of-concept web application that reimagines gambling as a market-driven e
 - **Index Ascent** — Ride live Deriv Crash synthetic indices (Crash 50/150/300) as they ascend tick by tick. Return builds with geometric pricing (98% RTP); exit before the index corrects.
 - **Digit Collect** — Crash/chicken-out game. Collect unique digits (0–9) from live ticks. Cash out before a duplicate knocks you out.
 - **Digit Poker** — Video poker with digits. 5-digit hands dealt from live ticks. Hold/draw mechanics with a pay table.
-- **Digit Slots** — 3-reel slot machine. Each reel stopped by a live tick. Includes gamble (double-or-nothing) feature.
+- **Digit Slots** — 3×3 live-digit slot. One feed per row (fills in parallel), eight additive paylines, optional double-or-nothing gamble.
 - **Volatility Plinko** — Plinko board driven by GBM-generated volatility quotes. Choose Low/Medium/High risk.
 
 ## Tech Stack

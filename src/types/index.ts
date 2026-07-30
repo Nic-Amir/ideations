@@ -122,6 +122,60 @@ export interface SlotResult {
   digits: [number, number, number];
 }
 
+export type PaylineId =
+  | 'row0'
+  | 'row1'
+  | 'row2'
+  | 'col0'
+  | 'col1'
+  | 'col2'
+  | 'diagMain'
+  | 'diagAnti';
+
+export interface LineResult {
+  paylineId: PaylineId;
+  paylineName: string;
+  indices: [number, number, number];
+  digits: [number, number, number];
+  outcome: SlotOutcome;
+  outcomeLabel: string;
+  multiplier: number;
+  payout: number;
+}
+
+export type SlotGridDigits = [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+export type SlotGridCells = [
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+];
+
+export type SlotRowSymbols = [DerivSymbol, DerivSymbol, DerivSymbol];
+
+export interface GridSpinResult {
+  grid: SlotGridDigits;
+  lines: LineResult[];
+  totalPayout: number;
+  totalMultiplier: number;
+}
+
 export type GameIconKey =
   | 'index-ascent'
   | 'digit-collect'

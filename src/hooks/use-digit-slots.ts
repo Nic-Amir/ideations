@@ -1,11 +1,23 @@
 'use client';
 
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
-import { evaluateSpin, resolveGamble } from '@/lib/games/digit-slots';
-import type { SlotResult, ParsedTick, DigitSlotsPhase } from '@/types';
+import {
+  CELL_COUNT,
+  evaluateGrid,
+  GRID_SIZE,
+  assignRowSymbol,
+  resolveGamble,
+} from '@/lib/games/digit-slots';
+import type {
+  DerivSymbol,
+  DigitSlotsPhase,
+  GridSpinResult,
+  ParsedTick,
+  SlotGridCells,
+  SlotRowSymbols,
+} from '@/types';
 
 // ---------------------------------------------------------------------------
 // State
@@ -20,8 +32,8 @@ export interface SlotSession {
 export interface SlotState {
   phase: DigitSlotsPhase;
   stake: number;
-  reels: [number | null, number | null, number | null];
-  result: SlotResult | null;
+  grid: SlotGridCells;
+  result: GridSpinResult | null;
   bank: number;
   gambleRound: number;
   gambleDigit: number | null;
@@ -35,8 +47,8 @@ export interface SlotState {
 
 type SlotAction =
   | { type: 'SPIN' }
-  | { type: 'REEL_LAND'; index: number; digit: number }
-  | { type: 'SPIN_COMPLETE'; result: SlotResult; bank: number }
+  | { type: 'CELL_LAND'; index: number; digit: number }
+  | { type: 'SPIN_COMPLETE'; result: GridSpinResult; bank: number }
   | { type: 'GAMBLE' }
   | { type: 'GAMBLE_WON'; digit: number; newBank: number }
   | { type: 'GAMBLE_LOST'; digit: number }
@@ -54,10 +66,14 @@ type SlotAction =
 // Initial state
 // ---------------------------------------------------------------------------
 
+const EMPTY_GRID: SlotGridCells = [null, null, null, null, null, null, null, null, null];
+
+export const DEFAULT_ROW_SYMBOLS: SlotRowSymbols = ['1HZ100V', '1HZ75V', '1HZ50V'];
+
 const INITIAL_STATE: SlotState = {
   phase: 'idle',
   stake: 100,
-  reels: [null, null, null],
+  grid: EMPTY_GRID,
   result: null,
   bank: 0,
   gambleRound: 0,
@@ -89,7 +105,7 @@ function slotReducer(state: SlotState, action: SlotAction): SlotState {
       return {
         ...state,
         phase: 'spinning',
-        reels: [null, null, null],
+        grid: EMPTY_GRID,
         result: null,
         bank: 0,
         gambleRound: 0,
@@ -98,11 +114,12 @@ function slotReducer(state: SlotState, action: SlotAction): SlotState {
       };
     }
 
-    case 'REEL_LAND': {
+    case 'CELL_LAND': {
       if (state.phase !== 'spinning') return state;
-      const reels = [...state.reels] as [number | null, number | null, number | null];
-      reels[action.index] = action.digit;
-      return { ...state, reels };
+      if (action.index < 0 || action.index >= CELL_COUNT) return state;
+      const grid = [...state.grid] as SlotGridCells;
+      grid[action.index] = action.digit;
+      return { ...state, grid };
     }
 
     case 'SPIN_COMPLETE': {
@@ -163,10 +180,7 @@ function slotReducer(state: SlotState, action: SlotAction): SlotState {
     }
 
     case 'STOP_SESSION': {
-      if (
-        state.phase !== 'awaitingResume' &&
-        state.phase !== 'result'
-      ) {
+      if (state.phase !== 'awaitingResume' && state.phase !== 'result') {
         return state;
       }
       return { ...state, phase: 'sessionComplete' };
@@ -220,10 +234,16 @@ const MAX_GAMBLE_ROUNDS = 5;
 const AUTO_CONTINUE_DELAY_MS = 1_500;
 
 export function useDigitSlots() {
-  const { selectedIndex } = useSettingsStore();
   const { balance, placeBet, addWinnings } = useBalanceStore();
-  const { ticks } = useTickStream(selectedIndex);
-  const getNextTick = useNextTick(selectedIndex);
+  const [rowSymbols, setRowSymbolsState] = useState<SlotRowSymbols>(DEFAULT_ROW_SYMBOLS);
+
+  // Three independent feeds — one per row. Gamble uses row 0.
+  const getNextTick0 = useNextTick(rowSymbols[0]);
+  const getNextTick1 = useNextTick(rowSymbols[1]);
+  const getNextTick2 = useNextTick(rowSymbols[2]);
+  const nextTickByRow = [getNextTick0, getNextTick1, getNextTick2] as const;
+
+  const { ticks } = useTickStream(rowSymbols[0]);
 
   const [state, dispatch] = useReducer(slotReducer, INITIAL_STATE);
 
@@ -234,22 +254,20 @@ export function useDigitSlots() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  const nextTickByRowRef = useRef(nextTickByRow);
+  nextTickByRowRef.current = nextTickByRow;
+
   const spinningRef = useRef(false);
 
-  // -- helpers ---------------------------------------------------------------
+  const setRowSymbol = useCallback((row: number, symbol: DerivSymbol) => {
+    setRowSymbolsState((prev) => assignRowSymbol(prev, row, symbol));
+  }, []);
 
-  const consumeTick = useCallback(
-    async () => {
-      const tick = await getNextTick();
-      setLastConsumedTick(tick);
-      setExtractionKey((k) => k + 1);
-      setHighlightedTicks((prev) => [...prev, tick]);
-      return tick;
-    },
-    [getNextTick],
-  );
-
-  // -- performSpin -----------------------------------------------------------
+  const recordTick = useCallback((tick: ParsedTick) => {
+    setLastConsumedTick(tick);
+    setExtractionKey((k) => k + 1);
+    setHighlightedTicks((prev) => [...prev, tick]);
+  }, []);
 
   const performSpin = useCallback(async () => {
     if (spinningRef.current) return;
@@ -280,27 +298,37 @@ export function useDigitSlots() {
     dispatch({ type: 'SPIN' });
     setHighlightedTicks([]);
 
-    try {
-      const digits: number[] = [];
-      for (let i = 0; i < 3; i++) {
-        const tick = await consumeTick();
-        digits.push(tick.lastDigit);
-        dispatch({ type: 'REEL_LAND', index: i, digit: tick.lastDigit });
-      }
+    const stake = s.stake;
+    const getters = nextTickByRowRef.current;
+    const digits: number[] = new Array(CELL_COUNT).fill(-1);
 
-      const result = evaluateSpin(digits[0], digits[1], digits[2]);
-      const bank = result.multiplier > 0 ? s.stake * result.multiplier : 0;
+    try {
+      // Fill each row in parallel: 3 sequential ticks per row feed (~3s wall clock).
+      await Promise.all(
+        [0, 1, 2].map(async (row) => {
+          const getNext = getters[row];
+          for (let col = 0; col < GRID_SIZE; col++) {
+            const tick = await getNext();
+            recordTick(tick);
+            const index = row * GRID_SIZE + col;
+            digits[index] = tick.lastDigit;
+            dispatch({ type: 'CELL_LAND', index, digit: tick.lastDigit });
+          }
+        }),
+      );
+
+      const result = evaluateGrid(digits, stake);
+      const bank = result.totalPayout > 0 ? result.totalPayout : 0;
       dispatch({ type: 'SPIN_COMPLETE', result, bank });
     } catch {
-      addWinnings(s.stake);
+      addWinnings(stake);
       dispatch({ type: 'ERROR', message: 'Connection issue — check your stream and try again.' });
     } finally {
       spinningRef.current = false;
     }
-  }, [placeBet, addWinnings, consumeTick]);
+  }, [placeBet, addWinnings, recordTick]);
 
-  // -- performGamble ---------------------------------------------------------
-
+  /** Gamble resolves on the next tick from row 0's feed. */
   const performGamble = useCallback(async () => {
     const s = stateRef.current;
     if (s.phase !== 'result' && s.phase !== 'gambleWon') return;
@@ -309,7 +337,8 @@ export function useDigitSlots() {
     dispatch({ type: 'GAMBLE' });
 
     try {
-      const tick = await consumeTick();
+      const tick = await nextTickByRowRef.current[0]();
+      recordTick(tick);
       const digit = tick.lastDigit;
       const won = resolveGamble(digit);
 
@@ -321,9 +350,7 @@ export function useDigitSlots() {
     } catch {
       dispatch({ type: 'ERROR', message: 'Connection issue — try again.' });
     }
-  }, [consumeTick]);
-
-  // -- cashOut ---------------------------------------------------------------
+  }, [recordTick]);
 
   const cashOut = useCallback(() => {
     const s = stateRef.current;
@@ -333,8 +360,6 @@ export function useDigitSlots() {
     }
     dispatch({ type: 'CASH_OUT' });
   }, [addWinnings]);
-
-  // -- session controls ------------------------------------------------------
 
   const startSession = useCallback(
     (total: number) => {
@@ -356,20 +381,15 @@ export function useDigitSlots() {
     dispatch({ type: 'DISMISS' });
   }, []);
 
-  // -- simple dispatchers ----------------------------------------------------
-
   const setStake = useCallback((value: number) => {
     dispatch({ type: 'SET_STAKE', value });
   }, []);
-
-  // -- auto-continue on loss during session ----------------------------------
 
   useEffect(() => {
     const { phase, session, result } = stateRef.current;
     if (!session) return;
 
-    const isLossInSession =
-      phase === 'result' && (result?.multiplier ?? 0) <= 0;
+    const isLossInSession = phase === 'result' && (result?.totalMultiplier ?? 0) <= 0;
 
     if (!isLossInSession) return;
 
@@ -385,15 +405,11 @@ export function useDigitSlots() {
     return () => clearTimeout(timer);
   }, [state.phase, state.session?.completed, performSpin]);
 
-  // -- auto-transition gambleLost → awaitingResume in session ----------------
-
   useEffect(() => {
     if (state.phase === 'gambleLost' && state.session) {
       dispatch({ type: 'SESSION_PAUSE' });
     }
   }, [state.phase, state.session]);
-
-  // -- auto-start first spin when session is created -------------------------
 
   const prevSessionRef = useRef<SlotSession | null>(null);
   useEffect(() => {
@@ -406,6 +422,8 @@ export function useDigitSlots() {
   return {
     state,
     balance,
+    rowSymbols,
+    setRowSymbol,
     performSpin,
     performGamble,
     cashOut,

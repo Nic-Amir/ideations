@@ -57,12 +57,13 @@ export const GAMES: GameInfo[] = [
     name: 'Digit Slots',
     shortName: 'Slots',
     description:
-      'A 3-reel slot powered by live-market digits, with autoplay and an optional double-or-nothing round.',
-    shortPitch: 'Spin three live digits. Collect or gamble the win.',
+      'A 3×3 live-digit slot with one market feed per row, eight additive paylines, autoplay, and an optional double-or-nothing round.',
+    shortPitch: 'Fill a 3×3 from three feeds. Collect multi-line wins or gamble.',
     category: 'Arcade',
     risk: 'Medium',
     sessionLength: '10-45 sec',
-    mechanics: 'Spin three live digits, evaluate the line, then collect or gamble.',
+    mechanics:
+      'Pick three distinct feeds, fill a 3×3 in parallel, evaluate eight paylines, then collect or gamble.',
     marketSource: 'Deriv live ticks',
     status: 'Live',
     track: 'other',

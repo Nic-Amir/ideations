@@ -216,8 +216,14 @@ export default function ProvablyFairPage() {
           Game 3: Digit Slots
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
-          3-reel slot machine. Each reel stopped by a live tick&apos;s last digit.
-          Calibrated pay table targeting ~95.5% RTP.
+          3×3 grid. Each row is filled by three sequential ticks from its own
+          chosen Deriv symbol (rows fill in parallel). Eight paylines settle
+          additively (3 rows + 3 columns + 2 diagonals); each line stakes{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            stake/8
+          </code>
+          . Per-line pay table targets ~95.5% RTP; linearity of expectation keeps
+          full-grid RTP at the same level.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 space-y-1 text-xs">

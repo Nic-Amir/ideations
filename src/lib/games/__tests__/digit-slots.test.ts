@@ -1,5 +1,16 @@
 import { describe, test, expect } from 'vitest';
-import { evaluateSpin, isSequential, resolveGamble, getSlotPayTable } from '../digit-slots';
+import {
+  CELL_COUNT,
+  evaluateGrid,
+  evaluateSpin,
+  getHittingLines,
+  getPaylines,
+  getSlotPayTable,
+  isSequential,
+  PAYLINE_COUNT,
+  resolveGamble,
+  assignRowSymbol,
+} from '../digit-slots';
 
 describe('Digit Slots Engine', () => {
   test('777 is jackpot', () => {
@@ -53,6 +64,11 @@ describe('Digit Slots Engine', () => {
     expect(getSlotPayTable()).toHaveLength(5);
   });
 
+  test('exposes 8 paylines on a 3x3 grid', () => {
+    expect(getPaylines()).toHaveLength(PAYLINE_COUNT);
+    expect(CELL_COUNT).toBe(9);
+  });
+
   test('brute-force outcome counts match expected probabilities', () => {
     const counts: Record<string, number> = {
       triple_seven: 0,
@@ -77,7 +93,7 @@ describe('Digit Slots Engine', () => {
     expect(counts.none).toBe(660);
   });
 
-  test('brute-force RTP is approximately 95.5%', () => {
+  test('brute-force single-line RTP is approximately 95.5%', () => {
     let totalPayout = 0;
     const totalOutcomes = 1000;
 
@@ -92,5 +108,58 @@ describe('Digit Slots Engine', () => {
     const rtp = totalPayout / totalOutcomes;
     expect(rtp).toBeGreaterThan(0.94);
     expect(rtp).toBeLessThan(0.97);
+  });
+
+  test('evaluateGrid sums additive paylines with line stake stake/8', () => {
+    // All sevens: every payline is jackpot 100x
+    const grid = [7, 7, 7, 7, 7, 7, 7, 7, 7];
+    const stake = 80;
+    const result = evaluateGrid(grid, stake);
+    expect(result.lines).toHaveLength(8);
+    expect(result.lines.every((l) => l.outcome === 'triple_seven')).toBe(true);
+    // lineStake=10; each of 8 lines pays 10×100 → total 8000 = stake×100
+    expect(result.totalPayout).toBe(stake * 100);
+    expect(result.totalMultiplier).toBe(100);
+  });
+
+  test('evaluateGrid pays only hitting lines', () => {
+    // Row0 pair (1,1,2), rest no pattern overlap carefully:
+    // [1,1,2, 3,4,5, 6,8,0]
+    // row0: pair 1 → 2x
+    // row1: sequential 3,4,5 → 3x
+    // row2: none
+    // col0: 1,3,6 none
+    // col1: 1,4,8 none
+    // col2: 2,5,0 none
+    // diag: 1,4,0 none
+    // anti: 2,4,6 none
+    const grid = [1, 1, 2, 3, 4, 5, 6, 8, 0];
+    const stake = 80;
+    const result = evaluateGrid(grid, stake);
+    const hits = getHittingLines(result);
+    expect(hits.map((h) => h.paylineId).sort()).toEqual(['row0', 'row1']);
+    expect(result.totalPayout).toBe(10 * 2 + 10 * 3); // 50
+    expect(result.totalMultiplier).toBeCloseTo(50 / 80);
+  });
+
+  test('Monte Carlo grid RTP stays near 95.5% (linearity of expectation)', () => {
+    const stake = 80;
+    const samples = 40_000;
+    let totalReturn = 0;
+
+    for (let i = 0; i < samples; i++) {
+      const digits = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10));
+      totalReturn += evaluateGrid(digits, stake).totalPayout;
+    }
+
+    const rtp = totalReturn / (samples * stake);
+    expect(rtp).toBeGreaterThan(0.93);
+    expect(rtp).toBeLessThan(0.98);
+  });
+
+  test('assignRowSymbol swaps when the symbol is already used', () => {
+    const current: [string, string, string] = ['1HZ100V', '1HZ75V', '1HZ50V'];
+    expect(assignRowSymbol(current, 0, '1HZ50V')).toEqual(['1HZ50V', '1HZ75V', '1HZ100V']);
+    expect(assignRowSymbol(current, 1, '1HZ75V')).toEqual(current);
   });
 });
