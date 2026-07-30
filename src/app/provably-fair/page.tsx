@@ -222,8 +222,8 @@ export default function ProvablyFairPage() {
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             stake/8
           </code>
-          . Per-line pay table targets ~95.5% RTP; linearity of expectation keeps
-          full-grid RTP at the same level.
+          . Wins credit automatically. Per-line pay table targets ~95.5% RTP;
+          linearity of expectation keeps full-grid RTP at the same level.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 space-y-1 text-xs">

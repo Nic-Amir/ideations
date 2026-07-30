@@ -83,15 +83,7 @@ export type DigitCollectState = 'idle' | 'collecting' | 'cashed_out' | 'knocked_
 
 export type DigitPokerState = 'idle' | 'dealt' | 'drawing' | 'evaluated';
 
-export type DigitSlotsPhase =
-  | 'idle'
-  | 'spinning'
-  | 'result'
-  | 'gambling'
-  | 'gambleWon'
-  | 'gambleLost'
-  | 'awaitingResume'
-  | 'sessionComplete';
+export type DigitSlotsPhase = 'idle' | 'spinning' | 'result';
 
 export type PlinkoRisk = 'low' | 'medium' | 'high';
 

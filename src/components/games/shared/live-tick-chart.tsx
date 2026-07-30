@@ -8,6 +8,8 @@ interface LiveTickChartProps {
   ticks: ParsedTick[];
   highlightedTicks?: ParsedTick[];
   className?: string;
+  /** Tighter chart height for multi-feed layouts. */
+  compact?: boolean;
 }
 
 function getPaddingRight(containerWidth: number): number {
@@ -18,6 +20,7 @@ export function LiveTickChart({
   ticks,
   highlightedTicks = [],
   className = '',
+  compact = false,
 }: LiveTickChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -193,7 +196,7 @@ export function LiveTickChart({
     <div
       ref={containerRef}
       className={`w-full ${className}`}
-      style={{ height: 'clamp(48px, 9dvh, 72px)' }}
+      style={{ height: compact ? 40 : 'clamp(48px, 9dvh, 72px)' }}
     >
       <canvas ref={canvasRef} className="block w-full h-full rounded-lg" />
     </div>
