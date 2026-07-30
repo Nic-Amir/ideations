@@ -133,7 +133,7 @@ export type GameIconKey =
   | 'barrier-touch'
   | 'synthetic-derby'
   | 'digit-derby'
-  | 'synthetic-coupon';
+  | 'corridor';
 
 export type GameTrack = 'roadmap' | 'other';
 

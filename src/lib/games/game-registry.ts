@@ -166,21 +166,21 @@ export const GAMES: GameInfo[] = [
     iconKey: 'digit-derby',
   },
   {
-    slug: 'synthetic-coupon',
-    name: 'Synthetic Coupon',
-    shortName: 'Coupon',
+    slug: 'corridor',
+    name: 'Corridor',
+    shortName: 'Corridor',
     description:
-      'A synthetic bond in a fixed double-barrier corridor. Accrue a fixed-cash coupon each survived period — breach wipes the whole position. Cash out after the first coupon for stake plus coupons.',
-    shortPitch: 'Accrue fixed coupons in the corridor. Cash out after the first coupon — or lose it all on default.',
-    category: 'Survival',
-    risk: 'High',
-    sessionLength: '30 sec - 3 min',
+      'Stay in / Goes out over a fixed duration. Tap Inside or Outside on the time strip — live multipliers on the board. No-touch wins Stay; first barrier touch wins Goes. No mid-path cash-out.',
+    shortPitch: 'Tap Inside or Outside on the strip. Stay wins on no-touch; Goes wins on first touch.',
+    category: 'Barrier',
+    risk: 'Medium',
+    sessionLength: '5-20 sec',
     mechanics:
-      'Stake equals notional. Enter a fixed corridor; each survived period T accrues a fixed-cash coupon on the position. Cash out after the first coupon for stake plus accrued, or breach for a full wipe.',
+      'Stake equals notional. Fixed log-symmetric barriers for T ticks. Pick Stay in (no touch) or Goes out (first touch). Multipliers lock at place from discrete double-barrier odds.',
     marketSource: 'Client-side simulation',
     status: 'Live',
     track: 'other',
-    iconKey: 'synthetic-coupon',
+    iconKey: 'corridor',
   },
 ];
 

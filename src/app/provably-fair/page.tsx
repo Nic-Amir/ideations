@@ -48,7 +48,7 @@ export default function ProvablyFairPage() {
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">
           Client-side simulation games (Volatility Plinko, Barrier Predictor /
-          Race / Touch, Synthetic Coupon, Synthetic Derby) generate paths with
+          Race / Touch, Corridor, Synthetic Derby) generate paths with
           driftless geometric Brownian motion and{' '}
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             crypto.getRandomValues()
@@ -266,37 +266,39 @@ export default function ProvablyFairPage() {
 
       <section className="space-y-4">
         <h2 className="heading-h3 font-display text-on-prominent">
-          Game 5: Synthetic Coupon
+          Game 5: Corridor
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
-          An open-ended corridor survival game. Stake equals notional inside a
-          fixed log-symmetric double barrier. Each survived period accrues a
-          fixed-cash coupon on the position. Cash out after the first coupon
-          for stake plus accrued coupons, or lose the whole position on
-          barrier breach.
+          Fixed-duration Stay in / Goes out. Stake equals notional inside a
+          log-symmetric double barrier for T ticks. Inside wins if the path
+          never touches either barrier; Outside wins on first touch. No mid-path
+          cash-out and no refund on no-touch.
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">
           Entropy is client-side driftless GBM with{' '}
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
             crypto.getRandomValues()
           </code>
-          , same family as Barrier Predictor. Coupon rate and corridor width
-          lock at entry so a one-period cash-out targets about a 2% house edge
-          (~98% RTP). Multi-period play with a fixed coupon compounds risk;
-          Monte Carlo tests validate the one-period anchor.
+          , same family as Barrier Predictor. Fair{' '}
+          <code className="text-on-prominent">p_stay</code> comes from the
+          discrete first-passage grid; each side pays{' '}
+          <code className="font-display text-on-prominent">
+            (1/p)×(1−m)
+          </code>{' '}
+          with margin m ≈ 0.03, locked at place.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 space-y-2 text-xs text-on-subtle">
             <p>
-              Money uses integer cents. Each round stores platform-shaped{' '}
-              <code className="text-on-prominent">locked_pricing</code> and{' '}
-              <code className="text-on-prominent">settlement_data</code> (status{' '}
-              <code className="text-on-prominent">WON</code> /{' '}
-              <code className="text-on-prominent">LOST</code>) for audit replay.
+              Money uses integer cents. Each round stores{' '}
+              <code className="text-on-prominent">locked_pricing</code> (
+              <code className="text-on-prominent">corridor_double_barrier_v1</code>
+              ) and <code className="text-on-prominent">settlement_data</code>{' '}
+              with path, touched side, and payout for audit replay.
             </p>
             <p className="font-display">
-              C = k × stake · barriers from discrete no-touch first-passage ·
-              margin m ≈ 0.02
+              p_stay = noTouchProbability · mult = (1/p)×(1−m) · outcomes WON /
+              LOST
             </p>
           </CardContent>
         </Card>

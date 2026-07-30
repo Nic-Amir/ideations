@@ -81,10 +81,10 @@ const DigitDerbyGame = dynamic(
   { ssr: false, loading: () => <GameLoading /> },
 );
 
-const SyntheticCouponGame = dynamic(
+const CorridorGame = dynamic(
   () =>
-    import('@/components/games/synthetic-coupon/synthetic-coupon-game').then(
-      (m) => m.SyntheticCouponGame,
+    import('@/components/games/corridor/corridor-game').then(
+      (m) => m.CorridorGame,
     ),
   { ssr: false, loading: () => <GameLoading /> },
 );
@@ -108,7 +108,7 @@ const GAME_COMPONENTS: Record<string, React.ComponentType> = {
   'barrier-touch': BarrierTouchGame,
   'synthetic-derby': DerbyGame,
   'digit-derby': DigitDerbyGame,
-  'synthetic-coupon': SyntheticCouponGame,
+  corridor: CorridorGame,
 };
 
 export default function GamePage({

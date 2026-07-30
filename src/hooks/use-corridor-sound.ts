@@ -40,7 +40,7 @@ function vibrate(pattern: number | number[]) {
 
 const APPROACH_SIGMA = 1.5;
 
-export function useSyntheticCouponSound() {
+export function useCorridorSound() {
   const soundEnabled = useSettingsStore((s) => s.soundEnabled);
   const ctxRef = useRef<AudioContext | null>(null);
   const lastTickRef = useRef(-1);
@@ -66,24 +66,24 @@ export function useSyntheticCouponSound() {
       const ctx = ensureContext();
       if (!ctx) return;
       const closeness = 1 - nearestSigma / APPROACH_SIGMA;
-      playTone(ctx, 480 + closeness * 640, 0.045, 0.05 + closeness * 0.04, 'triangle');
+      playTone(ctx, 480 + closeness * 580, 0.045, 0.05 + closeness * 0.04, 'triangle');
       if (closeness > 0.75) vibrate(8);
     },
     [soundEnabled, ensureContext],
   );
 
-  const playCoupon = useCallback(() => {
+  const playPlace = useCallback(() => {
+    if (!soundEnabled) return;
+    const ctx = ensureContext();
+    if (ctx) playTone(ctx, 660, 0.08, 0.07, 'sine');
+  }, [soundEnabled, ensureContext]);
+
+  const playBarrierHit = useCallback(() => {
     if (soundEnabled) {
       const ctx = ensureContext();
-      if (ctx) {
-        playTone(ctx, 880, 0.08, 0.08, 'sine');
-        setTimeout(() => {
-          if (!ctxRef.current || ctxRef.current.state === 'closed') return;
-          playTone(ctxRef.current, 1175, 0.1, 0.07, 'sine');
-        }, 70);
-      }
+      if (ctx) playTone(ctx, 1280, 0.14, 0.1, 'square');
     }
-    vibrate(12);
+    vibrate([12, 40, 12]);
   }, [soundEnabled, ensureContext]);
 
   const playWin = useCallback(() => {
@@ -104,7 +104,7 @@ export function useSyntheticCouponSound() {
   const playLoss = useCallback(() => {
     if (soundEnabled) {
       const ctx = ensureContext();
-      if (ctx) playTone(ctx, 180, 0.22, 0.09, 'sine');
+      if (ctx) playTone(ctx, 210, 0.22, 0.08, 'sine');
     }
     vibrate(40);
   }, [soundEnabled, ensureContext]);
@@ -115,7 +115,8 @@ export function useSyntheticCouponSound() {
 
   return {
     playApproachTick,
-    playCoupon,
+    playPlace,
+    playBarrierHit,
     playWin,
     playLoss,
     resetRound,
