@@ -121,33 +121,51 @@ function TripleFeedStrip({ feeds }: { feeds: SlotRowFeed[] }) {
   );
 }
 
+function formatCredits(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return value.toFixed(Number.isInteger(value) || Math.abs(value % 1) < 1e-9 ? 0 : 1);
+}
+
 function PayTablePanel({
+  stake,
   payTable,
 }: {
+  stake: number;
   payTable: ReturnType<typeof getSlotPayTable>;
 }) {
+  const lineBet = stake / PAYLINE_COUNT;
+
   return (
     <div className="w-full max-w-sm rounded-xl border border-border-subtle bg-subtle/40 px-3 py-2 space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
-        Line payouts
-      </p>
-      <p className="text-[11px] text-on-subtle leading-snug">
-        Each of {PAYLINE_COUNT} paylines stakes{' '}
-        <span className="font-display tabular-nums">stake/{PAYLINE_COUNT}</span>. Wins add up.
-      </p>
-      <div className="grid grid-cols-2 gap-1">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-on-subtle">
+          Pays per matching line
+        </p>
+        <p className="text-[10px] text-on-subtle font-display tabular-nums">
+          Stake {formatCredits(stake)} → {formatCredits(lineBet)} × {PAYLINE_COUNT} lines
+        </p>
+      </div>
+      <div className="space-y-1">
         {payTable
           .filter((row) => row.outcome !== 'none')
-          .map((row) => (
-            <div
-              key={row.outcome}
-              className="flex items-center justify-between rounded-md bg-subtle px-2 py-1 text-[11px] text-on-subtle"
-            >
-              <span className="truncate">{row.label}</span>
-              <span className="font-display tabular-nums shrink-0 ml-2">{row.multiplier}x</span>
-            </div>
-          ))}
+          .map((row) => {
+            const credits = lineBet * row.multiplier;
+            return (
+              <div
+                key={row.outcome}
+                className="flex items-center justify-between rounded-md bg-subtle px-2 py-1.5 text-[11px] text-on-subtle"
+              >
+                <span className="truncate">{row.label}</span>
+                <span className="font-display tabular-nums shrink-0 ml-2 text-on-prominent">
+                  {formatCredits(credits)} credits
+                </span>
+              </div>
+            );
+          })}
       </div>
+      <p className="text-[10px] text-on-subtle leading-snug">
+        Matching lines all pay; amounts above update with your stake.
+      </p>
     </div>
   );
 }
@@ -197,10 +215,11 @@ export function DigitSlotsGame() {
         <div className="space-y-2 text-sm text-on-subtle">
           <p>Pick a distinct live feed for each of the 3 rows. Rows fill in parallel (~3 ticks).</p>
           <p>
-            Eight paylines settle: 3 rows, 3 columns, 2 diagonals. Matching patterns on multiple
-            lines all pay. Line stake is stake/{PAYLINE_COUNT}.
+            Eight paylines settle: 3 rows, 3 columns, 2 diagonals. Stake is split across all
+            lines; the pay table shows the credit amount each pattern pays on one line at your
+            current stake. Matching lines all pay and sum together.
           </p>
-          <p>Wins credit automatically. See the on-screen pay table for line multipliers.</p>
+          <p>Wins credit automatically.</p>
         </div>
       ),
     },
@@ -229,7 +248,7 @@ export function DigitSlotsGame() {
   const dockFooter = (() => {
     if (phase === 'spinning') return 'Filling grid…';
     if (phase === 'result' && isWin) {
-      return `${hittingLines.length} line${hittingLines.length === 1 ? '' : 's'} · +${result!.totalPayout.toFixed(0)} credited`;
+      return `${hittingLines.length} line${hittingLines.length === 1 ? '' : 's'} · +${formatCredits(result!.totalPayout)} credited`;
     }
     if (phase === 'result' && !isWin) return 'No Match';
     return undefined;
@@ -335,7 +354,7 @@ export function DigitSlotsGame() {
               </div>
             </div>
 
-            <PayTablePanel payTable={payTable} />
+            <PayTablePanel stake={stake} payTable={payTable} />
 
             {result && phase === 'result' ? (
               <div className="w-full max-w-sm space-y-1 text-sm text-center">
@@ -356,16 +375,13 @@ export function DigitSlotsGame() {
                             </span>
                           </span>
                           <span className="font-display tabular-nums text-semantic-win">
-                            +{line.payout.toFixed(0)}
+                            +{formatCredits(line.payout)}
                           </span>
                         </li>
                       ))}
                     </ul>
                     <p className="font-display tabular-nums text-semantic-win pt-1">
-                      Total +{result.totalPayout.toFixed(0)}{' '}
-                      <span className="text-on-subtle">
-                        ({result.totalMultiplier.toFixed(2)}x)
-                      </span>
+                      +{formatCredits(result.totalPayout)} credits credited
                     </p>
                   </>
                 )}

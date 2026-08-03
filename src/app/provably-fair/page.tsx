@@ -218,27 +218,40 @@ export default function ProvablyFairPage() {
         <p className="body-sm text-on-subtle leading-relaxed">
           3×3 grid. Each row is filled by three sequential ticks from its own
           chosen Deriv symbol (rows fill in parallel). Eight paylines settle
-          additively (3 rows + 3 columns + 2 diagonals); each line stakes{' '}
+          additively (3 rows + 3 columns + 2 diagonals). Stake is split across
+          the lines (
           <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
-            stake/8
+            line bet = stake/8
           </code>
-          . Wins credit automatically. Per-line pay table targets ~95.5% RTP;
-          linearity of expectation keeps full-grid RTP at the same level.
+          ); each matching pattern pays{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            line bet × multiplier
+          </code>
+          . Example at stake 100: Pair pays 25 credits per matching line, Triple
+          187.5, Jackpot 777 pays 1,250. Wins credit automatically. Target RTP
+          ~95.5%.
         </p>
         <Card className="border-0 bg-subtle">
           <CardContent className="p-4 space-y-1 text-xs">
+            <div className="flex justify-between text-on-subtle mb-2 font-semibold">
+              <span>Pattern (per line)</span>
+              <div className="flex gap-6">
+                <span className="w-16 text-right">Prob</span>
+                <span className="w-24 text-right">@ stake 100</span>
+              </div>
+            </div>
             {[
-              ['777 (Jackpot)', '0.10%', '100×'],
-              ['Triple (non-7)', '0.90%', '15×'],
-              ['Sequential', '6.00%', '3×'],
-              ['Pair', '27.00%', '2×'],
-              ['No Match', '66.00%', '0×'],
+              ['777 (Jackpot)', '0.10%', '1,250 credits'],
+              ['Triple (non-7)', '0.90%', '187.5 credits'],
+              ['Sequential', '6.00%', '37.5 credits'],
+              ['Pair', '27.00%', '25 credits'],
+              ['No Match', '66.00%', '0'],
             ].map(([combo, prob, payout]) => (
               <div key={combo} className="flex justify-between text-on-subtle">
                 <span>{combo}</span>
                 <div className="flex gap-6">
                   <span className="font-display tabular-nums w-16 text-right">{prob}</span>
-                  <span className="font-display tabular-nums w-10 text-right">{payout}</span>
+                  <span className="font-display tabular-nums w-24 text-right">{payout}</span>
                 </div>
               </div>
             ))}
