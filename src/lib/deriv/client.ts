@@ -34,6 +34,8 @@ interface TickSubscription {
 const DERIV_WS_URL = 'wss://ws.derivws.com/websockets/v3';
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 1_000;
+/** In `auto` mode, switch to demo after this many failed reconnect cycles. */
+export const MAX_AUTO_RECONNECT_BEFORE_DEMO = 3;
 
 export function extractLastDigit(quote: string): number {
   const cleaned = quote.replace('.', '');
@@ -223,12 +225,22 @@ export class DerivClient {
   }
 
   private enableDemoFeed(code: string, message: string): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.forceDemo) {
       this.startMockForAllSubscriptions();
       return;
     }
     console.info('[DerivClient] Switching to demo feed:', code, message);
     this.forceDemo = true;
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
+    this.ws = null;
     this.setFeedSource('demo');
     this.setStatus('connected');
     this.emitFeedError({ code, message });
@@ -311,11 +323,24 @@ export class DerivClient {
   private scheduleReconnect(): void {
     if (this.forceDemo || this.feedMode === 'mock') return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+
+    this.reconnectAttempts++;
+
+    if (
+      this.feedMode === 'auto' &&
+      this.reconnectAttempts >= MAX_AUTO_RECONNECT_BEFORE_DEMO
+    ) {
+      this.enableDemoFeed(
+        'WebSocketUnavailable',
+        `Deriv WebSocket unavailable after ${this.reconnectAttempts} failed attempts; using demo feed`,
+      );
+      return;
+    }
+
     const delay = Math.min(
-      INITIAL_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts),
+      INITIAL_RECONNECT_DELAY * Math.pow(2, this.reconnectAttempts - 1),
       MAX_RECONNECT_DELAY,
     );
-    this.reconnectAttempts++;
     console.info(
       `[DerivClient] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,
     );
@@ -522,7 +547,8 @@ let clientInstance: DerivClient | null = null;
 export function getDerivClient(): DerivClient {
   if (!clientInstance) {
     const appId = process.env.NEXT_PUBLIC_DERIV_APP_ID || '1089';
-    clientInstance = new DerivClient(appId, resolveFeedMode());
+    // Ideations POC always uses the local mock tick feed (no Deriv WS).
+    clientInstance = new DerivClient(appId, 'mock');
   }
   return clientInstance;
 }

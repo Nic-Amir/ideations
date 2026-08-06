@@ -37,19 +37,21 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useMounted } from '@/hooks/use-mounted';
 import { useIsDesktop } from '@/hooks/use-media-query';
-import { useFeedSource } from '@/hooks/use-tick-stream';
 import { GameInfoDrawer, type GameInfoSection } from './game-info-drawer';
 import { SUPPORTED_SYMBOLS } from '@/types';
 import type { DerivSymbol } from '@/types';
 
 interface GameShellProps {
   children: React.ReactNode;
+  /** Game display name shown under the header. */
+  title?: string;
   infoSections?: GameInfoSection[];
   showSymbolPicker?: boolean;
 }
 
 export function GameShell({
   children,
+  title,
   infoSections = [],
   showSymbolPicker = true,
 }: GameShellProps) {
@@ -59,17 +61,18 @@ export function GameShell({
   const { selectedIndex, setSelectedIndex, soundEnabled, setSoundEnabled } =
     useSettingsStore();
   const { balance, resetBalance } = useBalanceStore();
-  const feedSource = useFeedSource();
   const [resetOpen, setResetOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [symbolDrawerOpen, setSymbolDrawerOpen] = useState(false);
 
   const selectedSymbol = SUPPORTED_SYMBOLS.find((s) => s.id === selectedIndex);
+  const symbolShort =
+    selectedSymbol?.name.replace(/\s*\(.*\)\s*$/, '').trim() ?? selectedIndex;
 
   const symbolPickerButton = (
     <NavigationButton
       size="md"
-      aria-label="Market symbol"
+      aria-label={`Market ${symbolShort}`}
       onClick={() => {
         if (!isDesktop) setSymbolDrawerOpen(true);
       }}
@@ -91,24 +94,35 @@ export function GameShell({
           actions={
             <>
               {showSymbolPicker ? (
-                isDesktop ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>{symbolPickerButton}</DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {SUPPORTED_SYMBOLS.map((sym) => (
-                        <DropdownMenuItem
-                          key={sym.id}
-                          onClick={() => setSelectedIndex(sym.id as DerivSymbol)}
-                        >
-                          <span>{sym.name}</span>
-                          <span className="ml-4 text-on-subtle text-xs">{sym.tickFreq}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  symbolPickerButton
-                )
+                <div className="flex items-center gap-1.5">
+                  <span className="hidden min-[380px]:inline max-w-[7.5rem] truncate text-[11px] font-semibold tabular-nums text-on-subtle">
+                    {symbolShort}
+                  </span>
+                  {isDesktop ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        {symbolPickerButton}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {SUPPORTED_SYMBOLS.map((sym) => (
+                          <DropdownMenuItem
+                            key={sym.id}
+                            onClick={() =>
+                              setSelectedIndex(sym.id as DerivSymbol)
+                            }
+                          >
+                            <span>{sym.name}</span>
+                            <span className="ml-4 text-on-subtle text-xs">
+                              {sym.tickFreq}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    symbolPickerButton
+                  )}
+                </div>
               ) : null}
 
               {infoSections.length > 0 ? (
@@ -150,12 +164,11 @@ export function GameShell({
           }
         />
 
-        {feedSource === 'demo' ? (
-          <div
-            role="status"
-            className="shrink-0 border-b border-semantic-warning/20 bg-semantic-warning/10 px-4 py-2 text-center text-xs text-semantic-warning"
-          >
-            Demo feed — Deriv markets unavailable in this region.
+        {title ? (
+          <div className="shrink-0 border-b border-border-subtle px-4 py-2">
+            <h1 className="font-display text-sm font-bold text-on-prominent truncate">
+              {title}
+            </h1>
           </div>
         ) : null}
 

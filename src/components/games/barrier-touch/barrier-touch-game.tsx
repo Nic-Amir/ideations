@@ -503,7 +503,7 @@ export function BarrierTouchGame() {
     startRound({ kind: 'sequence', pick: seqPick } satisfies TouchPick);
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
+    <GameShell title="Barrier Touch" infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<OutcomeStrip mode={mode} {...windowStats} />}
         play={

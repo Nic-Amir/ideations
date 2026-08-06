@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * Pure helpers for the local demo tick feed used when Deriv markets
- * are unavailable (e.g. geo-blocked regions).
+ * Pure helpers for the local tick feed used by the ideations POC.
+ * Crash symbols still model Crash N average spacing for realism.
  */
 
 export const MOCK_TICK_INTERVAL_MS = 1_000;

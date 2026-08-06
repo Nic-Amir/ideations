@@ -380,7 +380,7 @@ export function BarrierRaceGame() {
           : 'push';
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
+    <GameShell title="Barrier Race" infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<WinRateStrip {...windowStats} />}
         play={

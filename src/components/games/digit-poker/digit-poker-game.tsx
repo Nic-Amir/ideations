@@ -288,7 +288,7 @@ export function DigitPokerGame() {
   ];
 
   return (
-    <GameShell infoSections={infoSections}>
+    <GameShell title="Digit Poker" infoSections={infoSections}>
       <GameViewport
         market={
           marketReady ? (

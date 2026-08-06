@@ -176,7 +176,7 @@ export function useDigitLadder() {
     const ph = phaseRef.current;
     if (ph !== 'need_draw' && ph !== 'ready') return;
     if (!marketReady) {
-      setPlayError('Waiting for live ticks');
+      setPlayError('Waiting for ticks');
       return;
     }
 

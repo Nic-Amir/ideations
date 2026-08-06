@@ -491,7 +491,7 @@ export function PlinkoGame() {
     : undefined;
 
   return (
-    <GameShell infoSections={infoSections} showSymbolPicker={false}>
+    <GameShell title="Volatility Plinko" infoSections={infoSections} showSymbolPicker={false}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {liveAnnouncement}
       </div>

@@ -319,7 +319,7 @@ export function BarrierPredictorGame() {
     result?.outcome === 'win' ? 'win' : result?.outcome === 'lose' ? 'loss' : 'push';
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
+    <GameShell title="Barrier Predictor" infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<OutcomeStrip {...windowStats} />}
         play={

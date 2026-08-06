@@ -1,8 +1,5 @@
 import { describe, test, expect, afterEach, vi } from 'vitest';
-import {
-  DerivClient,
-  __resetDerivClientForTests,
-} from '../client';
+import { DerivClient, getDerivClient, __resetDerivClientForTests } from '../client';
 
 afterEach(() => {
   __resetDerivClientForTests();
@@ -10,7 +7,7 @@ afterEach(() => {
 });
 
 describe('DerivClient mock mode', () => {
-  test('emits demo ticks without a live WebSocket', async () => {
+  test('emits ticks without a live WebSocket', async () => {
     vi.useFakeTimers();
     const client = new DerivClient('1089', 'mock');
     client.connect();
@@ -26,7 +23,6 @@ describe('DerivClient mock mode', () => {
       expect(tick.lastDigit).toBeLessThanOrEqual(9);
     });
 
-    // Immediate tick on subscribe
     expect(ticks.length).toBeGreaterThanOrEqual(1);
 
     await vi.advanceTimersByTimeAsync(2100);
@@ -34,5 +30,11 @@ describe('DerivClient mock mode', () => {
 
     unsub();
     client.dispose();
+  });
+
+  test('getDerivClient always constructs mock mode', () => {
+    const client = getDerivClient();
+    expect(client.getFeedMode()).toBe('mock');
+    expect(client.getFeedSource()).toBe('demo');
   });
 });

@@ -663,10 +663,9 @@ export function DigitDerbyGame() {
       content: (
         <div className="space-y-2 text-sm text-on-subtle">
           <p>
-            Settlement prefers live Deriv ticks. If markets are unavailable in
-            your region, a labeled demo feed (~1 Hz) keeps the game playable.
+            Digits come from the continuous tick feed (~1 Hz in this POC).
+            Opening a position stays disabled until ticks arrive.
           </p>
-          <p>Opening a position stays disabled until ticks arrive.</p>
         </div>
       ),
     },
@@ -701,7 +700,7 @@ export function DigitDerbyGame() {
               ? ` · ${marginThresholdLabel(marginThreshold)}`
               : ''
           } · ${pricing.multiplier.toFixed(2)}×`
-        : 'Waiting for live ticks'
+        : 'Waiting for ticks'
       : isMargin
         ? 'Select Photo, Wide, or Blowout'
         : `Select ${spec.picks} digit${spec.picks === 1 ? '' : 's'} for ${spec.label}`
@@ -710,7 +709,7 @@ export function DigitDerbyGame() {
       : undefined;
 
   return (
-    <GameShell infoSections={infoSections} showSymbolPicker>
+    <GameShell title="Digit Derby" infoSections={infoSections} showSymbolPicker>
       <GameViewport
         market={
           marketReady ? (
@@ -845,7 +844,7 @@ export function DigitDerbyGame() {
             {playError ? <GameNotice tone="danger">{playError}</GameNotice> : null}
             {!marketReady && idle ? (
               <GameNotice tone="warning">
-                Market unavailable. Waiting for live ticks.
+                Waiting for ticks.
               </GameNotice>
             ) : null}
           </div>

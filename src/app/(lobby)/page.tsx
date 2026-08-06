@@ -118,7 +118,8 @@ export default function HomePage() {
       </Tabs>
 
       <p className="body-xs text-on-subtle">
-        Some games use live Deriv ticks. Others use client-side simulation.
+        Tick games use a continuous market feed. Others use client-side
+        simulation.
       </p>
     </div>
   );
@@ -212,12 +213,14 @@ function GameGridCard({
           <p className="mt-2 font-body text-sm text-on-subtle">
             {game.shortPitch}
           </p>
-          <div className="mt-2 flex items-center gap-2 font-body text-xs text-on-subtle">
+          <div className="mt-2 flex flex-wrap items-center gap-2 font-body text-xs text-on-subtle">
             <span className="uppercase">{game.category}</span>
             <span>/</span>
             <span className={RISK_COLOR[game.risk] ?? ''}>{game.risk}</span>
             <span>/</span>
             <span>{game.sessionLength}</span>
+            <span>/</span>
+            <span>{game.marketSource}</span>
           </div>
         </div>
         <div className="relative ml-4 shrink-0">

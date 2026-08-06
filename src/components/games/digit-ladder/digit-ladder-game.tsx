@@ -26,7 +26,7 @@ const INFO_SECTIONS: GameInfoSection[] = [
     content: (
       <div className="space-y-2 text-sm text-on-subtle">
         <p>
-          First, draw a free face digit from the next live tick — no stake.
+          First, draw a free face digit from the next tick — no stake.
           That face stays locked while you set a stake and tap Higher or Lower.
         </p>
         <p>
@@ -104,7 +104,7 @@ export function DigitLadderGame() {
       : 0;
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker>
+    <GameShell title="Digit Ladder" infoSections={INFO_SECTIONS} showSymbolPicker>
       <GameViewport
         play={
           <DigitLadderFace
@@ -131,7 +131,7 @@ export function DigitLadderGame() {
 
             {!marketReady && (needDraw || ready) ? (
               <div className="px-4">
-                <GameNotice tone="info">Waiting for live ticks…</GameNotice>
+                <GameNotice tone="info">Waiting for ticks…</GameNotice>
               </div>
             ) : null}
 

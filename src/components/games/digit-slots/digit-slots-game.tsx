@@ -290,7 +290,7 @@ export function DigitSlotsGame() {
   };
 
   return (
-    <GameShell infoSections={infoSections} showSymbolPicker={false}>
+    <GameShell title="Digit Slots" infoSections={infoSections} showSymbolPicker={false}>
       <GameViewport
         market={
           marketReady ? (

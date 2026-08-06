@@ -244,7 +244,7 @@ export function CorridorGame() {
   }
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
+    <GameShell title="Corridor" infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<SessionStrip n={history.length} stayWins={stayWins} />}
         play={

@@ -505,13 +505,13 @@ export function IndexAscentGame() {
       id: 'rules',
       label: 'Rules',
       content: (
-        <div className="space-y-2 text-sm text-on-subtle"><p>Your return multiplier builds on every tick the Deriv Crash index ascends without correcting.</p><p>Correction odds are memoryless: every tick carries the same risk regardless of the current run length.</p><p>Exit any time after the first surviving tick, or set an automatic target before entry.</p></div>
+        <div className="space-y-2 text-sm text-on-subtle"><p>Your return multiplier builds on every tick the Crash index ascends without correcting.</p><p>Correction odds are memoryless: every tick carries the same risk regardless of the current run length.</p><p>Exit any time after the first surviving tick, or set an automatic target before entry.</p></div>
       ),
     },
   ];
 
   return (
-    <GameShell infoSections={infoSections} showSymbolPicker={false}>
+    <GameShell title="Index Ascent" infoSections={infoSections} showSymbolPicker={false}>
       <GameViewport
         market={
           ticks.length > 0 ? (
@@ -519,7 +519,7 @@ export function IndexAscentGame() {
               <div className="relative overflow-hidden rounded-lg">
                 <LiveTickChart ticks={ticks} className="w-full" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between px-2 pt-1.5">
-                  <div className="pointer-events-auto rounded border border-border-subtle bg-card/90 px-2 py-0.5 backdrop-blur-sm"><div className="flex items-center gap-1.5"><span className="text-[9px] font-semibold uppercase tracking-wide text-on-subtle">Live index</span><ConnectionIndicator /></div></div>
+                  <div className="pointer-events-auto rounded border border-border-subtle bg-card/90 px-2 py-0.5 backdrop-blur-sm"><div className="flex items-center gap-1.5"><span className="text-[9px] font-semibold uppercase tracking-wide text-on-subtle">Index</span><ConnectionIndicator /></div></div>
                   <div className="rounded border border-border-subtle bg-card/90 px-2 py-0.5 text-[10px] text-on-subtle backdrop-blur-sm">{info.name} · run <span className="font-display font-semibold tabular-nums text-on-prominent">{marketStreak}</span></div>
                 </div>
               </div>

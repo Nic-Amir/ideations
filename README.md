@@ -41,15 +41,11 @@ npm run build
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Feed mode
+### Tick feed
 
-Digit games stream ticks from Deriv by default (`NEXT_PUBLIC_FEED_MODE=auto`). In regions where Deriv returns no active symbols (e.g. Malaysia), the client automatically switches to a labeled **Demo feed** (~1 Hz local ticks) so games stay playable.
+This POC always uses a **local tick feed** (~1 Hz) for digit / crash games. No Deriv WebSocket is opened at runtime. Client-side simulation games (Plinko, barriers, Corridor, Synthetic Derby) generate their own paths.
 
-| `NEXT_PUBLIC_FEED_MODE` | Behavior |
-| --- | --- |
-| `auto` (default) | Try Deriv; fall back to demo if symbols unavailable |
-| `live` | Deriv only — no mock |
-| `mock` | Local demo ticks only |
+`NEXT_PUBLIC_DERIV_APP_ID` is unused while the POC stays mock-only; kept for a future live-feed experiment.
 
 ## Project Structure
 
@@ -75,7 +71,7 @@ src/
 ## Key Design Decisions
 
 - **Client-side game logic** — All game resolution happens in the browser. No backend game server.
-- **Single WebSocket** — Shared connection to Deriv API via React context provider.
+- **Local tick feed** — Digit / crash games subscribe to an in-browser ~1 Hz tick generator (mock path of `DerivClient`).
 - **Demo balance** — 10,000 virtual credits stored in localStorage. Resettable.
 - **Provably fair** — All math is documented and verifiable on the /provably-fair page.
 

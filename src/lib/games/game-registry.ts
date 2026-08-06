@@ -15,7 +15,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10 sec - 5 min',
     mechanics:
       'Pick Crash 50/150/300, enter on any tick, and exit manually or at a target — an index correction closes the position.',
-    marketSource: 'Deriv live ticks (Crash indices)',
+    marketSource: 'Tick feed (Crash indices)',
     status: 'Live',
     track: 'roadmap',
     iconKey: 'index-ascent',
@@ -31,7 +31,7 @@ export const GAMES: GameInfo[] = [
     risk: 'High',
     sessionLength: '30-90 sec',
     mechanics: 'Draw unique digits, monitor knockout risk, cash out on your timing.',
-    marketSource: 'Deriv live ticks',
+    marketSource: 'Tick feed',
     status: 'Live',
     track: 'roadmap',
     iconKey: 'digit-collect',
@@ -47,7 +47,7 @@ export const GAMES: GameInfo[] = [
     risk: 'Medium',
     sessionLength: '45-120 sec',
     mechanics: 'Deal five digits, hold strong positions, and optimize the redraw.',
-    marketSource: 'Deriv live ticks',
+    marketSource: 'Tick feed',
     status: 'Live',
     track: 'other',
     iconKey: 'digit-poker',
@@ -64,7 +64,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '10-45 sec',
     mechanics:
       'Pick three distinct feeds, fill a 3×3 in parallel, evaluate eight paylines, and credit wins automatically.',
-    marketSource: 'Deriv live ticks',
+    marketSource: 'Tick feed',
     status: 'Live',
     track: 'other',
     iconKey: 'digit-slots',
@@ -161,7 +161,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '15-60 sec',
     mechanics:
       'Pick a contract, fill your ticket (digits or a margin threshold), open a position. Live ticks advance runners; first to the finish line ranks the board.',
-    marketSource: 'Deriv live ticks',
+    marketSource: 'Tick feed',
     status: 'Live',
     track: 'other',
     iconKey: 'digit-derby',
@@ -195,7 +195,7 @@ export const GAMES: GameInfo[] = [
     sessionLength: '2-30 sec',
     mechanics:
       'Stake once. Strict Higher/Lower vs the live last digit; next tick settles. Wins roll into a parlay pot — cash out or continue. Ties bust.',
-    marketSource: 'Deriv live ticks',
+    marketSource: 'Tick feed',
     status: 'Live',
     track: 'other',
     iconKey: 'digit-ladder',

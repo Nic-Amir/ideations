@@ -299,7 +299,7 @@ export function useDigitDerby() {
       return;
     }
     if (!marketReady) {
-      setPlayError('Market unavailable. Waiting for live ticks.');
+      setPlayError('Waiting for ticks.');
       return;
     }
 

@@ -521,7 +521,7 @@ export function DerbyGame() {
   };
 
   return (
-    <GameShell infoSections={INFO_SECTIONS} showSymbolPicker={false}>
+    <GameShell title="Synthetic Derby" infoSections={INFO_SECTIONS} showSymbolPicker={false}>
       <GameViewport
         market={<OutcomeStrip {...windowStats} />}
         play={

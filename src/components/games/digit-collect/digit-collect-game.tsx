@@ -652,7 +652,7 @@ export function DigitCollectGame() {
   const marketReady = ticks.length > 0 || lastConsumedTick !== null;
 
   return (
-    <GameShell infoSections={infoSections}>
+    <GameShell title="Digit Sync" infoSections={infoSections}>
       <GameViewport
         market={
           marketReady ? (

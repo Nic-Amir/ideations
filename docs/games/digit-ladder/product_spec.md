@@ -51,11 +51,11 @@ Digit Ladder is a casino-style Higher/Lower arcade on live last digits. The play
 
 ## 3. Feed Requirements
 
-- **Feed type:** Real Service Feed (Deriv ticks in ideations POC; Service Feed gRPC when ported)
+- **Feed type:** Continuous tick stream (local mock ~1 Hz in ideations POC)
 - **Settlement input:** Last digit of the price at the instrument’s pip precision
-- **Tick frequency:** ~1 Hz for volatility indices
-- **No client RNG for settlement** — authoritative tick stream only
-- **Demo / live:** Same feed path in the POC (`NEXT_PUBLIC_FEED_MODE` auto/mock/live)
+- **Tick frequency:** ~1 Hz
+- **No client RNG for settlement** — tick stream only
+- **POC note:** Feed is always local; no live/demo user distinction
 
 ---
 
