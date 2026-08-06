@@ -29,9 +29,9 @@ interface DigitLadderFaceProps {
 function phaseLabel(phase: DigitLadderFaceProps['phase']): string {
   switch (phase) {
     case 'need_draw':
-      return 'Draw a face digit';
+      return 'Draw to start';
     case 'drawing':
-      return 'Drawing face…';
+      return 'Drawing…';
     case 'ready':
       return 'Face locked — call the next tick';
     case 'awaiting_tick':
@@ -200,7 +200,8 @@ export function DigitLadderFace({
         </p>
       ) : phase === 'need_draw' ? (
         <p className="text-sm text-on-subtle text-center max-w-[280px]">
-          Draw a free face digit from the next tick, then bet Higher or Lower.
+          Tap Draw to start — the next tick becomes your face digit. No stake
+          yet.
         </p>
       ) : null}
     </div>

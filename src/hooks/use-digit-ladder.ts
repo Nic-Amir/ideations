@@ -77,7 +77,6 @@ export function useDigitLadder() {
   const phaseRef = useRef<DigitLadderPhase>('need_draw');
   const roundRef = useRef<DigitLadderRound | null>(null);
   const busyRef = useRef(false);
-  const autoDrawStartedRef = useRef(false);
   const addWinningsRef = useRef(addWinnings);
   const tableDigitRef = useRef<number | null>(null);
 
@@ -199,7 +198,7 @@ export function useDigitLadder() {
       setPhase('ready');
       phaseRef.current = 'ready';
     } catch {
-      setPlayError('Tick timed out — tap Draw to try again');
+      setPlayError('Tick timed out — tap Draw to start');
       setPhase('need_draw');
       phaseRef.current = 'need_draw';
       clearTable();
@@ -208,19 +207,8 @@ export function useDigitLadder() {
     }
   }, [clearTable, getNextTick, marketReady]);
 
-  // Auto-draw when we need a face and the feed is ready
+  // Reset table when symbol changes — player draws again to start
   useEffect(() => {
-    if (phase !== 'need_draw') return;
-    if (!marketReady || busyRef.current) return;
-    if (tableDigit !== null) return;
-    if (autoDrawStartedRef.current) return;
-    autoDrawStartedRef.current = true;
-    void drawFace();
-  }, [phase, marketReady, tableDigit, drawFace]);
-
-  // Reset table when symbol changes
-  useEffect(() => {
-    autoDrawStartedRef.current = false;
     if (
       phaseRef.current === 'need_draw' ||
       phaseRef.current === 'ready' ||
@@ -443,7 +431,6 @@ export function useDigitLadder() {
     setRound(null);
     roundRef.current = null;
     clearTable();
-    autoDrawStartedRef.current = false;
     setPhase('need_draw');
     phaseRef.current = 'need_draw';
   }, [clearTable]);

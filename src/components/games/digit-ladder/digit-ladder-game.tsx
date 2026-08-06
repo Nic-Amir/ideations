@@ -26,7 +26,7 @@ const INFO_SECTIONS: GameInfoSection[] = [
     content: (
       <div className="space-y-2 text-sm text-on-subtle">
         <p>
-          First, draw a free face digit from the next tick — no stake.
+          Tap Draw to start — the next tick becomes your free face digit.
           That face stays locked while you set a stake and tap Higher or Lower.
         </p>
         <p>
@@ -137,13 +137,13 @@ export function DigitLadderGame() {
 
             {drawing ? (
               <div className="px-4">
-                <GameNotice tone="info">Drawing face from next tick…</GameNotice>
+                <GameNotice tone="info">Drawing from next tick…</GameNotice>
               </div>
             ) : null}
 
             {awaiting ? (
               <div className="px-4">
-                <GameNotice tone="info">Next tick draws the digit…</GameNotice>
+                <GameNotice tone="info">Next tick settles the step…</GameNotice>
               </div>
             ) : null}
 
@@ -155,7 +155,7 @@ export function DigitLadderGame() {
                   disabled={drawing}
                   onClick={() => void drawFace()}
                 >
-                  {drawing ? 'Drawing…' : 'Draw face'}
+                  {drawing ? 'Drawing…' : 'Draw to start'}
                 </Button>
               </div>
             ) : null}
