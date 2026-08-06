@@ -1,6 +1,5 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@trading-game/design-intelligence-layer';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
@@ -11,6 +10,7 @@ import {
 } from '@/components/games/shared/result-overlay';
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 import { DigitLadderPickStrip } from '@/components/games/digit-ladder/digit-ladder-pick-strip';
+import { DigitLadderFace } from '@/components/games/digit-ladder/digit-ladder-face';
 import { useDigitLadder } from '@/hooks/use-digit-ladder';
 import {
   applyStepMult,
@@ -24,11 +24,17 @@ const INFO_SECTIONS: GameInfoSection[] = [
     id: 'how',
     label: 'How it works',
     content: (
-      <p className="text-sm text-on-subtle">
-        The face digit is the current last digit. Tap Higher or Lower for the
-        next tick. Win strictly above or below — a tie busts. After a win, cash
-        out the pot or climb the ladder and risk it all on the next step.
-      </p>
+      <div className="space-y-2 text-sm text-on-subtle">
+        <p>
+          First, draw a free face digit from the next live tick — no stake.
+          That face stays locked while you set a stake and tap Higher or Lower.
+        </p>
+        <p>
+          The next tick settles the step. Win strictly above or below — a tie
+          busts. After a win, cash out the pot or climb the ladder and risk it
+          all on the next step.
+        </p>
+      </div>
     ),
   },
   {
@@ -60,7 +66,12 @@ export function DigitLadderGame() {
     playError,
     revealDigit,
     faceDigit,
-    liveQuote,
+    tableTick,
+    liveDigit,
+    liveTick,
+    extractionKey,
+    settleCompare,
+    rungTrail,
     pricing,
     potUsdt,
     rungs,
@@ -71,16 +82,17 @@ export function DigitLadderGame() {
     placePick,
     onCashOut,
     dismissResult,
+    drawFace,
   } = useDigitLadder();
 
-  const idle = phase === 'idle';
+  const needDraw = phase === 'need_draw';
+  const drawing = phase === 'drawing';
+  const ready = phase === 'ready';
   const awaiting = phase === 'awaiting_tick';
   const decision = phase === 'decision';
-  const canPick = (idle && canTrade) || decision;
+  const canPick = (ready && canTrade) || decision;
 
-  const basePotCents = decision
-    ? usdtToCents(potUsdt)
-    : usdtToCents(stake);
+  const basePotCents = decision ? usdtToCents(potUsdt) : usdtToCents(stake);
 
   const potPreviewHigher =
     pricing?.higher.offered
@@ -91,57 +103,23 @@ export function DigitLadderGame() {
       ? centsToUsdt(applyStepMult(basePotCents, pricing.lower.multiplier))
       : 0;
 
-  const displayDigit = revealDigit ?? faceDigit;
-
   return (
     <GameShell infoSections={INFO_SECTIONS} showSymbolPicker>
       <GameViewport
         play={
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-6">
-            <p className="text-xs uppercase tracking-wide text-on-subtle">
-              {awaiting
-                ? 'Face digit'
-                : decision
-                  ? 'Climb or cash out'
-                  : 'Live last digit'}
-            </p>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={`${displayDigit}-${revealDigit ?? 'face'}`}
-                initial={{ scale: 0.85, opacity: 0.5 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 22 }}
-                className={cn(
-                  'flex size-28 items-center justify-center rounded-full border-2 font-display text-6xl font-black tabular-nums',
-                  revealDigit !== null
-                    ? 'border-primary bg-primary/15 text-primary'
-                    : 'border-border-subtle bg-subtle text-on-prominent',
-                )}
-              >
-                {displayDigit ?? '—'}
-              </motion.div>
-            </AnimatePresence>
-
-            {liveQuote ? (
-              <p className="font-body text-xs tabular-nums text-on-subtle">
-                {liveQuote}
-              </p>
-            ) : null}
-
-            {decision ? (
-              <p className="text-sm text-on-subtle text-center max-w-[280px]">
-                Pot is at risk on the next rung. Cash out to bank it, or call
-                Higher / Lower again.
-              </p>
-            ) : idle ? (
-              <p className="text-sm text-on-subtle text-center max-w-[280px]">
-                Call whether the next tick&apos;s last digit is higher or lower
-                than the face.
-              </p>
-            ) : null}
-          </div>
+          <DigitLadderFace
+            phase={phase}
+            faceDigit={faceDigit}
+            revealDigit={revealDigit}
+            tableTick={tableTick}
+            liveTick={liveTick}
+            liveDigit={liveDigit}
+            extractionKey={extractionKey}
+            settleCompare={settleCompare}
+            rungTrail={rungTrail}
+            canDrawAgain={ready && !drawing}
+            onDrawAgain={() => void drawFace()}
+          />
         }
         dock={
           <div className="flex flex-col gap-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -151,15 +129,34 @@ export function DigitLadderGame() {
               </div>
             ) : null}
 
-            {!marketReady && idle ? (
+            {!marketReady && (needDraw || ready) ? (
               <div className="px-4">
                 <GameNotice tone="info">Waiting for live ticks…</GameNotice>
+              </div>
+            ) : null}
+
+            {drawing ? (
+              <div className="px-4">
+                <GameNotice tone="info">Drawing face from next tick…</GameNotice>
               </div>
             ) : null}
 
             {awaiting ? (
               <div className="px-4">
                 <GameNotice tone="info">Next tick draws the digit…</GameNotice>
+              </div>
+            ) : null}
+
+            {(needDraw || (drawing && faceDigit === null)) && marketReady ? (
+              <div className="px-4">
+                <Button
+                  variant="primary"
+                  className="w-full min-h-[48px]"
+                  disabled={drawing}
+                  onClick={() => void drawFace()}
+                >
+                  {drawing ? 'Drawing…' : 'Draw face'}
+                </Button>
               </div>
             ) : null}
 
@@ -195,7 +192,17 @@ export function DigitLadderGame() {
               </div>
             ) : null}
 
-            {pricing && (idle || decision) ? (
+            {ready ? (
+              <StakeDock
+                stake={stake}
+                max={maxStake}
+                balance={balance}
+                onStakeChange={setStake}
+                stakeDisabled={!ready}
+              />
+            ) : null}
+
+            {pricing && (ready || decision) ? (
               <div className="px-4">
                 <DigitLadderPickStrip
                   higher={pricing.higher}
@@ -209,17 +216,7 @@ export function DigitLadderGame() {
               </div>
             ) : null}
 
-            {idle ? (
-              <StakeDock
-                stake={stake}
-                max={maxStake}
-                balance={balance}
-                onStakeChange={setStake}
-                stakeDisabled={!idle}
-              />
-            ) : null}
-
-            {history.length > 0 && idle ? (
+            {history.length > 0 && (ready || needDraw) ? (
               <p className="px-4 text-center text-xs text-on-subtle">
                 Last {Math.min(history.length, 5)}:{' '}
                 {history.slice(0, 5).map((h, i) => (
@@ -253,7 +250,9 @@ export function DigitLadderGame() {
         }
         subtitle={
           result?.lastDigit !== null && result?.lastDigit !== undefined
-            ? `Last digit ${result.lastDigit}`
+            ? result.entryDigit !== null
+              ? `${result.entryDigit} → ${result.lastDigit}`
+              : `Last digit ${result.lastDigit}`
             : undefined
         }
         amount={

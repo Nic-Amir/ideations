@@ -4,13 +4,13 @@ Locked product brief + playable ideations POC. Full mechanics and platform_stand
 
 ## Thesis
 
-Digit Ladder is casino High/Low on live last digits: the face digit is the current tick’s last digit; the player calls **Higher** or **Lower** for the **next** tick. Wins can be **cashed out** or **parlayed** (climb the ladder) — the whole pot rides the next step. Odds follow Digits Over/Under math vs the entry digit; ties bust.
+Digit Ladder is casino High/Low on live last digits: the player **draws a free face digit** from the next tick (no stake), then calls **Higher** or **Lower** for the following tick. Wins can be **cashed out** or **parlayed** (climb the ladder) — the whole pot rides the next step. Odds follow Digits Over/Under math vs the locked face; ties bust.
 
 ## Locked structuring
 
 | Decision | Lock |
 | --- | --- |
-| Face value | **Current last digit D** |
+| Face value | **Free draw** — next tick locks D before any stake; does not track live ticks while deciding |
 | Sides | **Higher** (`D' > D`) / **Lower** (`D' < D`) |
 | Tie | **LOST** (busts pot) |
 | Duration | **1 tick per step** |

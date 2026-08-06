@@ -11,7 +11,9 @@
 
 ## 1. Glossary of Terms
 
-**Face Digit / Entry Digit (D):** The last digit locked as the comparison base for a ladder step. On the first step, D is the live last digit at place. On continue, D is the previous settlement digit.
+**Face Digit / Entry Digit (D):** The last digit locked as the comparison base for a ladder step. Before the first stake, D is dealt by a **free draw** (next tick, no debit) and stays frozen while the player decides. On continue, D is the previous settlement digit.
+
+**Free Draw:** A no-stake tick that locks the table face. Odds do not track the live stream until the player places or redraws.
 
 **Settlement Digit (D′):** The last digit of the next tick after a step is locked.
 
@@ -39,11 +41,11 @@
 
 ## 2. Product Concept
 
-Digit Ladder is a casino-style Higher/Lower arcade on live last digits. The player sees a face digit, stakes once, taps Higher or Lower, and waits for the next tick. On a win they may cash out the pot or climb the ladder (parlay). On a loss the pot is gone.
+Digit Ladder is a casino-style Higher/Lower arcade on live last digits. The player draws a free face digit, stakes once, taps Higher or Lower, and waits for the next tick. On a win they may cash out the pot or climb the ladder (parlay). On a loss the pot is gone.
 
 **Why this product exists:** Digits already offers Over/Under with a keypad threshold. Digit Ladder is the comparative High/Low framing with a parlay continue loop — trading last digits with a gamified climb.
 
-**Core loop:** (1) See D, set stake; (2) tap Higher/Lower — lock step; (3) next tick settles; (4) cash out or continue; (5) bust or bank.
+**Core loop:** (1) Free-draw face D; (2) set stake, tap Higher/Lower — lock step; (3) next tick settles; (4) cash out or continue; (5) bust or bank → draw again.
 
 ---
 
@@ -179,10 +181,12 @@ On terminal settle, emit `CONTRACT_SETTLED` with `outcome` `WON`/`LOST`, stake/p
 ## 8. Frontend (platform_standard §25 + product)
 
 - Mobile-first column; sentence case
-- Hero: large face digit + subtle live quote
-- Equal pick cards — Higher / Lower with live multipliers and winning-set hints
+- **Free draw before stake** — face is locked from a no-bet tick; live stream shown separately so odds do not flicker
+- Hero: large face digit + quote→digit extraction + secondary live strip
+- Settle compare cue (`D → D′`) and rung trail during a climb
+- Equal pick cards — Higher / Lower with multipliers vs locked face
+- Ready dock order: stake, then Higher / Lower; optional Draw again
 - After win: Cash out + Higher / Lower continue; show pot and rung count
-- One gesture per step: tap pick → await tick → settle
 - Design tokens only (no hardcoded hex)
 
 ---

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
+import type { ParsedTick } from '@/types';
 import {
   cashOut,
   centsToUsdt,
@@ -12,12 +13,19 @@ import {
   openRound,
   rungCount,
   settleStep,
+  stepWins,
   usdtToCents,
   type DigitLadderPick,
   type DigitLadderRound,
 } from '@/lib/games/digit-ladder';
 
-export type DigitLadderPhase = 'idle' | 'awaiting_tick' | 'decision' | 'settled';
+export type DigitLadderPhase =
+  | 'need_draw'
+  | 'drawing'
+  | 'ready'
+  | 'awaiting_tick'
+  | 'decision'
+  | 'settled';
 
 export interface DigitLadderResult {
   outcome: 'WON' | 'LOST';
@@ -27,6 +35,8 @@ export interface DigitLadderResult {
   rungs: number;
   cashOut: boolean;
   lastDigit: number | null;
+  entryDigit: number | null;
+  pick: DigitLadderPick | null;
 }
 
 export interface DigitLadderHistoryEntry {
@@ -35,6 +45,13 @@ export interface DigitLadderHistoryEntry {
   stakeUsdt: number;
   rungs: number;
   cashOut: boolean;
+}
+
+export interface SettleCompare {
+  entryDigit: number;
+  settlementDigit: number;
+  pick: DigitLadderPick;
+  won: boolean;
 }
 
 const HISTORY_CAP = 50;
@@ -46,17 +63,23 @@ export function useDigitLadder() {
   const getNextTick = useNextTick(selectedIndex);
 
   const [stake, setStake] = useState(100);
-  const [phase, setPhase] = useState<DigitLadderPhase>('idle');
+  const [phase, setPhase] = useState<DigitLadderPhase>('need_draw');
   const [round, setRound] = useState<DigitLadderRound | null>(null);
   const [result, setResult] = useState<DigitLadderResult | null>(null);
   const [history, setHistory] = useState<DigitLadderHistoryEntry[]>([]);
   const [playError, setPlayError] = useState<string | null>(null);
   const [revealDigit, setRevealDigit] = useState<number | null>(null);
+  const [tableDigit, setTableDigit] = useState<number | null>(null);
+  const [tableTick, setTableTick] = useState<ParsedTick | null>(null);
+  const [extractionKey, setExtractionKey] = useState(0);
+  const [settleCompare, setSettleCompare] = useState<SettleCompare | null>(null);
 
-  const phaseRef = useRef<DigitLadderPhase>('idle');
+  const phaseRef = useRef<DigitLadderPhase>('need_draw');
   const roundRef = useRef<DigitLadderRound | null>(null);
   const busyRef = useRef(false);
+  const autoDrawStartedRef = useRef(false);
   const addWinningsRef = useRef(addWinnings);
+  const tableDigitRef = useRef<number | null>(null);
 
   useEffect(() => {
     addWinningsRef.current = addWinnings;
@@ -70,28 +93,57 @@ export function useDigitLadder() {
     roundRef.current = round;
   }, [round]);
 
+  useEffect(() => {
+    tableDigitRef.current = tableDigit;
+  }, [tableDigit]);
+
   const liveDigit = latestTick?.lastDigit ?? null;
+  const marketReady = ticks.length > 0 && liveDigit !== null;
+
+  /** Face used for pricing / display: locked table, or in-round face. */
   const faceDigit =
     phase === 'awaiting_tick' || phase === 'decision'
-      ? (round?.face_digit ?? liveDigit)
-      : liveDigit;
+      ? (round?.face_digit ?? tableDigit)
+      : tableDigit;
 
   const pricing = useMemo(() => livePricing(faceDigit), [faceDigit]);
 
   const maxStake = Math.max(10, Math.min(balance, 5000));
-  const marketReady = ticks.length > 0 && liveDigit !== null;
   const canTrade =
-    phase === 'idle' && marketReady && !busyRef.current && balance >= stake;
+    phase === 'ready' &&
+    tableDigit !== null &&
+    marketReady &&
+    !busyRef.current &&
+    balance >= stake;
 
   const potUsdt = round ? centsToUsdt(round.pot_cents) : 0;
   const rungs = round ? rungCount(round) : 0;
+
+  /** Settled step digits for rung trail (entry of first + each settlement). */
+  const rungTrail = useMemo(() => {
+    if (!round) return [] as number[];
+    const trail: number[] = [];
+    for (const step of round.steps) {
+      if (trail.length === 0) trail.push(step.entry_digit);
+      if (step.settlement_digit !== null) trail.push(step.settlement_digit);
+    }
+    return trail;
+  }, [round]);
 
   const pushHistory = useCallback((entry: DigitLadderHistoryEntry) => {
     setHistory((prev) => [entry, ...prev].slice(0, HISTORY_CAP));
   }, []);
 
+  const clearTable = useCallback(() => {
+    setTableDigit(null);
+    tableDigitRef.current = null;
+    setTableTick(null);
+    setRevealDigit(null);
+    setSettleCompare(null);
+  }, []);
+
   const finishBust = useCallback(
-    (next: DigitLadderRound, settlementDigit: number) => {
+    (next: DigitLadderRound, settlementDigit: number, pick: DigitLadderPick, entryDigit: number) => {
       const stakeUsdt = centsToUsdt(next.initial_stake_cents);
       const res: DigitLadderResult = {
         outcome: 'LOST',
@@ -101,6 +153,8 @@ export function useDigitLadder() {
         rungs: rungCount(next),
         cashOut: false,
         lastDigit: settlementDigit,
+        entryDigit,
+        pick,
       };
       setRound(next);
       roundRef.current = next;
@@ -117,24 +171,99 @@ export function useDigitLadder() {
     [pushHistory],
   );
 
+  const drawFace = useCallback(async () => {
+    if (busyRef.current) return;
+    const ph = phaseRef.current;
+    if (ph !== 'need_draw' && ph !== 'ready') return;
+    if (!marketReady) {
+      setPlayError('Waiting for live ticks');
+      return;
+    }
+
+    busyRef.current = true;
+    setPlayError(null);
+    setSettleCompare(null);
+    setRevealDigit(null);
+    setTableDigit(null);
+    tableDigitRef.current = null;
+    setPhase('drawing');
+    phaseRef.current = 'drawing';
+
+    try {
+      const tick = await getNextTick();
+      setTableDigit(tick.lastDigit);
+      tableDigitRef.current = tick.lastDigit;
+      setTableTick(tick);
+      setRevealDigit(tick.lastDigit);
+      setExtractionKey((k) => k + 1);
+      setPhase('ready');
+      phaseRef.current = 'ready';
+    } catch {
+      setPlayError('Tick timed out — tap Draw to try again');
+      setPhase('need_draw');
+      phaseRef.current = 'need_draw';
+      clearTable();
+    } finally {
+      busyRef.current = false;
+    }
+  }, [clearTable, getNextTick, marketReady]);
+
+  // Auto-draw when we need a face and the feed is ready
+  useEffect(() => {
+    if (phase !== 'need_draw') return;
+    if (!marketReady || busyRef.current) return;
+    if (tableDigit !== null) return;
+    if (autoDrawStartedRef.current) return;
+    autoDrawStartedRef.current = true;
+    void drawFace();
+  }, [phase, marketReady, tableDigit, drawFace]);
+
+  // Reset table when symbol changes
+  useEffect(() => {
+    autoDrawStartedRef.current = false;
+    if (
+      phaseRef.current === 'need_draw' ||
+      phaseRef.current === 'ready' ||
+      phaseRef.current === 'drawing'
+    ) {
+      clearTable();
+      setPhase('need_draw');
+      phaseRef.current = 'need_draw';
+      busyRef.current = false;
+    }
+  }, [selectedIndex, clearTable]);
+
   const awaitAndSettle = useCallback(
     async (current: DigitLadderRound) => {
       try {
         const tick = await getNextTick();
+        const active = current.steps[current.steps.length - 1];
+        const won = stepWins(active.pick, active.entry_digit, tick.lastDigit);
+        setSettleCompare({
+          entryDigit: active.entry_digit,
+          settlementDigit: tick.lastDigit,
+          pick: active.pick,
+          won,
+        });
         const settled = settleStep(current, tick.lastDigit, {
           quote: tick.quote,
           epoch: tick.epoch,
         });
         setRevealDigit(tick.lastDigit);
+        setExtractionKey((k) => k + 1);
+        setTableDigit(tick.lastDigit);
+        tableDigitRef.current = tick.lastDigit;
+        setTableTick(tick);
         roundRef.current = settled;
 
         if (settled.status === 'LOST') {
-          finishBust(settled, tick.lastDigit);
+          finishBust(settled, tick.lastDigit, active.pick, active.entry_digit);
           return;
         }
 
         setRound(settled);
         setPhase('decision');
+        phaseRef.current = 'decision';
       } catch {
         setPlayError('Tick timed out — try again');
         const open = roundRef.current;
@@ -144,12 +273,12 @@ export function useDigitLadder() {
           open.steps.length === 1 &&
           open.steps[0].result === null
         ) {
-          // First step never settled — refund escrowed stake
           addWinningsRef.current(centsToUsdt(open.initial_stake_cents));
           setRound(null);
-          setPhase('idle');
+          roundRef.current = null;
+          setPhase('ready');
+          phaseRef.current = 'ready';
         } else if (open && open.status === 'OPEN' && open.phase === 'awaiting_tick') {
-          // Continue step timed out — drop the open step, return to decision with pot intact
           const rolledBack: DigitLadderRound = {
             ...open,
             phase: 'decision',
@@ -160,7 +289,6 @@ export function useDigitLadder() {
                   open.face_digit)
                 : open.face_digit,
           };
-          // Rebuild locked_pricing without the aborted step
           rolledBack.locked_pricing = {
             ...open.locked_pricing,
             steps: rolledBack.steps.map((s) => ({
@@ -172,30 +300,39 @@ export function useDigitLadder() {
             })),
           };
           setRound(rolledBack);
+          roundRef.current = rolledBack;
+          setTableDigit(rolledBack.face_digit);
+          tableDigitRef.current = rolledBack.face_digit;
           setPhase('decision');
+          phaseRef.current = 'decision';
         } else {
           setRound(null);
-          setPhase('idle');
+          roundRef.current = null;
+          setPhase('need_draw');
+          phaseRef.current = 'need_draw';
+          clearTable();
         }
       } finally {
         busyRef.current = false;
       }
     },
-    [finishBust, getNextTick],
+    [clearTable, finishBust, getNextTick],
   );
 
   const placePick = useCallback(
     async (pick: DigitLadderPick) => {
       if (busyRef.current) return;
       setPlayError(null);
-      setRevealDigit(null);
+      setSettleCompare(null);
 
-      if (phaseRef.current === 'idle') {
-        if (liveDigit === null) {
-          setPlayError('Waiting for a live digit');
+      if (phaseRef.current === 'ready') {
+        const entry = tableDigitRef.current;
+        if (entry === null) {
+          setPlayError('Draw a face digit first');
           return;
         }
-        if (!pricing || !pricing[pick].offered) {
+        const side = livePricing(entry)?.[pick];
+        if (!side?.offered) {
           setPlayError('That side is not offered on this digit');
           return;
         }
@@ -209,23 +346,26 @@ export function useDigitLadder() {
         }
 
         busyRef.current = true;
+        setRevealDigit(null);
         try {
           const opened = openRound({
             stakeCents: usdtToCents(stake),
             pick,
-            entryDigit: liveDigit,
+            entryDigit: entry,
             instrument: selectedIndex,
           });
           roundRef.current = opened;
           setRound(opened);
           setPhase('awaiting_tick');
+          phaseRef.current = 'awaiting_tick';
           await awaitAndSettle(opened);
         } catch (err) {
           addWinningsRef.current(stake);
           setPlayError(err instanceof Error ? err.message : 'Could not place');
           setRound(null);
           roundRef.current = null;
-          setPhase('idle');
+          setPhase('ready');
+          phaseRef.current = 'ready';
           busyRef.current = false;
         }
         return;
@@ -244,11 +384,13 @@ export function useDigitLadder() {
         busyRef.current = true;
         setPlayError(null);
         setRevealDigit(null);
+        setSettleCompare(null);
         try {
           const continued = continueRound(current, pick, entry);
           roundRef.current = continued;
           setRound(continued);
           setPhase('awaiting_tick');
+          phaseRef.current = 'awaiting_tick';
           await awaitAndSettle(continued);
         } catch (err) {
           setPlayError(err instanceof Error ? err.message : 'Could not continue');
@@ -256,15 +398,7 @@ export function useDigitLadder() {
         }
       }
     },
-    [
-      awaitAndSettle,
-      balance,
-      liveDigit,
-      placeBet,
-      pricing,
-      selectedIndex,
-      stake,
-    ],
+    [awaitAndSettle, balance, placeBet, selectedIndex, stake],
   );
 
   const onCashOut = useCallback(() => {
@@ -275,6 +409,7 @@ export function useDigitLadder() {
       const stakeUsdt = centsToUsdt(cashed.initial_stake_cents);
       const pot = centsToUsdt(cashed.pot_cents);
       addWinningsRef.current(pot);
+      const lastStep = cashed.steps[cashed.steps.length - 1];
       const res: DigitLadderResult = {
         outcome: 'WON',
         potUsdt: pot,
@@ -283,11 +418,14 @@ export function useDigitLadder() {
         rungs: rungCount(cashed),
         cashOut: true,
         lastDigit: cashed.face_digit,
+        entryDigit: lastStep?.entry_digit ?? null,
+        pick: lastStep?.pick ?? null,
       };
       roundRef.current = cashed;
       setRound(cashed);
       setResult(res);
       setPhase('settled');
+      phaseRef.current = 'settled';
       pushHistory({
         outcome: 'WON',
         potUsdt: pot,
@@ -304,9 +442,11 @@ export function useDigitLadder() {
     setResult(null);
     setRound(null);
     roundRef.current = null;
-    setRevealDigit(null);
-    setPhase('idle');
-  }, []);
+    clearTable();
+    autoDrawStartedRef.current = false;
+    setPhase('need_draw');
+    phaseRef.current = 'need_draw';
+  }, [clearTable]);
 
   return {
     stake,
@@ -318,8 +458,14 @@ export function useDigitLadder() {
     playError,
     revealDigit,
     faceDigit,
+    tableDigit,
+    tableTick,
     liveDigit,
+    liveTick: latestTick,
     liveQuote: latestTick?.quote ?? null,
+    extractionKey,
+    settleCompare,
+    rungTrail,
     pricing,
     potUsdt,
     rungs,
@@ -330,5 +476,6 @@ export function useDigitLadder() {
     placePick,
     onCashOut,
     dismissResult,
+    drawFace,
   };
 }
