@@ -179,7 +179,8 @@ export type GameIconKey =
   | 'barrier-touch'
   | 'synthetic-derby'
   | 'digit-derby'
-  | 'corridor';
+  | 'corridor'
+  | 'digit-ladder';
 
 export type GameTrack = 'roadmap' | 'other';
 

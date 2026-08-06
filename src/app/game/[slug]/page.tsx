@@ -89,6 +89,14 @@ const CorridorGame = dynamic(
   { ssr: false, loading: () => <GameLoading /> },
 );
 
+const DigitLadderGame = dynamic(
+  () =>
+    import('@/components/games/digit-ladder/digit-ladder-game').then(
+      (m) => m.DigitLadderGame,
+    ),
+  { ssr: false, loading: () => <GameLoading /> },
+);
+
 function GameLoading() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-prominent">
@@ -109,6 +117,7 @@ const GAME_COMPONENTS: Record<string, React.ComponentType> = {
   'synthetic-derby': DerbyGame,
   'digit-derby': DigitDerbyGame,
   corridor: CorridorGame,
+  'digit-ladder': DigitLadderGame,
 };
 
 export default function GamePage({

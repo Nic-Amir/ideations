@@ -183,6 +183,23 @@ export const GAMES: GameInfo[] = [
     track: 'other',
     iconKey: 'corridor',
   },
+  {
+    slug: 'digit-ladder',
+    name: 'Digit Ladder',
+    shortName: 'Ladder',
+    description:
+      'Call Higher or Lower on the next tick’s last digit vs the face digit. Cash out after a win, or climb the ladder and parlay the whole pot.',
+    shortPitch: 'Ride the next digit up or down. Cash out or climb the ladder.',
+    category: 'Prediction',
+    risk: 'Medium',
+    sessionLength: '2-30 sec',
+    mechanics:
+      'Stake once. Strict Higher/Lower vs the live last digit; next tick settles. Wins roll into a parlay pot — cash out or continue. Ties bust.',
+    marketSource: 'Deriv live ticks',
+    status: 'Live',
+    track: 'other',
+    iconKey: 'digit-ladder',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

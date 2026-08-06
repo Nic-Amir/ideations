@@ -325,6 +325,49 @@ export default function ProvablyFairPage() {
 
       <Separator />
 
+      <section className="space-y-4">
+        <h2 className="heading-h3 font-display text-on-prominent">
+          Game 6: Digit Ladder
+        </h2>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Casino-style Higher / Lower on the next tick&apos;s last digit versus
+          the face digit. Strict compare only — ties bust the pot. After a win,
+          cash out or parlay the entire pot on the next rung.
+        </p>
+        <p className="body-sm text-on-subtle leading-relaxed">
+          Settlement digits come from the live Deriv (or demo) tick stream — no
+          client RNG. Fair probabilities assume uniform last digits:{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            P(Higher)=(9−D)/10
+          </code>
+          ,{' '}
+          <code className="font-display tabular-nums text-on-prominent bg-subtle px-1 rounded">
+            P(Lower)=D/10
+          </code>
+          . Multipliers use the Digits commission formula{' '}
+          <code className="font-display text-on-prominent">1/(p+0.02)</code>,
+          locked per step.
+        </p>
+        <Card className="border-0 bg-subtle">
+          <CardContent className="p-4 space-y-2 text-xs text-on-subtle">
+            <p>
+              Money uses integer cents. Each round stores{' '}
+              <code className="text-on-prominent">locked_pricing</code> (
+              <code className="text-on-prominent">digit_ladder_vs_current_v1</code>
+              ) with per-step snapshots and{' '}
+              <code className="text-on-prominent">settlement_data</code> for
+              audit replay.
+            </p>
+            <p className="font-display">
+              Parlay pot = floor(pot × step_mult) · cash-out credits pot · bust
+              pays 0
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <Separator />
+
       <Card className="border-0 bg-subtle">
         <CardContent className="p-3">
           <p className="body-xs text-on-subtle">
