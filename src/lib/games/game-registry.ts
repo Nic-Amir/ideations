@@ -200,6 +200,23 @@ export const GAMES: GameInfo[] = [
     track: 'other',
     iconKey: 'digit-ladder',
   },
+  {
+    slug: 'digit-delta',
+    name: 'Digit Delta',
+    shortName: 'Delta',
+    description:
+      'Collect a Higher/Lower digit streak, Hold, then beat the dealer’s run. Paid on the length Δ — ties refund your stake.',
+    shortPitch: 'Hold your digit streak. Beat the dealer. Win the Δ.',
+    category: 'Strategy',
+    risk: 'Medium',
+    sessionLength: '15-90 sec',
+    mechanics:
+      'Free-draw a face, stake once, collect with Higher/Lower, Hold at length ≥ 2. Dealer follows 0–4 Higher / 5 Stand / 6–9 Lower until stand or bust. Fixed Δ pay table.',
+    marketSource: 'Tick feed',
+    status: 'Live',
+    track: 'other',
+    iconKey: 'digit-delta',
+  },
 ];
 
 export const LIVE_GAMES = GAMES.filter((game) => game.status === 'Live');

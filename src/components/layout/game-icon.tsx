@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideProps } from "lucide-react";
-import { Activity, ArrowUpDown, ChevronsUpDown, Columns2, Dice3, Flag, Hash, Repeat, Spade, Target, TrendingUp, Trophy } from "lucide-react";
+import { Activity, ArrowUpDown, ChevronsUpDown, Columns2, Dice3, Diff, Flag, Hash, Repeat, Spade, Target, TrendingUp, Trophy } from "lucide-react";
 import type { GameIconKey } from "@/types";
 
 const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
@@ -17,6 +17,7 @@ const ICONS: Record<GameIconKey, React.ComponentType<LucideProps>> = {
   "digit-derby": Hash,
   corridor: Columns2,
   "digit-ladder": ArrowUpDown,
+  "digit-delta": Diff,
 };
 
 export function GameIcon({

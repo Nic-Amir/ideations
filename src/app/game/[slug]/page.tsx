@@ -97,6 +97,14 @@ const DigitLadderGame = dynamic(
   { ssr: false, loading: () => <GameLoading /> },
 );
 
+const DigitDeltaGame = dynamic(
+  () =>
+    import('@/components/games/digit-delta/digit-delta-game').then(
+      (m) => m.DigitDeltaGame,
+    ),
+  { ssr: false, loading: () => <GameLoading /> },
+);
+
 function GameLoading() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-prominent">
@@ -118,6 +126,7 @@ const GAME_COMPONENTS: Record<string, React.ComponentType> = {
   'digit-derby': DigitDerbyGame,
   corridor: CorridorGame,
   'digit-ladder': DigitLadderGame,
+  'digit-delta': DigitDeltaGame,
 };
 
 export default function GamePage({

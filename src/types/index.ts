@@ -180,7 +180,8 @@ export type GameIconKey =
   | 'synthetic-derby'
   | 'digit-derby'
   | 'corridor'
-  | 'digit-ladder';
+  | 'digit-ladder'
+  | 'digit-delta';
 
 export type GameTrack = 'roadmap' | 'other';
 
