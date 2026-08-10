@@ -10,6 +10,8 @@ interface DigitDeltaPickStripProps {
   canPick: boolean;
   onTap: (pick: DigitDeltaPick) => void;
   faceDigit: number | null;
+  /** ready = first call locks stake; collect = continue streak */
+  mode?: 'start' | 'collect';
 }
 
 export function DigitDeltaPickStrip({
@@ -18,14 +20,16 @@ export function DigitDeltaPickStrip({
   canPick,
   onTap,
   faceDigit,
+  mode = 'collect',
 }: DigitDeltaPickStripProps) {
+  const cue = mode === 'start' ? 'Locks stake' : 'Collect';
   return (
     <div className="flex gap-2" role="group" aria-label="Pick Higher or Lower">
       <PickCard
         title="Higher"
         subtitle={
           higherOffered && faceDigit !== null
-            ? `Above ${faceDigit}`
+            ? `${cue} · above ${faceDigit}`
             : 'Not offered'
         }
         disabled={!canPick || !higherOffered}
@@ -36,7 +40,7 @@ export function DigitDeltaPickStrip({
         title="Lower"
         subtitle={
           lowerOffered && faceDigit !== null
-            ? `Below ${faceDigit}`
+            ? `${cue} · below ${faceDigit}`
             : 'Not offered'
         }
         disabled={!canPick || !lowerOffered}

@@ -15,6 +15,8 @@ import {
   isSideOffered,
   lockPlayerPick,
   openRound,
+  payoutCents,
+  payoutMultiplier,
   playerFace,
   playerLen,
   settleDealerTick,
@@ -35,6 +37,9 @@ export type DigitDeltaPhase =
   | 'awaiting_dealer_face'
   | 'awaiting_dealer_tick'
   | 'settled';
+
+/** Rail steps for the VS board. */
+export type DigitDeltaStepId = 'build' | 'hold' | 'dealer' | 'result';
 
 export interface DigitDeltaResult {
   outcome: 'WON' | 'LOST' | 'REFUNDED';
@@ -63,6 +68,42 @@ export interface SettleCompare {
 }
 
 const HISTORY_CAP = 50;
+const DEALER_PACE_MS = 420;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+export function phaseToStepId(phase: DigitDeltaPhase, pLen: number): DigitDeltaStepId {
+  switch (phase) {
+    case 'need_draw':
+    case 'drawing':
+    case 'ready':
+    case 'awaiting_player_tick':
+      return 'build';
+    case 'player_decision':
+      return pLen >= 2 ? 'hold' : 'build';
+    case 'awaiting_dealer_face':
+    case 'awaiting_dealer_tick':
+      return 'dealer';
+    case 'settled':
+      return 'result';
+    default:
+      return 'build';
+  }
+}
+
+function formatDealerBanner(
+  face: number | null,
+  action: DealerAction | null,
+): string | null {
+  if (face === null || action === null) return null;
+  if (action === 'stand') return `Face ${face} · Stand`;
+  if (action === 'higher') return `Face ${face} · must Higher`;
+  return `Face ${face} · must Lower`;
+}
 
 export function useDigitDelta() {
   const { selectedIndex } = useSettingsStore();
@@ -121,17 +162,74 @@ export function useDigitDelta() {
     !busyRef.current &&
     balance >= stake;
 
-  const pLen = round ? playerLen(round) : 0;
+  const pLen = round ? playerLen(round) : tableDigit !== null ? 1 : 0;
   const dLen = round ? round.dealer_digits.length : 0;
   const holdAllowed = round ? canHold(round) : false;
 
   const higherOffered = faceDigit !== null && isSideOffered('higher', faceDigit);
   const lowerOffered = faceDigit !== null && isSideOffered('lower', faceDigit);
 
+  const stepId = useMemo(
+    () => phaseToStepId(phase, pLen),
+    [phase, pLen],
+  );
+
+  const liveDelta = useMemo(() => {
+    if (phase === 'awaiting_dealer_face') return pLen; // dealer not dealt yet
+    if (
+      phase === 'awaiting_dealer_tick' ||
+      phase === 'settled' ||
+      (round && round.dealer_digits.length > 0)
+    ) {
+      return pLen - dLen;
+    }
+    if (phase === 'player_decision' && pLen >= 2) {
+      // Pre-dealer: assume dealer could stop at 1
+      return pLen - 1;
+    }
+    return null;
+  }, [phase, pLen, dLen, round]);
+
+  const stakeCentsForProjection = round
+    ? round.initial_stake_cents
+    : usdtToCents(stake);
+
+  const projectedPayoutUsdt = useMemo(() => {
+    if (liveDelta === null || liveDelta <= 0) return 0;
+    return centsToUsdt(
+      payoutCents(stakeCentsForProjection, liveDelta, DEFAULT_PAY_TABLE),
+    );
+  }, [liveDelta, stakeCentsForProjection]);
+
+  const holdHint = useMemo(() => {
+    if (pLen < 2) return null;
+    const deltaIfDealerOne = pLen - 1;
+    if (deltaIfDealerOne <= 0) return null;
+    const mult = payoutMultiplier(deltaIfDealerOne, DEFAULT_PAY_TABLE);
+    return `If dealer stops at 1 → Δ${deltaIfDealerOne} pays ${mult}×`;
+  }, [pLen]);
+
+  const dealerFaceDigit =
+    round && round.dealer_digits.length > 0
+      ? round.dealer_digits[round.dealer_digits.length - 1]!
+      : null;
+
+  const dealerBanner = useMemo(() => {
+    if (phase === 'awaiting_dealer_face') return 'Dealer face incoming…';
+    if (phase === 'settled' && result) {
+      if (result.outcome === 'WON') return `You lead by Δ${result.delta}`;
+      if (result.outcome === 'REFUNDED') return 'Lengths tied · stake back';
+      if (result.settleReason === 'player_bust') return 'Streak busted';
+      return 'Dealer outran you';
+    }
+    return formatDealerBanner(dealerFaceDigit, dealerChip);
+  }, [phase, dealerFaceDigit, dealerChip, result]);
+
   const payLegend = useMemo(
     () =>
       DEFAULT_PAY_TABLE.slice(1).map((mult, i) => ({
-        delta: i + 1 >= DEFAULT_PAY_TABLE.length - 1 ? `${i + 1}+` : String(i + 1),
+        delta:
+          i + 1 >= DEFAULT_PAY_TABLE.length - 1 ? `${i + 1}+` : String(i + 1),
         mult,
       })),
     [],
@@ -190,6 +288,9 @@ export function useDigitDelta() {
         setPhase('awaiting_dealer_face');
         phaseRef.current = 'awaiting_dealer_face';
         setDealerChip(null);
+        setSettleCompare(null);
+        await sleep(DEALER_PACE_MS);
+
         const faceTick = await getNextTick();
         setRevealDigit(faceTick.lastDigit);
         setExtractionKey((k) => k + 1);
@@ -208,6 +309,7 @@ export function useDigitDelta() {
         setRound(next);
 
         if (next.status !== 'OPEN') {
+          await sleep(DEALER_PACE_MS);
           finishRound(next);
           return;
         }
@@ -219,6 +321,8 @@ export function useDigitDelta() {
           if (pending === 'higher' || pending === 'lower') {
             setDealerChip(pending);
           }
+          await sleep(DEALER_PACE_MS);
+
           const tick = await getNextTick();
           const face = next.dealer_digits[next.dealer_digits.length - 1]!;
           const pick = next.pending_dealer_action as DigitDeltaPick;
@@ -249,6 +353,7 @@ export function useDigitDelta() {
         }
 
         if (next.status !== 'OPEN') {
+          await sleep(DEALER_PACE_MS);
           finishRound(next);
         }
       } catch {
@@ -328,7 +433,6 @@ export function useDigitDelta() {
       setPlayError(null);
       setSettleCompare(null);
 
-      // First stake + pick from ready
       if (phaseRef.current === 'ready') {
         const entry = tableDigitRef.current;
         if (entry === null) {
@@ -404,7 +508,6 @@ export function useDigitDelta() {
         return;
       }
 
-      // Continue collecting
       if (phaseRef.current === 'player_decision') {
         const current = roundRef.current;
         if (!current) return;
@@ -493,6 +596,30 @@ export function useDigitDelta() {
     phaseRef.current = 'need_draw';
   }, [clearTable]);
 
+  const headline = useMemo(() => {
+    switch (phase) {
+      case 'need_draw':
+        return 'Draw to start';
+      case 'drawing':
+        return 'Drawing face…';
+      case 'ready':
+        return 'Build your streak';
+      case 'awaiting_player_tick':
+        return 'Next tick settles your call';
+      case 'player_decision':
+        return pLen >= 2 ? 'Hold to lock length' : 'Build your streak';
+      case 'awaiting_dealer_face':
+      case 'awaiting_dealer_tick':
+        return "Dealer's turn";
+      case 'settled':
+        if (result?.outcome === 'WON') return `You lead by Δ${result.delta}`;
+        if (result?.outcome === 'REFUNDED') return 'Push';
+        return 'Round over';
+      default:
+        return 'Digit Delta';
+    }
+  }, [phase, pLen, result]);
+
   return {
     stake,
     setStake,
@@ -510,10 +637,17 @@ export function useDigitDelta() {
     extractionKey,
     settleCompare,
     dealerChip,
-    playerDigits: round?.player_digits ?? (tableDigit !== null ? [tableDigit] : []),
+    dealerBanner,
+    playerDigits:
+      round?.player_digits ?? (tableDigit !== null ? [tableDigit] : []),
     dealerDigits: round?.dealer_digits ?? [],
     pLen,
     dLen,
+    liveDelta,
+    projectedPayoutUsdt,
+    holdHint,
+    stepId,
+    headline,
     holdAllowed,
     higherOffered,
     lowerOffered,

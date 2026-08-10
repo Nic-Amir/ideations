@@ -21,14 +21,31 @@ const INFO_SECTIONS: GameInfoSection[] = [
     content: (
       <div className="space-y-2 text-sm text-on-subtle">
         <p>
-          Draw a free face digit, stake once, then call Higher or Lower to
-          collect a streak. Hold when you are ready (length ≥ 2).
+          <strong className="text-on-prominent">1. Build</strong> — Draw a free
+          face, set stake, call Higher or Lower to grow your digit streak.
         </p>
         <p>
-          The dealer must follow house rules: 0–4 Higher, 5 Stand, 6–9 Lower —
-          until they stand or bust. You win the length Δ vs the dealer. Ties
-          refund your stake.
+          <strong className="text-on-prominent">2. Hold</strong> — Lock your
+          length (at least 2; 3 is recommended), then the dealer plays.
         </p>
+        <p>
+          <strong className="text-on-prominent">3. Beat the dealer</strong> —
+          Win if your length beats theirs. Paid on Δ. Ties refund stake.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'dealer',
+    label: 'Dealer rules',
+    content: (
+      <div className="space-y-2 text-sm text-on-subtle">
+        <p>House policy is fixed — no choice:</p>
+        <ul className="list-disc space-y-1 pl-4">
+          <li>Face 0–4 → must call Higher</li>
+          <li>Face 5 → Stand (settle now)</li>
+          <li>Face 6–9 → must call Lower</li>
+        </ul>
       </div>
     ),
   },
@@ -37,11 +54,11 @@ const INFO_SECTIONS: GameInfoSection[] = [
     label: 'Δ payouts',
     content: (
       <div className="space-y-2 text-sm text-on-subtle">
-        <p>
-          Fixed total return on Δ = your length − dealer length: 2.7× · 3.65× ·
-          4.9× · 6.8× · 9.5× (Δ1…Δ5+). Tuned near ~97% RTP if you Hold around
-          length 3.
+        <p>Total return including stake:</p>
+        <p className="font-display tabular-nums text-on-prominent">
+          Δ1 2.7× · Δ2 3.65× · Δ3 4.9× · Δ4 6.8× · Δ5+ 9.5×
         </p>
+        <p>~97% RTP if you Hold around length 3.</p>
       </div>
     ),
   },
@@ -55,22 +72,24 @@ export function DigitDeltaGame() {
     result,
     history,
     playError,
-    revealDigit,
-    faceDigit,
     tableTick,
-    liveDigit,
     liveTick,
     extractionKey,
     settleCompare,
-    dealerChip,
+    dealerBanner,
     playerDigits,
     dealerDigits,
     pLen,
     dLen,
+    liveDelta,
+    projectedPayoutUsdt,
+    holdHint,
+    stepId,
+    headline,
     holdAllowed,
     higherOffered,
     lowerOffered,
-    payLegend,
+    faceDigit,
     balance,
     maxStake,
     marketReady,
@@ -89,6 +108,11 @@ export function DigitDeltaGame() {
   const awaitingDealer =
     phase === 'awaiting_dealer_face' || phase === 'awaiting_dealer_tick';
   const canPick = (ready && canTrade) || playerDecision;
+  const showDealerColumn =
+    dealerDigits.length > 0 ||
+    awaitingDealer ||
+    (phase === 'settled' && (result?.dealerLen ?? 0) > 0);
+  const holdRecommended = playerDecision && pLen >= 3;
 
   return (
     <GameShell title="Digit Delta" infoSections={INFO_SECTIONS} showSymbolPicker>
@@ -96,18 +120,20 @@ export function DigitDeltaGame() {
         play={
           <DigitDeltaFace
             phase={phase}
-            faceDigit={faceDigit}
-            revealDigit={revealDigit}
+            headline={headline}
+            stepId={stepId}
             tableTick={tableTick}
             liveTick={liveTick}
-            liveDigit={liveDigit}
             extractionKey={extractionKey}
             settleCompare={settleCompare}
             playerDigits={playerDigits}
             dealerDigits={dealerDigits}
-            dealerChip={dealerChip}
+            dealerBanner={dealerBanner}
             pLen={pLen}
             dLen={dLen}
+            liveDelta={liveDelta}
+            projectedPayoutUsdt={projectedPayoutUsdt}
+            showDealerColumn={showDealerColumn}
           />
         }
         dock={
@@ -126,7 +152,7 @@ export function DigitDeltaGame() {
 
             {drawing ? (
               <div className="px-4">
-                <GameNotice tone="info">Drawing from next tick…</GameNotice>
+                <GameNotice tone="info">Drawing face digit…</GameNotice>
               </div>
             ) : null}
 
@@ -139,14 +165,13 @@ export function DigitDeltaGame() {
             {awaitingDealer ? (
               <div className="px-4">
                 <GameNotice tone="info">
-                  {phase === 'awaiting_dealer_face'
-                    ? 'Dealer face incoming…'
-                    : 'Dealer must draw…'}
+                  {dealerBanner ?? "Dealer's turn…"}
                 </GameNotice>
               </div>
             ) : null}
 
-            {(needDraw || (drawing && faceDigit === null)) && marketReady ? (
+            {(needDraw || (drawing && playerDigits.length === 0)) &&
+            marketReady ? (
               <div className="px-4">
                 <Button
                   variant="primary"
@@ -159,61 +184,68 @@ export function DigitDeltaGame() {
               </div>
             ) : null}
 
-            {ready || playerDecision ? (
-              <div className="flex flex-wrap justify-center gap-2 px-4 text-[11px] text-on-subtle">
-                {payLegend.map((row) => (
-                  <span key={row.delta} className="tabular-nums">
-                    Δ{row.delta}{' '}
-                    <span className="font-display text-on-prominent">
-                      {row.mult}×
-                    </span>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
             {ready ? (
-              <StakeDock
-                stake={stake}
-                max={maxStake}
-                balance={balance}
-                onStakeChange={setStake}
-                stakeDisabled={!ready}
-              />
+              <>
+                <div className="px-4">
+                  <p className="mb-2 text-center text-xs text-on-subtle">
+                    Stake locks on your first Higher / Lower call
+                  </p>
+                  <StakeDock
+                    stake={stake}
+                    max={maxStake}
+                    balance={balance}
+                    onStakeChange={setStake}
+                    stakeDisabled={!ready}
+                  />
+                </div>
+                <div className="px-4">
+                  <DigitDeltaPickStrip
+                    higherOffered={higherOffered}
+                    lowerOffered={lowerOffered}
+                    canPick={canPick}
+                    onTap={(p) => void placePick(p)}
+                    faceDigit={faceDigit}
+                    mode="start"
+                  />
+                </div>
+              </>
             ) : null}
 
             {playerDecision ? (
-              <div className="flex flex-col gap-2 px-4">
-                <div className="flex items-center justify-between text-xs text-on-subtle">
-                  <span>
-                    Your length{' '}
-                    <span className="font-display font-semibold tabular-nums text-on-prominent">
-                      {pLen}
-                    </span>
-                  </span>
-                  <span className="text-on-subtle">Hold recommended at 3</span>
+              <>
+                <div className="px-4">
+                  <DigitDeltaPickStrip
+                    higherOffered={higherOffered}
+                    lowerOffered={lowerOffered}
+                    canPick={canPick}
+                    onTap={(p) => void placePick(p)}
+                    faceDigit={faceDigit}
+                    mode="collect"
+                  />
                 </div>
-                <Button
-                  variant="primary"
-                  className="w-full min-h-[48px]"
-                  disabled={!holdAllowed}
-                  onClick={() => void onHold()}
-                >
-                  Hold · beat the dealer
-                </Button>
-              </div>
-            ) : null}
-
-            {(ready || playerDecision) && !awaitingPlayer ? (
-              <div className="px-4">
-                <DigitDeltaPickStrip
-                  higherOffered={higherOffered}
-                  lowerOffered={lowerOffered}
-                  canPick={canPick}
-                  onTap={(p) => void placePick(p)}
-                  faceDigit={faceDigit}
-                />
-              </div>
+                {holdAllowed ? (
+                  <div className="flex flex-col gap-1.5 px-4">
+                    <Button
+                      variant={holdRecommended ? 'primary' : 'secondary'}
+                      className="w-full min-h-[48px]"
+                      onClick={() => void onHold()}
+                    >
+                      {holdRecommended
+                        ? 'Hold · recommended'
+                        : 'Hold · lock length'}
+                    </Button>
+                    {holdHint ? (
+                      <p className="text-center text-[11px] text-on-subtle">
+                        {holdHint}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="px-4 text-center text-[11px] text-on-subtle">
+                    Collect one more digit before you can Hold
+                  </p>
+                )}
+              </>
             ) : null}
 
             {history.length > 0 && (ready || needDraw) ? (

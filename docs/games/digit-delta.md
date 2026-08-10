@@ -37,6 +37,7 @@ Pay table (total return incl. stake): Δ1 **2.7×** · Δ2 **3.65×** · Δ3 **4
 ## Playable surface
 
 - Route: `/game/digit-delta` (Other ideas · Live)
+- Play loop UI: **Build → Hold → Dealer → Result** with a You vs Dealer board and live Δ
 - Engine: `src/lib/games/digit-delta.ts`
 - Spec: `docs/games/digit-delta/product_spec.md`
 
