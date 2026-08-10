@@ -5,20 +5,19 @@ import type { HandRank, HandResult } from '@/types';
 /**
  * Calibrated pay table for digit poker with 10-value replacement draws.
  *
- * Two pair and above returns a profit (multiplier > 1x). The top-end
- * payouts are compressed to compensate for how often the hold/redraw
- * mechanic produces matching hands with only 10 digit values.
+ * Top payouts are capped at 7× (five of a kind) and 5× (four of a kind);
+ * value is shifted to mid-tier hands so common wins feel meaningful.
  *
  * Exact brute-force computation (100K hands x 32 hold masks) confirms
- * ~96.6% RTP with optimal hold strategy.
+ * ~98.2% RTP with optimal hold strategy.
  */
 const PAY_TABLE: Record<HandRank, { label: string; multiplier: number }> = {
-  five_of_a_kind: { label: 'Five of a Kind', multiplier: 40 },
-  four_of_a_kind: { label: 'Four of a Kind', multiplier: 9 },
-  full_house: { label: 'Full House', multiplier: 1.8 },
-  straight: { label: 'Straight', multiplier: 1.5 },
-  three_of_a_kind: { label: 'Three of a Kind', multiplier: 1.2 },
-  two_pair: { label: 'Two Pair', multiplier: 1.1 },
+  five_of_a_kind: { label: 'Five of a Kind', multiplier: 7 },
+  four_of_a_kind: { label: 'Four of a Kind', multiplier: 5 },
+  full_house: { label: 'Full House', multiplier: 2.38 },
+  straight: { label: 'Straight', multiplier: 2.08 },
+  three_of_a_kind: { label: 'Three of a Kind', multiplier: 1.61 },
+  two_pair: { label: 'Two Pair', multiplier: 1.52 },
   one_pair: { label: 'One Pair', multiplier: 0 },
   high_card: { label: 'High Card', multiplier: 0 },
 };

@@ -182,12 +182,12 @@ export default function ProvablyFairPage() {
             <p className="font-medium text-on-prominent">Pay Table</p>
             <div className="space-y-1">
               {[
-                ['Five of a Kind', '77777', '40×'],
-                ['Four of a Kind', '33383', '9×'],
-                ['Full House', '44422', '1.8×'],
-                ['Straight', '89012', '1.5×'],
-                ['Three of a Kind', '55563', '1.2×'],
-                ['Two Pair', '33448', '1.1×'],
+                ['Five of a Kind', '77777', '7×'],
+                ['Four of a Kind', '33383', '5×'],
+                ['Full House', '44422', '2.38×'],
+                ['Straight', '89012', '2.08×'],
+                ['Three of a Kind', '55563', '1.61×'],
+                ['Two Pair', '33448', '1.52×'],
                 ['One Pair', '33567', '0×'],
                 ['High Card', '13579', '0×'],
               ].map(([hand, example, payout]) => (

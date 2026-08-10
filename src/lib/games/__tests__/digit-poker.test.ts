@@ -62,25 +62,25 @@ describe('Digit Poker Engine', () => {
     expect(table[table.length - 1].rank).toBe('high_card');
   });
 
-  test('five of a kind pays 40x', () => {
+  test('five of a kind pays 7x', () => {
     const result = evaluateHand([7, 7, 7, 7, 7]);
-    expect(result.multiplier).toBe(40);
+    expect(result.multiplier).toBe(7);
   });
 
-  test('four of a kind pays 9x', () => {
+  test('four of a kind pays 5x', () => {
     const result = evaluateHand([3, 3, 3, 8, 3]);
-    expect(result.multiplier).toBe(9);
+    expect(result.multiplier).toBe(5);
   });
 
-  test('full house pays 1.8x', () => {
+  test('full house pays 2.38x', () => {
     const result = evaluateHand([4, 4, 4, 2, 2]);
-    expect(result.multiplier).toBe(1.8);
+    expect(result.multiplier).toBe(2.38);
   });
 
   test('two pair and above all profit (multiplier > 1)', () => {
-    expect(evaluateHand([3, 4, 5, 6, 7]).multiplier).toBe(1.5);
-    expect(evaluateHand([5, 5, 5, 6, 3]).multiplier).toBe(1.2);
-    expect(evaluateHand([3, 3, 4, 4, 8]).multiplier).toBe(1.1);
+    expect(evaluateHand([3, 4, 5, 6, 7]).multiplier).toBe(2.08);
+    expect(evaluateHand([5, 5, 5, 6, 3]).multiplier).toBe(1.61);
+    expect(evaluateHand([3, 3, 4, 4, 8]).multiplier).toBe(1.52);
   });
 
   test('one pair and high card pay 0x', () => {
@@ -137,7 +137,7 @@ describe('Digit Poker Engine', () => {
   });
 
   test(
-    'optimal-play RTP is between 95% and 99%',
+    'optimal-play RTP is between 97.5% and 99%',
     () => {
       const evCache = new Map<string, number>();
 
@@ -192,8 +192,8 @@ describe('Digit Poker Engine', () => {
       }
 
       const optimalRTP = totalOptimalEV / 100_000;
-      expect(optimalRTP).toBeGreaterThan(0.95);
-      expect(optimalRTP).toBeLessThan(0.98);
+      expect(optimalRTP).toBeGreaterThan(0.975);
+      expect(optimalRTP).toBeLessThan(0.99);
     },
     60_000,
   );
