@@ -4,6 +4,7 @@ import { describe, expect, test } from 'vitest';
 import {
   DEFAULT_PAY_TABLE,
   canHold,
+  compareReasonLabel,
   dealDealerFace,
   dealerAction,
   hold,
@@ -17,6 +18,7 @@ import {
   settlePlayerTick,
   simulateRtp,
   stepWins,
+  winningSetHint,
 } from '@/lib/games/digit-delta';
 
 describe('dealerAction', () => {
@@ -33,6 +35,24 @@ describe('stepWins', () => {
     expect(stepWins('higher', 5, 5)).toBe(false);
     expect(stepWins('lower', 5, 3)).toBe(true);
     expect(stepWins('lower', 5, 5)).toBe(false);
+  });
+});
+
+describe('compareReasonLabel / winningSetHint', () => {
+  test('labels tie, not higher, collected', () => {
+    expect(compareReasonLabel('higher', 5, 5, false)).toBe('Tie · same digit');
+    expect(compareReasonLabel('higher', 5, 3, false)).toBe('Not higher');
+    expect(compareReasonLabel('lower', 5, 7, false)).toBe('Not lower');
+    expect(compareReasonLabel('higher', 5, 8, true)).toBe('Higher · collected');
+    expect(compareReasonLabel('higher', 5, 8, true, 'dealer')).toBe(
+      'Higher · dealer collected',
+    );
+  });
+
+  test('winning set hints', () => {
+    expect(winningSetHint('higher', 5)).toBe('6–9');
+    expect(winningSetHint('lower', 5)).toBe('0–4');
+    expect(winningSetHint('higher', 9)).toBe('—');
   });
 });
 

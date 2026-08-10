@@ -6,6 +6,7 @@ import type { ParsedTick } from '@/types';
 import type {
   DigitDeltaPhase,
   DigitDeltaStepId,
+  PendingCall,
   SettleCompare,
 } from '@/hooks/use-digit-delta';
 import { cn } from '@/lib/utils';
@@ -23,8 +24,10 @@ interface DigitDeltaFaceProps {
   stepId: DigitDeltaStepId;
   tableTick: ParsedTick | null;
   liveTick: ParsedTick | null;
+  liveDigit: number | null;
   extractionKey: number;
   settleCompare: SettleCompare | null;
+  pendingCall: PendingCall | null;
   playerDigits: number[];
   dealerDigits: number[];
   dealerBanner: string | null;
@@ -33,6 +36,15 @@ interface DigitDeltaFaceProps {
   liveDelta: number | null;
   projectedPayoutUsdt: number;
   showDealerColumn: boolean;
+  onDrawAgain?: () => void;
+  canDrawAgain?: boolean;
+}
+
+function compareCue(compare: SettleCompare): { label: string; tone: string } {
+  return {
+    label: compare.reasonLabel,
+    tone: compare.won ? 'text-semantic-win' : 'text-semantic-loss',
+  };
 }
 
 export function DigitDeltaFace({
@@ -41,8 +53,10 @@ export function DigitDeltaFace({
   stepId,
   tableTick,
   liveTick,
+  liveDigit,
   extractionKey,
   settleCompare,
+  pendingCall,
   playerDigits,
   dealerDigits,
   dealerBanner,
@@ -51,11 +65,24 @@ export function DigitDeltaFace({
   liveDelta,
   projectedPayoutUsdt,
   showDealerColumn,
+  onDrawAgain,
+  canDrawAgain,
 }: DigitDeltaFaceProps) {
   const extractionTick =
     settleCompare && liveTick && liveTick.lastDigit === settleCompare.settlementDigit
       ? liveTick
       : tableTick;
+
+  const showExtraction =
+    Boolean(extractionTick) &&
+    (phase === 'ready' ||
+      phase === 'drawing' ||
+      phase === 'player_decision' ||
+      phase === 'awaiting_player_tick' ||
+      phase === 'awaiting_dealer_face' ||
+      phase === 'awaiting_dealer_tick' ||
+      phase === 'settled' ||
+      Boolean(settleCompare));
 
   const showDelta =
     showDealerColumn ||
@@ -71,30 +98,59 @@ export function DigitDeltaFace({
           ? 'push'
           : 'behind';
 
+  const awaitingLine = pendingCall
+    ? `Waiting ${pendingCall.pick === 'higher' ? 'Higher' : pendingCall.pick === 'lower' ? 'Lower' : 'Stand'} vs ${pendingCall.face}`
+    : null;
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-5">
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-4">
       <StepRail active={stepId} />
 
       <p className="text-center text-sm font-medium text-on-prominent">{headline}</p>
 
-      {extractionTick ? (
+      {/* Persistent live feed — Ladder-style */}
+      <div className="flex items-center gap-2 text-xs text-on-subtle">
+        <span className="uppercase tracking-wide">Live</span>
+        <span
+          className={cn(
+            'inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-subtle font-display text-sm font-bold tabular-nums text-on-prominent',
+            liveDigit === null && 'text-on-subtle',
+          )}
+        >
+          {liveDigit ?? '—'}
+        </span>
+        {liveTick?.quote ? (
+          <span className="tabular-nums opacity-80">{liveTick.quote}</span>
+        ) : null}
+      </div>
+
+      {showExtraction && extractionTick ? (
         <DigitExtraction tick={extractionTick} triggerKey={extractionKey} />
       ) : null}
 
+      {awaitingLine ? (
+        <p className="text-center text-xs font-semibold text-primary tabular-nums">
+          {awaitingLine}
+        </p>
+      ) : null}
+
       {settleCompare ? (
-        <motion.p
+        <motion.div
           key={`${settleCompare.side}-${settleCompare.settlementDigit}-${extractionKey}`}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            'text-sm font-medium tabular-nums',
-            settleCompare.won ? 'text-semantic-win' : 'text-semantic-loss',
-          )}
+          className="flex flex-col items-center gap-0.5"
         >
-          {settleCompare.side === 'dealer' ? 'Dealer · ' : 'You · '}
-          {settleCompare.entryDigit} → {settleCompare.settlementDigit}
-          {settleCompare.won ? ' · collect' : ' · bust'}
-        </motion.p>
+          <p className="font-display text-base tabular-nums text-on-prominent">
+            {settleCompare.side === 'dealer' ? 'Dealer · ' : 'You · '}
+            <span>{settleCompare.entryDigit}</span>
+            <span className="mx-2 text-on-subtle">→</span>
+            <span>{settleCompare.settlementDigit}</span>
+          </p>
+          <p className={cn('text-sm font-semibold', compareCue(settleCompare).tone)}>
+            {compareCue(settleCompare).label}
+          </p>
+        </motion.div>
       ) : null}
 
       <div className="grid w-full max-w-md grid-cols-[1fr_auto_1fr] items-start gap-2 sm:gap-3">
@@ -132,6 +188,16 @@ export function DigitDeltaFace({
           banner={showDealerColumn ? dealerBanner : null}
         />
       </div>
+
+      {phase === 'ready' && canDrawAgain && onDrawAgain ? (
+        <button
+          type="button"
+          onClick={onDrawAgain}
+          className="min-h-[44px] px-3 text-xs font-semibold text-primary underline-offset-2 hover:underline"
+        >
+          Draw again
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -139,16 +205,16 @@ export function DigitDeltaFace({
 function StepRail({ active }: { active: DigitDeltaStepId }) {
   const activeIndex = STEPS.findIndex((s) => s.id === active);
   return (
-    <ol className="flex w-full max-w-md items-center justify-between gap-1 px-1">
+    <ol className="flex w-full max-w-sm items-center gap-0.5 px-1">
       {STEPS.map((step, i) => {
         const isActive = step.id === active;
         const isDone = i < activeIndex;
         return (
-          <li key={step.id} className="flex flex-1 items-center gap-1">
-            <div className="flex flex-col items-center gap-1">
+          <li key={step.id} className="flex flex-1 items-center gap-0.5">
+            <div className="flex flex-col items-center gap-0.5">
               <span
                 className={cn(
-                  'flex size-6 items-center justify-center rounded-full text-[10px] font-bold tabular-nums',
+                  'flex size-5 items-center justify-center rounded-full text-[9px] font-bold tabular-nums',
                   isActive
                     ? 'bg-primary text-on-prominent-static-inverse'
                     : isDone
@@ -160,8 +226,8 @@ function StepRail({ active }: { active: DigitDeltaStepId }) {
               </span>
               <span
                 className={cn(
-                  'text-[10px] uppercase tracking-wide',
-                  isActive ? 'text-on-prominent font-semibold' : 'text-on-subtle',
+                  'text-[9px] uppercase tracking-wide',
+                  isActive ? 'font-semibold text-on-prominent' : 'text-on-subtle',
                 )}
               >
                 {step.label}
@@ -170,7 +236,7 @@ function StepRail({ active }: { active: DigitDeltaStepId }) {
             {i < STEPS.length - 1 ? (
               <div
                 className={cn(
-                  'mb-4 h-px flex-1',
+                  'mb-3 h-px flex-1',
                   i < activeIndex ? 'bg-primary/40' : 'bg-border-subtle',
                 )}
               />
@@ -196,7 +262,7 @@ function DeltaBadge({
   settled: boolean;
 }) {
   if (!show) {
-    return <div className="flex w-14 flex-col items-center pt-8" />;
+    return <div className="flex w-14 flex-col items-center pt-6" />;
   }
 
   const label =
@@ -220,7 +286,7 @@ function DeltaBadge({
           : 'behind';
 
   return (
-    <div className="flex w-14 flex-col items-center pt-6">
+    <div className="flex w-14 flex-col items-center pt-5">
       <AnimatePresence mode="wait">
         <motion.div
           key={`${label}-${settled}`}
@@ -228,7 +294,7 @@ function DeltaBadge({
           animate={{ scale: settled ? [1, 1.08, 1] : 1, opacity: 1 }}
           transition={{ duration: settled ? 0.45 : 0.2 }}
           className={cn(
-            'flex min-h-[3.25rem] w-full flex-col items-center justify-center rounded-xl border px-1 py-2 text-center',
+            'flex min-h-[3rem] w-full flex-col items-center justify-center rounded-xl border px-1 py-1.5 text-center',
             tone === 'lead' && 'border-semantic-win/40 bg-semantic-win/10',
             tone === 'push' && 'border-border-subtle bg-subtle',
             tone === 'behind' && 'border-semantic-loss/40 bg-semantic-loss/10',
@@ -274,7 +340,7 @@ function HandColumn({
   return (
     <div
       className={cn(
-        'flex min-h-[10rem] flex-col gap-2 rounded-xl border p-3',
+        'flex min-h-[9rem] flex-col gap-2 rounded-xl border p-2.5',
         active ? 'border-primary/35 bg-primary/5' : 'border-border-subtle bg-subtle/30',
         placeholder && 'opacity-60',
       )}
@@ -310,7 +376,7 @@ function HandColumn({
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 420, damping: 22 }}
               className={cn(
-                'flex size-9 items-center justify-center rounded-lg font-display text-base font-bold tabular-nums',
+                'flex size-8 items-center justify-center rounded-lg font-display text-sm font-bold tabular-nums',
                 tone === 'player'
                   ? 'bg-primary/15 text-on-prominent'
                   : 'bg-subtle text-on-prominent',

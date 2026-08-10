@@ -74,8 +74,10 @@ export function DigitDeltaGame() {
     playError,
     tableTick,
     liveTick,
+    liveDigit,
     extractionKey,
     settleCompare,
+    pendingCall,
     dealerBanner,
     playerDigits,
     dealerDigits,
@@ -114,6 +116,29 @@ export function DigitDeltaGame() {
     (phase === 'settled' && (result?.dealerLen ?? 0) > 0);
   const holdRecommended = playerDecision && pLen >= 3;
 
+  const resultTitle =
+    result?.outcome === 'WON'
+      ? `Won · Δ${result.delta}`
+      : result?.outcome === 'REFUNDED'
+        ? 'Push · stake back'
+        : result?.settleReason === 'player_bust'
+          ? result.pickLabel
+            ? `Bust · called ${result.pickLabel}`
+            : 'Bust'
+          : 'Dealer outran you';
+
+  const resultSubtitle = result
+    ? result.settleReason === 'player_bust' && result.compareLine
+      ? `${result.compareLine}${result.reasonLabel ? ` · ${result.reasonLabel}` : ''}`
+      : result.reasonLabel ??
+        `You ${result.playerLen} · Dealer ${result.dealerLen}`
+    : undefined;
+
+  const autoDismissMs =
+    result?.outcome === 'LOST' && result.settleReason === 'player_bust'
+      ? 5000
+      : 3500;
+
   return (
     <GameShell title="Digit Delta" infoSections={INFO_SECTIONS} showSymbolPicker>
       <GameViewport
@@ -124,8 +149,10 @@ export function DigitDeltaGame() {
             stepId={stepId}
             tableTick={tableTick}
             liveTick={liveTick}
+            liveDigit={liveDigit}
             extractionKey={extractionKey}
             settleCompare={settleCompare}
+            pendingCall={pendingCall}
             playerDigits={playerDigits}
             dealerDigits={dealerDigits}
             dealerBanner={dealerBanner}
@@ -134,6 +161,8 @@ export function DigitDeltaGame() {
             liveDelta={liveDelta}
             projectedPayoutUsdt={projectedPayoutUsdt}
             showDealerColumn={showDealerColumn}
+            canDrawAgain={ready && !drawing}
+            onDrawAgain={() => void drawFace()}
           />
         }
         dock={
@@ -158,7 +187,11 @@ export function DigitDeltaGame() {
 
             {awaitingPlayer ? (
               <div className="px-4">
-                <GameNotice tone="info">Next tick settles your call…</GameNotice>
+                <GameNotice tone="info">
+                  {pendingCall
+                    ? `Waiting ${pendingCall.pick === 'higher' ? 'Higher' : 'Lower'} vs ${pendingCall.face}…`
+                    : 'Next tick settles your call…'}
+                </GameNotice>
               </div>
             ) : null}
 
@@ -279,20 +312,8 @@ export function DigitDeltaGame() {
       <ResultOverlay
         open={phase === 'settled' && result !== null}
         won={result?.outcome === 'WON'}
-        title={
-          result?.outcome === 'WON'
-            ? `Won · Δ${result.delta}`
-            : result?.outcome === 'REFUNDED'
-              ? 'Push · stake back'
-              : result?.settleReason === 'player_bust'
-                ? 'Bust'
-                : 'Dealer outran you'
-        }
-        subtitle={
-          result
-            ? `You ${result.playerLen} · Dealer ${result.dealerLen}`
-            : undefined
-        }
+        title={resultTitle}
+        subtitle={resultSubtitle}
         amount={
           result?.outcome === 'LOST' ? result.stakeUsdt : result?.payoutUsdt
         }
@@ -315,7 +336,7 @@ export function DigitDeltaGame() {
             : 'loss'
         }
         onDismiss={dismissResult}
-        autoDismissMs={3500}
+        autoDismissMs={autoDismissMs}
         showAutoDismissBar
       />
     </GameShell>

@@ -9,6 +9,7 @@ import {
   DEFAULT_PAY_TABLE,
   canHold,
   centsToUsdt,
+  compareReasonLabel,
   dealDealerFace,
   dealerAction,
   hold,
@@ -50,6 +51,11 @@ export interface DigitDeltaResult {
   dealerLen: number;
   delta: number;
   settleReason: string;
+  /** Why the round ended (bust/win detail). */
+  reasonLabel: string | null;
+  /** Last compare digits for bust display, e.g. "4 → 4". */
+  compareLine: string | null;
+  pickLabel: string | null;
 }
 
 export interface DigitDeltaHistoryEntry {
@@ -65,6 +71,13 @@ export interface SettleCompare {
   pick: DigitDeltaPick | DealerAction;
   won: boolean;
   side: 'player' | 'dealer';
+  reasonLabel: string;
+}
+
+export interface PendingCall {
+  side: 'player' | 'dealer';
+  pick: DigitDeltaPick | DealerAction;
+  face: number;
 }
 
 const HISTORY_CAP = 50;
@@ -123,6 +136,8 @@ export function useDigitDelta() {
   const [extractionKey, setExtractionKey] = useState(0);
   const [settleCompare, setSettleCompare] = useState<SettleCompare | null>(null);
   const [dealerChip, setDealerChip] = useState<DealerAction | null>(null);
+  const [pendingCall, setPendingCall] = useState<PendingCall | null>(null);
+  const lastCompareRef = useRef<SettleCompare | null>(null);
 
   const phaseRef = useRef<DigitDeltaPhase>('need_draw');
   const roundRef = useRef<DigitDeltaRound | null>(null);
@@ -246,6 +261,8 @@ export function useDigitDelta() {
     setRevealDigit(null);
     setSettleCompare(null);
     setDealerChip(null);
+    setPendingCall(null);
+    lastCompareRef.current = null;
   }, []);
 
   const finishRound = useCallback(
@@ -256,6 +273,31 @@ export function useDigitDelta() {
         addWinningsRef.current(payoutUsdt);
       }
       const sd = next.settlement_data;
+      const settleReason = sd?.settle_reason ?? 'player_bust';
+      const last = lastCompareRef.current;
+      let reasonLabel: string | null = null;
+      let compareLine: string | null = null;
+      let pickLabel: string | null = null;
+
+      if (settleReason === 'player_bust' && last) {
+        reasonLabel = last.reasonLabel;
+        compareLine = `${last.entryDigit} → ${last.settlementDigit}`;
+        pickLabel =
+          last.pick === 'higher'
+            ? 'Higher'
+            : last.pick === 'lower'
+              ? 'Lower'
+              : String(last.pick);
+      } else if (settleReason === 'length_win') {
+        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0}`;
+        compareLine = null;
+        pickLabel = null;
+      } else if (settleReason === 'length_tie') {
+        reasonLabel = 'Same length · stake back';
+      } else if (settleReason === 'length_loss') {
+        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0}`;
+      }
+
       const res: DigitDeltaResult = {
         outcome: next.status as DigitDeltaResult['outcome'],
         payoutUsdt,
@@ -264,11 +306,15 @@ export function useDigitDelta() {
         playerLen: sd?.player_len ?? playerLen(next),
         dealerLen: sd?.dealer_len ?? next.dealer_digits.length,
         delta: sd?.delta ?? 0,
-        settleReason: sd?.settle_reason ?? 'player_bust',
+        settleReason,
+        reasonLabel,
+        compareLine,
+        pickLabel,
       };
       setRound(next);
       roundRef.current = next;
       setResult(res);
+      setPendingCall(null);
       setPhase('settled');
       phaseRef.current = 'settled';
       pushHistory({
@@ -289,6 +335,7 @@ export function useDigitDelta() {
         phaseRef.current = 'awaiting_dealer_face';
         setDealerChip(null);
         setSettleCompare(null);
+        setPendingCall(null);
         await sleep(DEALER_PACE_MS);
 
         const faceTick = await getNextTick();
@@ -318,8 +365,10 @@ export function useDigitDelta() {
           setPhase('awaiting_dealer_tick');
           phaseRef.current = 'awaiting_dealer_tick';
           const pending = next.pending_dealer_action;
+          const faceBefore = next.dealer_digits[next.dealer_digits.length - 1]!;
           if (pending === 'higher' || pending === 'lower') {
             setDealerChip(pending);
+            setPendingCall({ side: 'dealer', pick: pending, face: faceBefore });
           }
           await sleep(DEALER_PACE_MS);
 
@@ -327,13 +376,17 @@ export function useDigitDelta() {
           const face = next.dealer_digits[next.dealer_digits.length - 1]!;
           const pick = next.pending_dealer_action as DigitDeltaPick;
           const won = stepWins(pick, face, tick.lastDigit);
-          setSettleCompare({
+          const compare: SettleCompare = {
             entryDigit: face,
             settlementDigit: tick.lastDigit,
             pick,
             won,
             side: 'dealer',
-          });
+            reasonLabel: compareReasonLabel(pick, face, tick.lastDigit, won, 'dealer'),
+          };
+          lastCompareRef.current = compare;
+          setSettleCompare(compare);
+          setPendingCall(null);
           setRevealDigit(tick.lastDigit);
           setExtractionKey((k) => k + 1);
           setTableDigit(tick.lastDigit);
@@ -349,6 +402,7 @@ export function useDigitDelta() {
 
           if (next.dealer_stop_reason === 'stand_on_5') {
             setDealerChip('stand');
+            setPendingCall(null);
           }
         }
 
@@ -463,18 +517,23 @@ export function useDigitDelta() {
           opened = lockPlayerPick(opened, pick);
           roundRef.current = opened;
           setRound(opened);
+          setPendingCall({ side: 'player', pick, face: entry });
           setPhase('awaiting_player_tick');
           phaseRef.current = 'awaiting_player_tick';
 
           const tick = await getNextTick();
           const won = stepWins(pick, entry, tick.lastDigit);
-          setSettleCompare({
+          const compare: SettleCompare = {
             entryDigit: entry,
             settlementDigit: tick.lastDigit,
             pick,
             won,
             side: 'player',
-          });
+            reasonLabel: compareReasonLabel(pick, entry, tick.lastDigit, won, 'player'),
+          };
+          lastCompareRef.current = compare;
+          setSettleCompare(compare);
+          setPendingCall(null);
           setRevealDigit(tick.lastDigit);
           setExtractionKey((k) => k + 1);
           setTableDigit(tick.lastDigit);
@@ -501,6 +560,7 @@ export function useDigitDelta() {
           setPlayError(err instanceof Error ? err.message : 'Could not place');
           setRound(null);
           roundRef.current = null;
+          setPendingCall(null);
           setPhase('ready');
           phaseRef.current = 'ready';
           busyRef.current = false;
@@ -523,18 +583,23 @@ export function useDigitDelta() {
           const locked = lockPlayerPick(current, pick);
           roundRef.current = locked;
           setRound(locked);
+          setPendingCall({ side: 'player', pick, face: entry });
           setPhase('awaiting_player_tick');
           phaseRef.current = 'awaiting_player_tick';
 
           const tick = await getNextTick();
           const won = stepWins(pick, entry, tick.lastDigit);
-          setSettleCompare({
+          const compare: SettleCompare = {
             entryDigit: entry,
             settlementDigit: tick.lastDigit,
             pick,
             won,
             side: 'player',
-          });
+            reasonLabel: compareReasonLabel(pick, entry, tick.lastDigit, won, 'player'),
+          };
+          lastCompareRef.current = compare;
+          setSettleCompare(compare);
+          setPendingCall(null);
           setRevealDigit(tick.lastDigit);
           setExtractionKey((k) => k + 1);
           setTableDigit(tick.lastDigit);
@@ -558,6 +623,7 @@ export function useDigitDelta() {
           busyRef.current = false;
         } catch (err) {
           setPlayError(err instanceof Error ? err.message : 'Could not continue');
+          setPendingCall(null);
           busyRef.current = false;
         }
       }
@@ -636,6 +702,7 @@ export function useDigitDelta() {
     liveTick: latestTick,
     extractionKey,
     settleCompare,
+    pendingCall,
     dealerChip,
     dealerBanner,
     playerDigits:

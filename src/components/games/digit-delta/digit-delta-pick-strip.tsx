@@ -2,7 +2,10 @@
 
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import type { DigitDeltaPick } from '@/lib/games/digit-delta';
+import {
+  winningSetHint,
+  type DigitDeltaPick,
+} from '@/lib/games/digit-delta';
 
 interface DigitDeltaPickStripProps {
   higherOffered: boolean;
@@ -29,7 +32,7 @@ export function DigitDeltaPickStrip({
         title="Higher"
         subtitle={
           higherOffered && faceDigit !== null
-            ? `${cue} · above ${faceDigit}`
+            ? `${cue} · ${winningSetHint('higher', faceDigit)}`
             : 'Not offered'
         }
         disabled={!canPick || !higherOffered}
@@ -40,7 +43,7 @@ export function DigitDeltaPickStrip({
         title="Lower"
         subtitle={
           lowerOffered && faceDigit !== null
-            ? `${cue} · below ${faceDigit}`
+            ? `${cue} · ${winningSetHint('lower', faceDigit)}`
             : 'Not offered'
         }
         disabled={!canPick || !lowerOffered}

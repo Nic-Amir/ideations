@@ -84,6 +84,22 @@ export function isSideOffered(pick: DigitDeltaPick, entryDigit: number): boolean
   return baseProb(pick, entryDigit) > 0;
 }
 
+/** Digits 0…9 that win for this pick given face D. */
+export function winningSet(pick: DigitDeltaPick, entryDigit: number): number[] {
+  if (!isValidDigit(entryDigit)) return [];
+  if (pick === 'higher') {
+    return Array.from({ length: 9 - entryDigit }, (_, i) => entryDigit + 1 + i);
+  }
+  return Array.from({ length: entryDigit }, (_, i) => i);
+}
+
+export function winningSetHint(pick: DigitDeltaPick, entryDigit: number): string {
+  const set = winningSet(pick, entryDigit);
+  if (set.length === 0) return '—';
+  if (set.length === 1) return String(set[0]);
+  return `${set[0]}–${set[set.length - 1]}`;
+}
+
 export function stepWins(
   pick: DigitDeltaPick,
   entryDigit: number,
@@ -92,6 +108,28 @@ export function stepWins(
   if (!isValidDigit(entryDigit) || !isValidDigit(settlementDigit)) return false;
   if (pick === 'higher') return settlementDigit > entryDigit;
   return settlementDigit < entryDigit;
+}
+
+/** Human-readable settle outcome for UI. */
+export function compareReasonLabel(
+  pick: DigitDeltaPick | 'stand',
+  entryDigit: number,
+  settlementDigit: number,
+  won: boolean,
+  side: 'player' | 'dealer' = 'player',
+): string {
+  if (pick === 'stand') return 'Stand';
+  if (settlementDigit === entryDigit) return 'Tie · same digit';
+  if (won) {
+    return side === 'dealer'
+      ? pick === 'higher'
+        ? 'Higher · dealer collected'
+        : 'Lower · dealer collected'
+      : pick === 'higher'
+        ? 'Higher · collected'
+        : 'Lower · collected';
+  }
+  return pick === 'higher' ? 'Not higher' : 'Not lower';
 }
 
 /** Optimal player call for EV (D=5 → Higher by convention). */
