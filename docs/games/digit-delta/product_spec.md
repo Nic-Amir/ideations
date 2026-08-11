@@ -1,6 +1,6 @@
 # Digit Delta — Product Specification
 
-**Version:** 1.1 · **Date:** August 2026  
+**Version:** 1.3 · **Date:** August 2026  
 **Read `platform_standard.md` first** (trading-game-specs). This document defines only product-specific behavior. Everything in the platform standard applies unchanged when this product is ported to the Deriv Product Mesh.
 
 **Ideations note:** The playable POC in this repo is client-side. Engine types, money (integer cents), round status, `locked_pricing`, and `settlement_data` mirror platform_standard §6.2 / §8.1 / §23.7 so a Go backend can lift them without reshaping the product.
@@ -15,19 +15,23 @@
 
 **Collect:** A successful Higher/Lower call that appends a digit to the hand and increases length by 1.
 
-**Hold:** Player action that ends collecting and starts the dealer phase. Allowed when `playerLen ≥ 2`.
+**Hold:** Player action that ends collecting and starts the dealer phase. Allowed when `playerLen ≥ 2`. Recommended Hold length **3**.
 
 **Length:** Count of digits in a hand including the starting face.
 
-**Δ (Delta):** Settlement length edge used for payout.
-- On **dealer stand:** `playerLen − dealerLen` (only positive Δ pays).
-- On **dealer bust:** `playerLen` (dealer treated as length 0).
+**Stop floor:** Shared rule — neither side may stop on the opening digit alone (`MIN_STOP_LENGTH = 2`). House edge is second-move only.
 
-**House dealer rules:** Deterministic policy — face 0–3 must call Higher; face 4–6 **Stand** (settle immediately); face 7–9 must call Lower.
+**Δ (Delta):** Settlement length edge used for payout: `playerLen − dealerLen` on both stand and dealer bust (dealer digits always count). On bust, Δ is floored to at least 1.
 
-**Dealer stop reason:** `stand` or `bust` (wrong/equal call).
+**Auto-win cap:** Reaching `AUTO_WIN_LENGTH` (6) wins immediately with fixed jackpot mult `AUTO_WIN_PAYOUT_MULT` (dealer skipped).
 
-**Locked Pricing:** Snapshot of pay table version + stake at open. Required by platform_standard §6.2.
+**House dealer rules:** Deterministic policy.
+- Length 1: must call — Higher if face ≤ 5, Lower if face ≥ 6 (never Stand).
+- Length ≥ 2: face 0–3 Higher; face 4–6 **Stand**; face 7–9 Lower.
+
+**Dealer stop reason:** `stand` or `bust` (wrong-direction call; equal rerolls).
+
+**Locked Pricing:** Snapshot of pay table version, auto-win mult, and stake at open. Required by platform_standard §6.2.
 
 **Settlement Data:** Self-contained proof (digits, picks, lengths, Δ, outcome, dealer_stop_reason).
 
@@ -35,11 +39,11 @@
 
 ## 2. Product Concept
 
-Digit Delta turns live last digits into a Hold-and-compare streak game. The player free-draws a face, stakes once, collects with Higher/Lower, Holds, then the house dealer must follow a strict call table until Stand or bust. Payout is a fixed total-return multiple of stake based on settlement Δ.
+Digit Delta turns live last digits into a Hold-and-compare streak game. The player free-draws a face, stakes once, collects with Higher/Lower (equal rerolls), Holds, then the house dealer must follow the same stop floor and a strict call table until Stand or bust. Payout uses a tapered Δ table; length 6 is a fixed jackpot climax.
 
-**Why this product exists:** Digit Ladder is climb-and-parlay. Digit Delta is beat-the-market-continuation — trading language (Hold, Δ) with a gamified dealer phase.
+**Why this product exists:** Digit Ladder is climb-and-parlay. Digit Delta is beat-the-market-continuation — trading language (Hold, Δ) with a gamified dealer phase whose only structural edge is playing after the player.
 
-**Core loop:** (1) Free-draw face; (2) stake; (3) Higher/Lower collect; (4) Hold; (5) dealer runs house rules; (6) settle by bust / length Δ / tie refund / loss.
+**Core loop:** (1) Free-draw face; (2) stake; (3) Higher/Lower collect; (4) Hold or ride to 6; (5) dealer runs house rules; (6) settle by bust / length Δ / tie refund / loss / auto-win.
 
 ---
 
@@ -70,25 +74,29 @@ Digit Delta turns live last digits into a Hold-and-compare streak game. The play
 | --- | --- |
 | Higher and `D′ > D` | Collect — append D′, continue |
 | Lower and `D′ < D` | Collect — append D′, continue |
-| Else (incl. equal) | Round `LOST` (player bust) |
+| Else (wrong direction) | Round `LOST` (player bust) |
+| Equal digit | **Reroll** — not collected; keep pending call |
+| `playerLen ≥ 6` | Instant `WON` (`auto_win_cap`) |
 | Hold with `playerLen ≥ 2` | Enter dealer phase |
 | Hold with `playerLen < 2` | Disallowed |
 
 ### 4.3 House dealer rules
 
-| Face D | Action |
-| --- | --- |
-| 0–3 | Must call **Higher** |
-| 4–6 | **Stand** — settle immediately |
-| 7–9 | Must call **Lower** |
+| Face D | Length 1 | Length ≥ 2 |
+| --- | --- | --- |
+| 0–3 | Must call **Higher** | Must call **Higher** |
+| 4–5 | Must call **Higher** | **Stand** |
+| 6 | Must call **Lower** | **Stand** |
+| 7–9 | Must call **Lower** | Must call **Lower** |
 
-After a successful Higher/Lower, re-evaluate the new face. Stand on 4–6 can occur on the opening face or mid-run.
+After a successful Higher/Lower, re-evaluate the new face with the updated length. Stand on 4–6 is only legal once length ≥ 2.
 
 ### 4.4 Settlement
 
 | Condition | Status | Payout | `settle_reason` |
 | --- | --- | --- | --- |
-| Dealer bust | `WON` | `floor(stake_cents × payTable[playerLen])` | `dealer_bust` |
+| Auto-win at length 6 | `WON` | `floor(stake_cents × auto_win_mult)` | `auto_win_cap` |
+| Dealer bust | `WON` | `floor(stake_cents × payTable[max(playerLen − dealerLen, 1)])` | `dealer_bust` |
 | Stand and `playerLen > dealerLen` | `WON` | `floor(stake_cents × payTable[Δ])` | `length_win` |
 | Stand and `playerLen === dealerLen` | `REFUNDED` | stake back | `length_tie` |
 | Stand and `playerLen < dealerLen` | `LOST` | 0 | `length_loss` |
@@ -98,33 +106,40 @@ After a successful Higher/Lower, re-evaluate the new face. Stand on 4–6 can oc
 
 ## 5. Pricing Model
 
-### 5.1 Fixed pay table (`digit_delta_length_v2`)
+### 5.1 Tapered pay table (`digit_delta_taper_v1`)
 
 Total return including stake:
 
 | Δ | Multiplier |
 | --- | --- |
-| 1 | 1.50 |
-| 2 | 2.30 |
-| 3 | 3.30 |
-| 4 | 4.75 |
-| ≥5 | 6.75 |
+| 1 | 2.25 |
+| 2 | 2.55 |
+| 3 | 2.80 |
+| 4 | 3.00 |
+| ≥5 | 3.15 |
 
-### 5.2 RTP (Monte Carlo, uniform digits, optimal player picks)
+**Auto-win jackpot** (length 6): **3.60×** (`AUTO_WIN_PAYOUT_MULT`) — not `payTable[6]`.
+
+### 5.2 RTP (Monte Carlo, uniform digits, optimal player picks, equal=reroll)
 
 | Hold strategy | Approx RTP |
 | --- | --- |
-| Hold at 3 (recommended) | ~97% |
-| Hold at 4 | ~96% |
-| Hold at 2 | ~95% |
+| Hold at 2 | ~89% |
+| Hold at 3 (recommended) | ~98.5–99% |
+| Hold at 4 | ~91% |
+| Hold at 5 | ~78% |
+| Hold at 6 (jackpot ride) | ~81% |
+
+Constraints: max strategy RTP ≤ 99%; Hold-at-3 is the peak.
 
 ### 5.3 `locked_pricing`
 
 ```json
 {
-  "pricing_model": "digit_delta_length_v2",
-  "pay_table_version": "v2",
-  "pay_table": [0, 1.5, 2.3, 3.3, 4.75, 6.75],
+  "pricing_model": "digit_delta_taper_v1",
+  "pay_table_version": "v5",
+  "pay_table": [0, 2.25, 2.55, 2.8, 3.0, 3.15],
+  "auto_win_mult": 3.6,
   "instrument": "1HZ100V",
   "stake_cents": 10000
 }
@@ -147,7 +162,8 @@ Total return including stake:
 | --- | --- |
 | Min stake | Ideations UI: 10 credits |
 | Max stake | Ideations UI: 5000 credits |
-| Min Hold length | 2 |
+| Min stop length | 2 (player Hold and dealer Stand) |
+| Auto-win length | 6 (fixed jackpot mult) |
 | Split | Not in v1 |
 
 ---

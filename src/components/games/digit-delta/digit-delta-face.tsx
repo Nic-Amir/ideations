@@ -24,7 +24,6 @@ interface DigitDeltaFaceProps {
   stepId: DigitDeltaStepId;
   tableTick: ParsedTick | null;
   liveTick: ParsedTick | null;
-  liveDigit: number | null;
   extractionKey: number;
   settleCompare: SettleCompare | null;
   pendingCall: PendingCall | null;
@@ -41,9 +40,15 @@ interface DigitDeltaFaceProps {
 }
 
 function compareCue(compare: SettleCompare): { label: string; tone: string } {
+  if (compare.reroll) {
+    return { label: compare.reasonLabel, tone: 'text-on-subtle' };
+  }
+  if (compare.won) {
+    return { label: 'Collected · +1', tone: 'text-semantic-win' };
+  }
   return {
     label: compare.reasonLabel,
-    tone: compare.won ? 'text-semantic-win' : 'text-semantic-loss',
+    tone: 'text-semantic-loss',
   };
 }
 
@@ -53,7 +58,6 @@ export function DigitDeltaFace({
   stepId,
   tableTick,
   liveTick,
-  liveDigit,
   extractionKey,
   settleCompare,
   pendingCall,
@@ -98,9 +102,25 @@ export function DigitDeltaFace({
           ? 'push'
           : 'behind';
 
-  const awaitingLine = pendingCall
-    ? `Waiting ${pendingCall.pick === 'higher' ? 'Higher' : pendingCall.pick === 'lower' ? 'Lower' : 'Stand'} vs ${pendingCall.face}`
-    : null;
+  const playerPending =
+    pendingCall?.side === 'player'
+      ? `Waiting ${pendingCall.pick === 'higher' ? 'Higher' : 'Lower'} vs ${pendingCall.face}`
+      : null;
+  const dealerPending =
+    pendingCall?.side === 'dealer'
+      ? `Waiting ${pendingCall.pick === 'higher' ? 'Higher' : pendingCall.pick === 'lower' ? 'Lower' : 'Stand'} vs ${pendingCall.face}`
+      : null;
+
+  const pulsePlayer =
+    Boolean(settleCompare) &&
+    settleCompare!.side === 'player' &&
+    settleCompare!.won &&
+    !settleCompare!.reroll;
+  const pulseDealer =
+    Boolean(settleCompare) &&
+    settleCompare!.side === 'dealer' &&
+    settleCompare!.won &&
+    !settleCompare!.reroll;
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-4">
@@ -108,30 +128,8 @@ export function DigitDeltaFace({
 
       <p className="text-center text-sm font-medium text-on-prominent">{headline}</p>
 
-      {/* Persistent live feed — Ladder-style */}
-      <div className="flex items-center gap-2 text-xs text-on-subtle">
-        <span className="uppercase tracking-wide">Live</span>
-        <span
-          className={cn(
-            'inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-subtle font-display text-sm font-bold tabular-nums text-on-prominent',
-            liveDigit === null && 'text-on-subtle',
-          )}
-        >
-          {liveDigit ?? '—'}
-        </span>
-        {liveTick?.quote ? (
-          <span className="tabular-nums opacity-80">{liveTick.quote}</span>
-        ) : null}
-      </div>
-
       {showExtraction && extractionTick ? (
         <DigitExtraction tick={extractionTick} triggerKey={extractionKey} />
-      ) : null}
-
-      {awaitingLine ? (
-        <p className="text-center text-xs font-semibold text-primary tabular-nums">
-          {awaitingLine}
-        </p>
       ) : null}
 
       {settleCompare ? (
@@ -165,6 +163,9 @@ export function DigitDeltaFace({
             phase === 'awaiting_player_tick' ||
             phase === 'drawing'
           }
+          pendingLine={playerPending}
+          pulseNewest={pulsePlayer}
+          pulseKey={extractionKey}
         />
 
         <DeltaBadge
@@ -186,6 +187,9 @@ export function DigitDeltaFace({
           }
           placeholder={!showDealerColumn}
           banner={showDealerColumn ? dealerBanner : null}
+          pendingLine={dealerPending}
+          pulseNewest={pulseDealer}
+          pulseKey={extractionKey}
         />
       </div>
 
@@ -328,6 +332,9 @@ function HandColumn({
   active,
   placeholder,
   banner,
+  pendingLine,
+  pulseNewest,
+  pulseKey,
 }: {
   label: string;
   digits: number[];
@@ -336,6 +343,9 @@ function HandColumn({
   active?: boolean;
   placeholder?: boolean;
   banner?: string | null;
+  pendingLine?: string | null;
+  pulseNewest?: boolean;
+  pulseKey?: number;
 }) {
   return (
     <div
@@ -351,6 +361,12 @@ function HandColumn({
           len {length}
         </span>
       </div>
+
+      {pendingLine ? (
+        <p className="rounded-md bg-primary/10 px-2 py-1 text-[10px] font-semibold leading-snug text-primary tabular-nums">
+          {pendingLine}
+        </p>
+      ) : null}
 
       {banner ? (
         <motion.p
@@ -369,23 +385,35 @@ function HandColumn({
         ) : digits.length === 0 ? (
           <span className="text-xs text-on-subtle">—</span>
         ) : (
-          digits.map((d, i) => (
-            <motion.span
-              key={`${tone}-${i}-${d}`}
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 22 }}
-              className={cn(
-                'flex size-8 items-center justify-center rounded-lg font-display text-sm font-bold tabular-nums',
-                tone === 'player'
-                  ? 'bg-primary/15 text-on-prominent'
-                  : 'bg-subtle text-on-prominent',
-                i === digits.length - 1 && 'ring-2 ring-primary/45',
-              )}
-            >
-              {d}
-            </motion.span>
-          ))
+          digits.map((d, i) => {
+            const isNewest = i === digits.length - 1;
+            return (
+              <motion.span
+                key={`${tone}-${i}-${d}-${isNewest && pulseNewest ? pulseKey : ''}`}
+                initial={{ scale: 0.7, opacity: 0 }}
+                animate={
+                  isNewest && pulseNewest
+                    ? { scale: [1, 1.18, 1], opacity: 1 }
+                    : { scale: 1, opacity: 1 }
+                }
+                transition={
+                  isNewest && pulseNewest
+                    ? { duration: 0.45, times: [0, 0.4, 1] }
+                    : { type: 'spring', stiffness: 420, damping: 22 }
+                }
+                className={cn(
+                  'flex size-8 items-center justify-center rounded-lg font-display text-sm font-bold tabular-nums',
+                  tone === 'player'
+                    ? 'bg-primary/15 text-on-prominent'
+                    : 'bg-subtle text-on-prominent',
+                  isNewest && 'ring-2 ring-primary/45',
+                  isNewest && pulseNewest && 'ring-semantic-win/70 bg-semantic-win/15',
+                )}
+              >
+                {d}
+              </motion.span>
+            );
+          })
         )}
       </div>
     </div>

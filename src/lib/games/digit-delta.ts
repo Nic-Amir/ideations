@@ -3,10 +3,15 @@
 /**
  * Digit Delta — Hold a Higher/Lower digit streak, then beat the dealer on length Δ.
  *
- * Player collects digits with strict Higher/Lower; Hold at length ≥ 2.
- * House dealer: 0–3 Higher, 4–6 Stand (settle), 7–9 Lower — until stand or bust.
- * Bust → player wins with Δ = playerLen (dealer treated as 0).
+ * Player and dealer share the same floor: must call after the opening digit
+ * (cannot stop at length 1). House edge is second-move only.
+ * Dealer policy at length ≥ 2: 0–3 Higher · 4–6 Stand · 7–9 Lower.
+ * At length 1 dealer must call (optimal Higher/Lower — never Stand).
+ * Bust → player wins with Δ = playerLen − dealerLen (digits still count; not treated as 0).
  * Stand → Δ = playerLen − dealerLen (win / push / loss).
+ * Player length 6 → instant jackpot (fixed mult); dealer does not play.
+ * Equal digit → reroll (not collected); wrong direction → bust.
+ * Tapered Δ pay table: Hold-at-3 ~98–99% RTP peak; longer Holds ≤99%.
  * Mesh-shaped rounds (integer cents, locked_pricing, settlement_data).
  */
 
@@ -16,32 +21,43 @@ export interface DigitDeltaConfig {
   instrument: string;
   /** Total-return multipliers keyed by Δ (player − dealer). Δ≥max uses last entry. */
   payTable: number[];
+  /** Total-return mult for length-cap auto-win (not payTable[Δ]). */
+  autoWinMult: number;
 }
 
 /**
  * Index 0 unused; payTable[Δ] = total return incl. stake.
- * Tuned for ~97% RTP under optimal picks + Hold-at-3 (recommended).
- * Hold-at-2 is slightly worse (~95%) with stand-on-4–6 + bust-pays-playerLen.
+ * Front-loaded taper: Hold-at-3 ~98.5–99%; longer Holds and cap ride ≤99%.
  */
 export const DEFAULT_PAY_TABLE: number[] = [
   0,
-  1.5, // Δ1
-  2.3, // Δ2
-  3.3, // Δ3
-  4.75, // Δ4
-  6.75, // Δ5+
+  2.25, // Δ1
+  2.55, // Δ2
+  2.8, // Δ3
+  3.0, // Δ4
+  3.15, // Δ5+
 ];
+
+/** Fixed jackpot total-return when player reaches AUTO_WIN_LENGTH. */
+export const AUTO_WIN_PAYOUT_MULT = 3.6;
 
 export const DIGIT_DELTA_CONFIG: DigitDeltaConfig = {
   instrument: '1HZ100V',
   payTable: DEFAULT_PAY_TABLE,
+  autoWinMult: AUTO_WIN_PAYOUT_MULT,
 };
 
-export const PRICING_MODEL = 'digit_delta_length_v2' as const;
-export const PAY_TABLE_VERSION = 'v2';
-export const GAME_VERSION = '0.2.0';
+export const PRICING_MODEL = 'digit_delta_taper_v1' as const;
+export const PAY_TABLE_VERSION = 'v5';
+export const GAME_VERSION = '0.5.0';
 export const CONTAINER_SHA_POC = 'ideations-poc';
 export const CONTRACT_TYPE = 'DIGIT_DELTA';
+
+/** Shared by player Hold and dealer Stand — cannot stop on the opening face alone. */
+export const MIN_STOP_LENGTH = 2;
+
+/** Reach this length → instant win; dealer does not play. Pays AUTO_WIN_PAYOUT_MULT. */
+export const AUTO_WIN_LENGTH = 6;
 
 export type DigitDeltaPick = 'higher' | 'lower';
 
@@ -111,6 +127,19 @@ export function stepWins(
   return settlementDigit < entryDigit;
 }
 
+export type StepOutcome = 'collect' | 'bust' | 'reroll';
+
+/** Equal digit → reroll; wrong direction → bust; else collect. */
+export function stepOutcome(
+  pick: DigitDeltaPick,
+  entryDigit: number,
+  settlementDigit: number,
+): StepOutcome {
+  if (!isValidDigit(entryDigit) || !isValidDigit(settlementDigit)) return 'bust';
+  if (settlementDigit === entryDigit) return 'reroll';
+  return stepWins(pick, entryDigit, settlementDigit) ? 'collect' : 'bust';
+}
+
 /** Human-readable settle outcome for UI. */
 export function compareReasonLabel(
   pick: DigitDeltaPick | 'stand',
@@ -118,9 +147,12 @@ export function compareReasonLabel(
   settlementDigit: number,
   won: boolean,
   side: 'player' | 'dealer' = 'player',
+  outcome?: StepOutcome,
 ): string {
   if (pick === 'stand') return 'Stand';
-  if (settlementDigit === entryDigit) return 'Tie · same digit';
+  if (outcome === 'reroll' || settlementDigit === entryDigit) {
+    return 'Reroll · not collected';
+  }
   if (won) {
     return side === 'dealer'
       ? pick === 'higher'
@@ -140,18 +172,24 @@ export function optimalPick(face: number): DigitDeltaPick {
 }
 
 /**
- * House dealer decision from current face.
- * 0–3 Higher · 4–6 Stand · 7–9 Lower
+ * House dealer decision from current face + hand length.
+ * Same stop floor as the player: never Stand until length ≥ MIN_STOP_LENGTH.
+ * At length ≥ 2: 0–3 Higher · 4–6 Stand · 7–9 Lower.
+ * At length 1: must call — optimal Higher/Lower.
  */
-export function dealerAction(face: number): DealerAction {
+export function dealerAction(face: number, handLen: number): DealerAction {
   if (!isValidDigit(face)) {
     throw new Error('Invalid dealer face');
+  }
+  if (handLen < MIN_STOP_LENGTH) {
+    return optimalPick(face);
   }
   if (face <= 3) return 'higher';
   if (face <= 6) return 'stand';
   return 'lower';
 }
 
+/** Total return incl. stake from Δ via tapered table (last entry caps). */
 export function payoutMultiplier(
   delta: number,
   payTable: number[] = DEFAULT_PAY_TABLE,
@@ -167,6 +205,11 @@ export function payoutCents(
   payTable: number[] = DEFAULT_PAY_TABLE,
 ): number {
   const mult = payoutMultiplier(delta, payTable);
+  if (mult <= 0) return 0;
+  return Math.floor(stakeCents * mult);
+}
+
+export function payoutCentsFromMult(stakeCents: number, mult: number): number {
   if (mult <= 0) return 0;
   return Math.floor(stakeCents * mult);
 }
@@ -203,6 +246,7 @@ export interface DigitDeltaLockedPricing {
   pricing_model: typeof PRICING_MODEL;
   pay_table_version: typeof PAY_TABLE_VERSION;
   pay_table: number[];
+  auto_win_mult: number;
   instrument: string;
   stake_cents: number;
 }
@@ -217,6 +261,7 @@ export interface DigitDeltaSettlementData {
   settle_reason:
     | 'player_bust'
     | 'dealer_bust'
+    | 'auto_win_cap'
     | 'length_win'
     | 'length_tie'
     | 'length_loss';
@@ -282,7 +327,7 @@ export function canHold(round: DigitDeltaRound): boolean {
   return (
     round.status === 'OPEN' &&
     round.phase === 'player_decision' &&
-    playerLen(round) >= 2
+    playerLen(round) >= MIN_STOP_LENGTH
   );
 }
 
@@ -316,7 +361,14 @@ function finalize(
   const dLen = dealerLen(round);
   let payout = 0;
   if (outcome === 'WON') {
-    payout = payoutCents(round.initial_stake_cents, delta, config.payTable);
+    if (settleReason === 'auto_win_cap') {
+      payout = payoutCentsFromMult(
+        round.initial_stake_cents,
+        config.autoWinMult,
+      );
+    } else {
+      payout = payoutCents(round.initial_stake_cents, delta, config.payTable);
+    }
   } else if (outcome === 'REFUNDED') {
     payout = round.initial_stake_cents;
   }
@@ -385,6 +437,7 @@ export function openRound(params: OpenRoundParams): DigitDeltaRound {
       pricing_model: PRICING_MODEL,
       pay_table_version: PAY_TABLE_VERSION,
       pay_table: [...config.payTable],
+      auto_win_mult: config.autoWinMult,
       instrument,
       stake_cents: params.stakeCents,
     },
@@ -441,7 +494,17 @@ export function settlePlayerTick(
   }
 
   const face = playerFace(round);
-  const won = stepWins(pick, face, settlementDigit);
+  const outcome = stepOutcome(pick, face, settlementDigit);
+
+  // Equal digit: do not append to the hand — keep pending call, wait for next tick.
+  if (outcome === 'reroll') {
+    return {
+      ...round,
+      feed_snapshot: appendFeed(round, settlementDigit, meta),
+    };
+  }
+
+  const won = outcome === 'collect';
   const picks = round.player_picks.map((p, i) =>
     i === round.player_picks.length - 1
       ? { ...p, settlement_digit: settlementDigit, won }
@@ -464,12 +527,22 @@ export function settlePlayerTick(
     player_digits: [...next.player_digits, settlementDigit],
     phase: 'player_decision',
   };
+
+  // Length cap: collect 6 → win 6–0; dealer never plays.
+  if (playerLen(next) >= AUTO_WIN_LENGTH) {
+    return finalize(next, 'WON', 'auto_win_cap', config, AUTO_WIN_LENGTH);
+  }
+
   return next;
 }
 
-export function hold(round: DigitDeltaRound): DigitDeltaRound {
+export function hold(round: DigitDeltaRound, config: DigitDeltaConfig = DIGIT_DELTA_CONFIG): DigitDeltaRound {
   if (!canHold(round)) {
     throw new Error('Cannot Hold yet');
+  }
+  // Safety: if already at cap, settle without dealer.
+  if (playerLen(round) >= AUTO_WIN_LENGTH) {
+    return finalize(round, 'WON', 'auto_win_cap', config, AUTO_WIN_LENGTH);
   }
   return {
     ...round,
@@ -478,13 +551,13 @@ export function hold(round: DigitDeltaRound): DigitDeltaRound {
 }
 
 /**
- * Deal dealer opening face. If face is 4–6, Stand and settle immediately.
+ * Deal dealer opening face. Always must call (length 1) — never Stand on face alone.
  */
 export function dealDealerFace(
   round: DigitDeltaRound,
   faceDigit: number,
   meta: TickMeta = {},
-  config: DigitDeltaConfig = DIGIT_DELTA_CONFIG,
+  _config: DigitDeltaConfig = DIGIT_DELTA_CONFIG,
 ): DigitDeltaRound {
   if (round.status !== 'OPEN' || round.phase !== 'awaiting_dealer_face') {
     throw new Error('Round is not awaiting dealer face');
@@ -493,32 +566,20 @@ export function dealDealerFace(
     throw new Error('Invalid dealer face');
   }
 
-  const action = dealerAction(faceDigit);
-  let next: DigitDeltaRound = {
-    ...round,
-    dealer_digits: [faceDigit],
-    feed_snapshot: appendFeed(round, faceDigit, meta),
-  };
-
+  // Opening hand length is 1 — same floor as player: must bet after first digit.
+  const action = dealerAction(faceDigit, 1);
   if (action === 'stand') {
-    next = {
-      ...next,
-      dealer_steps: [
-        ...next.dealer_steps,
-        { face: faceDigit, action: 'stand', settlement_digit: null, won: null },
-      ],
-      dealer_stop_reason: 'stand',
-      pending_dealer_action: null,
-    };
-    return settleVsDealer(next, config);
+    throw new Error('Dealer cannot Stand on opening face');
   }
 
   return {
-    ...next,
+    ...round,
+    dealer_digits: [faceDigit],
+    feed_snapshot: appendFeed(round, faceDigit, meta),
     phase: 'awaiting_dealer_tick',
     pending_dealer_action: action,
     dealer_steps: [
-      ...next.dealer_steps,
+      ...round.dealer_steps,
       { face: faceDigit, action, settlement_digit: null, won: null },
     ],
   };
@@ -542,7 +603,17 @@ export function settleDealerTick(
   }
 
   const face = dealerFace(round);
-  const won = stepWins(action, face, settlementDigit);
+  const outcome = stepOutcome(action, face, settlementDigit);
+
+  // Equal digit: do not append to the hand — keep pending call, wait for next tick.
+  if (outcome === 'reroll') {
+    return {
+      ...round,
+      feed_snapshot: appendFeed(round, settlementDigit, meta),
+    };
+  }
+
+  const won = outcome === 'collect';
   const steps = round.dealer_steps.map((s, i) =>
     i === round.dealer_steps.length - 1
       ? { ...s, settlement_digit: settlementDigit, won }
@@ -566,7 +637,7 @@ export function settleDealerTick(
     dealer_digits: [...next.dealer_digits, settlementDigit],
   };
 
-  const nextAction = dealerAction(settlementDigit);
+  const nextAction = dealerAction(settlementDigit, dealerLen(next));
   if (nextAction === 'stand') {
     next = {
       ...next,
@@ -608,9 +679,11 @@ function settleVsDealer(
   const pLen = playerLen(round);
   const dLen = dealerLen(round);
 
-  // Dealer bust → player wins; treat dealer length as 0 for Δ.
+  // Dealer bust → player wins; Δ is real length diff (dealer digits still count).
+  // If dealer was equal/ahead before busting, still win at least Δ1 (even money).
   if (round.dealer_stop_reason === 'bust') {
-    return finalize(round, 'WON', 'dealer_bust', config, pLen);
+    const delta = Math.max(pLen - dLen, 1);
+    return finalize(round, 'WON', 'dealer_bust', config, delta);
   }
 
   const delta = pLen - dLen;
@@ -630,6 +703,7 @@ export interface RtpSimOptions {
   /** Hold when player length reaches this (default 2). */
   holdAt?: number;
   payTable?: number[];
+  autoWinMult?: number;
   seed?: number;
 }
 
@@ -669,10 +743,12 @@ export function simulateRtp(options: RtpSimOptions = {}): RtpSimResult {
   const trials = options.trials ?? 50_000;
   const holdAt = options.holdAt ?? 2;
   const payTable = options.payTable ?? DEFAULT_PAY_TABLE;
+  const autoWinMult = options.autoWinMult ?? AUTO_WIN_PAYOUT_MULT;
   const rng = makeRng(options.seed ?? 42);
   const config: DigitDeltaConfig = {
     ...DIGIT_DELTA_CONFIG,
     payTable,
+    autoWinMult,
   };
   const stake = 100;
 
@@ -690,20 +766,31 @@ export function simulateRtp(options: RtpSimOptions = {}): RtpSimResult {
       config,
     });
 
-    // Player collect until Hold or bust
+    // Player collect until Hold, auto-win cap, or bust
     while (round.status === 'OPEN' && round.phase === 'player_decision') {
       if (playerLen(round) >= holdAt) {
-        round = hold(round);
+        round = hold(round, config);
         break;
       }
       const pick = optimalPick(playerFace(round));
       round = lockPlayerPick(round, pick);
-      round = settlePlayerTick(round, randDigit(rng), {}, config);
+      // Reroll on equal until collect or bust
+      while (round.status === 'OPEN' && round.phase === 'awaiting_player_tick') {
+        round = settlePlayerTick(round, randDigit(rng), {}, config);
+      }
     }
 
     if (round.status === 'LOST') {
       losses++;
       playerBusts++;
+      continue;
+    }
+
+    if (round.status === 'WON') {
+      // Auto-win at length cap (dealer skipped)
+      totalReturn += round.payout_cents;
+      wins++;
+      wonDeltaSum += round.settlement_data?.delta ?? 0;
       continue;
     }
 

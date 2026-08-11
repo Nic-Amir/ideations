@@ -1,9 +1,10 @@
 'use client';
 
-import { Button } from '@trading-game/design-intelligence-layer';
+import { Button, Spinner } from '@trading-game/design-intelligence-layer';
 import { GameShell } from '@/components/games/shared/game-shell';
 import { GameViewport, GameNotice } from '@/components/games/shared/game-layout';
 import { StakeDock } from '@/components/games/shared/stake-dock';
+import { MiniMarketStrip } from '@/components/games/shared/mini-market-strip';
 import {
   ResultOverlay,
   getResultTierFromPayout,
@@ -11,7 +12,7 @@ import {
 import type { GameInfoSection } from '@/components/games/shared/game-info-drawer';
 import { DigitDeltaPickStrip } from '@/components/games/digit-delta/digit-delta-pick-strip';
 import { DigitDeltaFace } from '@/components/games/digit-delta/digit-delta-face';
-import { useDigitDelta } from '@/hooks/use-digit-delta';
+import { useDigitDelta, type DigitDeltaResult } from '@/hooks/use-digit-delta';
 import { cn } from '@/lib/utils';
 
 const INFO_SECTIONS: GameInfoSection[] = [
@@ -22,15 +23,17 @@ const INFO_SECTIONS: GameInfoSection[] = [
       <div className="space-y-2 text-sm text-on-subtle">
         <p>
           <strong className="text-on-prominent">1. Build</strong> — Draw a free
-          face, set stake, call Higher or Lower to grow your digit streak.
+          face, set stake, call Higher or Lower to grow your digit streak. Same
+          digit → reroll (not collected, hand unchanged).
         </p>
         <p>
           <strong className="text-on-prominent">2. Hold</strong> — Lock your
-          length (at least 2; 3 is recommended), then the dealer plays.
+          length (at least 2; 3 is the sweet spot), then the dealer plays. Reach
+          length 6 for a fixed jackpot — dealer does not play.
         </p>
         <p>
           <strong className="text-on-prominent">3. Beat the dealer</strong> —
-          Dealer bust → you win (Δ = your length). Stand → win if your length is
+          Dealer bust → you win (Δ = length diff). Stand → win if your length is
           longer; paid on Δ. Ties refund stake.
         </p>
       </div>
@@ -43,13 +46,15 @@ const INFO_SECTIONS: GameInfoSection[] = [
       <div className="space-y-2 text-sm text-on-subtle">
         <p>House policy is fixed — no choice:</p>
         <ul className="list-disc space-y-1 pl-4">
-          <li>Face 0–3 → must call Higher</li>
-          <li>Face 4–6 → Stand (settle now)</li>
-          <li>Face 7–9 → must call Lower</li>
+          <li>Same floor as you: must call after the opening digit</li>
+          <li>Face 0–3 → Higher</li>
+          <li>Face 4–6 → Stand once length ≥ 2</li>
+          <li>Face 7–9 → Lower</li>
+          <li>On length 1 with 4–6 → still calls (Higher on ≤5, Lower on ≥6)</li>
         </ul>
         <p>
-          Dealer bust → you win with Δ = your length. Stand → Δ = your length −
-          dealer length.
+          Dealer bust → you win with Δ = your length − dealer length (at least
+          Δ1). Stand → same Δ formula.
         </p>
       </div>
     ),
@@ -59,15 +64,85 @@ const INFO_SECTIONS: GameInfoSection[] = [
     label: 'Δ payouts',
     content: (
       <div className="space-y-2 text-sm text-on-subtle">
-        <p>Total return including stake:</p>
+        <p>Tapered total return including stake:</p>
         <p className="font-display tabular-nums text-on-prominent">
-          Δ1 1.5× · Δ2 2.3× · Δ3 3.3× · Δ4 4.75× · Δ5+ 6.75×
+          Δ1 2.25× · Δ2 2.55× · Δ3 2.8× · Δ4 3× · Δ5+ 3.15×
         </p>
-        <p>~97% RTP if you Hold around length 3.</p>
+        <p>
+          Length-6 jackpot: <strong className="text-on-prominent">3.6×</strong>{' '}
+          fixed. Hold around 3 for ~98.5% RTP — longer is spicier, not better EV.
+        </p>
       </div>
     ),
   },
 ];
+
+function resultTitleFor(result: DigitDeltaResult): string {
+  switch (result.settleReason) {
+    case 'auto_win_cap':
+      return 'Jackpot · length 6';
+    case 'dealer_bust':
+      return 'Dealer bust · you win';
+    case 'length_win':
+      return `Won · Δ${result.delta}`;
+    case 'length_tie':
+      return 'Push · stake back';
+    case 'length_loss':
+      return 'Dealer longer';
+    case 'player_bust':
+      return result.pickLabel
+        ? `Bust · called ${result.pickLabel}`
+        : 'Bust';
+    default:
+      if (result.outcome === 'WON') return `Won · Δ${result.delta}`;
+      if (result.outcome === 'REFUNDED') return 'Push · stake back';
+      return 'Round over';
+  }
+}
+
+function dealerStopLabel(reason: DigitDeltaResult['dealerStopReason']): string | null {
+  if (reason === 'bust') return 'Dealer stopped · bust';
+  if (reason === 'stand') return 'Dealer stopped · stand';
+  return null;
+}
+
+function DeltaResultDetails({ result }: { result: DigitDeltaResult }) {
+  const stop = dealerStopLabel(result.dealerStopReason);
+  return (
+    <div className="mx-auto w-full max-w-xs space-y-2 rounded-lg border border-border-subtle bg-subtle/40 px-3 py-2.5 text-left text-xs">
+      <div className="flex justify-between gap-3 tabular-nums">
+        <span className="text-on-subtle">You</span>
+        <span className="font-display text-on-prominent">
+          {result.playerDigits.join(' · ') || '—'}{' '}
+          <span className="text-on-subtle">· len {result.playerLen}</span>
+        </span>
+      </div>
+      <div className="flex justify-between gap-3 tabular-nums">
+        <span className="text-on-subtle">Dealer</span>
+        <span className="font-display text-on-prominent">
+          {result.dealerDigits.length > 0
+            ? result.dealerDigits.join(' · ')
+            : '—'}{' '}
+          <span className="text-on-subtle">· len {result.dealerLen}</span>
+        </span>
+      </div>
+      <div className="flex justify-between gap-3 border-t border-border-subtle pt-2 tabular-nums">
+        <span className="text-on-subtle">Δ</span>
+        <span className="font-display font-semibold text-on-prominent">
+          {result.delta}
+          {result.payoutMult > 0 ? ` · ${result.payoutMult}×` : ''}
+        </span>
+      </div>
+      {result.compareLine ? (
+        <p className="text-on-subtle tabular-nums">
+          Last compare {result.compareLine}
+          {result.pickLabel ? ` · ${result.pickLabel}` : ''}
+        </p>
+      ) : null}
+      {stop ? <p className="text-on-subtle">{stop}</p> : null}
+    </div>
+  );
+}
 
 export function DigitDeltaGame() {
   const {
@@ -79,7 +154,9 @@ export function DigitDeltaGame() {
     playError,
     tableTick,
     liveTick,
-    liveDigit,
+    ticks,
+    highlightedTicks,
+    lastConsumedTick,
     extractionKey,
     settleCompare,
     pendingCall,
@@ -121,17 +198,9 @@ export function DigitDeltaGame() {
     (phase === 'settled' && (result?.dealerLen ?? 0) > 0);
   const holdRecommended = playerDecision && pLen >= 3;
 
-  const resultTitle =
-    result?.outcome === 'WON'
-      ? `Won · Δ${result.delta}`
-      : result?.outcome === 'REFUNDED'
-        ? 'Push · stake back'
-        : result?.settleReason === 'player_bust'
-          ? result.pickLabel
-            ? `Bust · called ${result.pickLabel}`
-            : 'Bust'
-          : 'Dealer outran you';
+  const marketStripReady = ticks.length > 0 || lastConsumedTick !== null;
 
+  const resultTitle = result ? resultTitleFor(result) : '';
   const resultSubtitle = result
     ? result.settleReason === 'player_bust' && result.compareLine
       ? `${result.compareLine}${result.reasonLabel ? ` · ${result.reasonLabel}` : ''}`
@@ -140,13 +209,31 @@ export function DigitDeltaGame() {
     : undefined;
 
   const autoDismissMs =
-    result?.outcome === 'LOST' && result.settleReason === 'player_bust'
-      ? 5000
+    result?.settleReason === 'player_bust' ||
+    result?.settleReason === 'dealer_bust' ||
+    result?.settleReason === 'length_win' ||
+    result?.settleReason === 'length_loss' ||
+    result?.settleReason === 'auto_win_cap'
+      ? 5500
       : 3500;
 
   return (
     <GameShell title="Digit Delta" infoSections={INFO_SECTIONS} showSymbolPicker>
       <GameViewport
+        market={
+          marketStripReady ? (
+            <MiniMarketStrip
+              ticks={ticks}
+              highlightedTicks={highlightedTicks}
+              lastConsumedTick={lastConsumedTick}
+              extractionKey={extractionKey}
+            />
+          ) : (
+            <div className="flex shrink-0 items-center justify-center border-b border-border-subtle py-6">
+              <Spinner />
+            </div>
+          )
+        }
         play={
           <DigitDeltaFace
             phase={phase}
@@ -154,7 +241,6 @@ export function DigitDeltaGame() {
             stepId={stepId}
             tableTick={tableTick}
             liveTick={liveTick}
-            liveDigit={liveDigit}
             extractionKey={extractionKey}
             settleCompare={settleCompare}
             pendingCall={pendingCall}
@@ -343,6 +429,7 @@ export function DigitDeltaGame() {
         onDismiss={dismissResult}
         autoDismissMs={autoDismissMs}
         showAutoDismissBar
+        details={result ? <DeltaResultDetails result={result} /> : undefined}
       />
     </GameShell>
   );

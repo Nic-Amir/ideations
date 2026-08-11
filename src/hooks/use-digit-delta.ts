@@ -6,6 +6,7 @@ import { useBalanceStore } from '@/stores/balance-store';
 import { useTickStream, useNextTick } from '@/hooks/use-tick-stream';
 import type { ParsedTick } from '@/types';
 import {
+  AUTO_WIN_PAYOUT_MULT,
   DEFAULT_PAY_TABLE,
   canHold,
   centsToUsdt,
@@ -22,9 +23,10 @@ import {
   playerLen,
   settleDealerTick,
   settlePlayerTick,
-  stepWins,
+  stepOutcome,
   usdtToCents,
   type DealerAction,
+  type DealerStopReason,
   type DigitDeltaPick,
   type DigitDeltaRound,
 } from '@/lib/games/digit-delta';
@@ -56,6 +58,11 @@ export interface DigitDeltaResult {
   /** Last compare digits for bust display, e.g. "4 → 4". */
   compareLine: string | null;
   pickLabel: string | null;
+  playerDigits: number[];
+  dealerDigits: number[];
+  dealerStopReason: DealerStopReason;
+  /** Total-return multiplier used for payout (0 on loss). */
+  payoutMult: number;
 }
 
 export interface DigitDeltaHistoryEntry {
@@ -70,6 +77,7 @@ export interface SettleCompare {
   settlementDigit: number;
   pick: DigitDeltaPick | DealerAction;
   won: boolean;
+  reroll: boolean;
   side: 'player' | 'dealer';
   reasonLabel: string;
 }
@@ -137,6 +145,10 @@ export function useDigitDelta() {
   const [settleCompare, setSettleCompare] = useState<SettleCompare | null>(null);
   const [dealerChip, setDealerChip] = useState<DealerAction | null>(null);
   const [pendingCall, setPendingCall] = useState<PendingCall | null>(null);
+  const [highlightedTicks, setHighlightedTicks] = useState<ParsedTick[]>([]);
+  const [lastConsumedTick, setLastConsumedTick] = useState<ParsedTick | null>(
+    null,
+  );
   const lastCompareRef = useRef<SettleCompare | null>(null);
 
   const phaseRef = useRef<DigitDeltaPhase>('need_draw');
@@ -262,7 +274,17 @@ export function useDigitDelta() {
     setSettleCompare(null);
     setDealerChip(null);
     setPendingCall(null);
+    setHighlightedTicks([]);
+    setLastConsumedTick(null);
     lastCompareRef.current = null;
+  }, []);
+
+  const consumeTick = useCallback((tick: ParsedTick) => {
+    setLastConsumedTick(tick);
+    setHighlightedTicks((prev) => [...prev.slice(-11), tick]);
+    setRevealDigit(tick.lastDigit);
+    setExtractionKey((k) => k + 1);
+    setTableTick(tick);
   }, []);
 
   const finishRound = useCallback(
@@ -302,14 +324,29 @@ export function useDigitDelta() {
                 ? 'Lower'
                 : String(last.pick)
             : null;
+      } else if (settleReason === 'auto_win_cap') {
+        reasonLabel = `Length ${sd?.player_len ?? 6} jackpot · dealer skipped`;
+        compareLine = null;
+        pickLabel = null;
       } else if (settleReason === 'length_win') {
-        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0}`;
+        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0} · Stand`;
         compareLine = null;
         pickLabel = null;
       } else if (settleReason === 'length_tie') {
         reasonLabel = 'Same length · stake back';
       } else if (settleReason === 'length_loss') {
-        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0}`;
+        reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0} · Stand`;
+      }
+
+      const delta = sd?.delta ?? 0;
+      let payoutMult = 0;
+      if (next.status === 'WON') {
+        payoutMult =
+          settleReason === 'auto_win_cap'
+            ? AUTO_WIN_PAYOUT_MULT
+            : payoutMultiplier(delta, DEFAULT_PAY_TABLE);
+      } else if (next.status === 'REFUNDED') {
+        payoutMult = 1;
       }
 
       const res: DigitDeltaResult = {
@@ -319,11 +356,15 @@ export function useDigitDelta() {
         netPL: payoutUsdt - stakeUsdt,
         playerLen: sd?.player_len ?? playerLen(next),
         dealerLen: sd?.dealer_len ?? next.dealer_digits.length,
-        delta: sd?.delta ?? 0,
+        delta,
         settleReason,
         reasonLabel,
         compareLine,
         pickLabel,
+        playerDigits: sd?.player_digits ?? [...next.player_digits],
+        dealerDigits: sd?.dealer_digits ?? [...next.dealer_digits],
+        dealerStopReason: sd?.dealer_stop_reason ?? next.dealer_stop_reason,
+        payoutMult,
       };
       setRound(next);
       roundRef.current = next;
@@ -353,13 +394,11 @@ export function useDigitDelta() {
         await sleep(DEALER_PACE_MS);
 
         const faceTick = await getNextTick();
-        setRevealDigit(faceTick.lastDigit);
-        setExtractionKey((k) => k + 1);
+        consumeTick(faceTick);
         setTableDigit(faceTick.lastDigit);
         tableDigitRef.current = faceTick.lastDigit;
-        setTableTick(faceTick);
 
-        const action = dealerAction(faceTick.lastDigit);
+        const action = dealerAction(faceTick.lastDigit, 1);
         setDealerChip(action);
 
         let next = dealDealerFace(current, faceTick.lastDigit, {
@@ -375,7 +414,7 @@ export function useDigitDelta() {
           return;
         }
 
-        while (next.status === 'OPEN' && next.phase === 'awaiting_dealer_tick') {
+          while (next.status === 'OPEN' && next.phase === 'awaiting_dealer_tick') {
           setPhase('awaiting_dealer_tick');
           phaseRef.current = 'awaiting_dealer_tick';
           const pending = next.pending_dealer_action;
@@ -389,23 +428,41 @@ export function useDigitDelta() {
           const tick = await getNextTick();
           const face = next.dealer_digits[next.dealer_digits.length - 1]!;
           const pick = next.pending_dealer_action as DigitDeltaPick;
-          const won = stepWins(pick, face, tick.lastDigit);
+          const outcome = stepOutcome(pick, face, tick.lastDigit);
+          const won = outcome === 'collect';
           const compare: SettleCompare = {
             entryDigit: face,
             settlementDigit: tick.lastDigit,
             pick,
             won,
+            reroll: outcome === 'reroll',
             side: 'dealer',
-            reasonLabel: compareReasonLabel(pick, face, tick.lastDigit, won, 'dealer'),
+            reasonLabel: compareReasonLabel(
+              pick,
+              face,
+              tick.lastDigit,
+              won,
+              'dealer',
+              outcome,
+            ),
           };
           lastCompareRef.current = compare;
           setSettleCompare(compare);
+          consumeTick(tick);
+          // Reroll: not collected — dealer hand / face unchanged.
+          if (outcome === 'reroll') {
+            next = settleDealerTick(next, tick.lastDigit, {
+              quote: tick.quote,
+              epoch: tick.epoch,
+            });
+            roundRef.current = next;
+            setRound(next);
+            continue;
+          }
+
           setPendingCall(null);
-          setRevealDigit(tick.lastDigit);
-          setExtractionKey((k) => k + 1);
           setTableDigit(tick.lastDigit);
           tableDigitRef.current = tick.lastDigit;
-          setTableTick(tick);
 
           next = settleDealerTick(next, tick.lastDigit, {
             quote: tick.quote,
@@ -438,7 +495,7 @@ export function useDigitDelta() {
         busyRef.current = false;
       }
     },
-    [clearTable, finishRound, getNextTick],
+    [clearTable, consumeTick, finishRound, getNextTick],
   );
 
   const drawFace = useCallback(async () => {
@@ -460,16 +517,16 @@ export function useDigitDelta() {
     setRevealDigit(null);
     setTableDigit(null);
     tableDigitRef.current = null;
+    setHighlightedTicks([]);
+    setLastConsumedTick(null);
     setPhase('drawing');
     phaseRef.current = 'drawing';
 
     try {
       const tick = await getNextTick();
+      consumeTick(tick);
       setTableDigit(tick.lastDigit);
       tableDigitRef.current = tick.lastDigit;
-      setTableTick(tick);
-      setRevealDigit(tick.lastDigit);
-      setExtractionKey((k) => k + 1);
       setPhase('ready');
       phaseRef.current = 'ready';
     } catch {
@@ -480,7 +537,7 @@ export function useDigitDelta() {
     } finally {
       busyRef.current = false;
     }
-  }, [clearTable, getNextTick, marketReady]);
+  }, [clearTable, consumeTick, getNextTick, marketReady]);
 
   useEffect(() => {
     if (
@@ -535,31 +592,57 @@ export function useDigitDelta() {
           setPhase('awaiting_player_tick');
           phaseRef.current = 'awaiting_player_tick';
 
-          const tick = await getNextTick();
-          const won = stepWins(pick, entry, tick.lastDigit);
-          const compare: SettleCompare = {
-            entryDigit: entry,
-            settlementDigit: tick.lastDigit,
-            pick,
-            won,
-            side: 'player',
-            reasonLabel: compareReasonLabel(pick, entry, tick.lastDigit, won, 'player'),
-          };
-          lastCompareRef.current = compare;
-          setSettleCompare(compare);
-          setPendingCall(null);
-          setRevealDigit(tick.lastDigit);
-          setExtractionKey((k) => k + 1);
-          setTableDigit(tick.lastDigit);
-          tableDigitRef.current = tick.lastDigit;
-          setTableTick(tick);
+          let settled = opened;
+          while (
+            settled.status === 'OPEN' &&
+            settled.phase === 'awaiting_player_tick'
+          ) {
+            const tick = await getNextTick();
+            const face = playerFace(settled);
+            const pending = settled.pending_player_pick ?? pick;
+            const outcome = stepOutcome(pending, face, tick.lastDigit);
+            const won = outcome === 'collect';
+            const compare: SettleCompare = {
+              entryDigit: face,
+              settlementDigit: tick.lastDigit,
+              pick: pending,
+              won,
+              reroll: outcome === 'reroll',
+              side: 'player',
+              reasonLabel: compareReasonLabel(
+                pending,
+                face,
+                tick.lastDigit,
+                won,
+                'player',
+                outcome,
+              ),
+            };
+            lastCompareRef.current = compare;
+            setSettleCompare(compare);
+            consumeTick(tick);
+            // Reroll: digit is not collected — hand face stays; keep waiting on same call.
+            if (outcome === 'reroll') {
+              settled = settlePlayerTick(settled, tick.lastDigit, {
+                quote: tick.quote,
+                epoch: tick.epoch,
+              });
+              roundRef.current = settled;
+              setRound(settled);
+              continue;
+            }
 
-          const settled = settlePlayerTick(opened, tick.lastDigit, {
-            quote: tick.quote,
-            epoch: tick.epoch,
-          });
-          roundRef.current = settled;
-          setRound(settled);
+            setPendingCall(null);
+            setTableDigit(tick.lastDigit);
+            tableDigitRef.current = tick.lastDigit;
+
+            settled = settlePlayerTick(settled, tick.lastDigit, {
+              quote: tick.quote,
+              epoch: tick.epoch,
+            });
+            roundRef.current = settled;
+            setRound(settled);
+          }
 
           if (settled.status !== 'OPEN') {
             finishRound(settled);
@@ -601,31 +684,56 @@ export function useDigitDelta() {
           setPhase('awaiting_player_tick');
           phaseRef.current = 'awaiting_player_tick';
 
-          const tick = await getNextTick();
-          const won = stepWins(pick, entry, tick.lastDigit);
-          const compare: SettleCompare = {
-            entryDigit: entry,
-            settlementDigit: tick.lastDigit,
-            pick,
-            won,
-            side: 'player',
-            reasonLabel: compareReasonLabel(pick, entry, tick.lastDigit, won, 'player'),
-          };
-          lastCompareRef.current = compare;
-          setSettleCompare(compare);
-          setPendingCall(null);
-          setRevealDigit(tick.lastDigit);
-          setExtractionKey((k) => k + 1);
-          setTableDigit(tick.lastDigit);
-          tableDigitRef.current = tick.lastDigit;
-          setTableTick(tick);
+          let settled = locked;
+          while (
+            settled.status === 'OPEN' &&
+            settled.phase === 'awaiting_player_tick'
+          ) {
+            const tick = await getNextTick();
+            const face = playerFace(settled);
+            const pending = settled.pending_player_pick ?? pick;
+            const outcome = stepOutcome(pending, face, tick.lastDigit);
+            const won = outcome === 'collect';
+            const compare: SettleCompare = {
+              entryDigit: face,
+              settlementDigit: tick.lastDigit,
+              pick: pending,
+              won,
+              reroll: outcome === 'reroll',
+              side: 'player',
+              reasonLabel: compareReasonLabel(
+                pending,
+                face,
+                tick.lastDigit,
+                won,
+                'player',
+                outcome,
+              ),
+            };
+            lastCompareRef.current = compare;
+            setSettleCompare(compare);
+            consumeTick(tick);
+            if (outcome === 'reroll') {
+              settled = settlePlayerTick(settled, tick.lastDigit, {
+                quote: tick.quote,
+                epoch: tick.epoch,
+              });
+              roundRef.current = settled;
+              setRound(settled);
+              continue;
+            }
 
-          const settled = settlePlayerTick(locked, tick.lastDigit, {
-            quote: tick.quote,
-            epoch: tick.epoch,
-          });
-          roundRef.current = settled;
-          setRound(settled);
+            setPendingCall(null);
+            setTableDigit(tick.lastDigit);
+            tableDigitRef.current = tick.lastDigit;
+
+            settled = settlePlayerTick(settled, tick.lastDigit, {
+              quote: tick.quote,
+              epoch: tick.epoch,
+            });
+            roundRef.current = settled;
+            setRound(settled);
+          }
 
           if (settled.status !== 'OPEN') {
             finishRound(settled);
@@ -642,7 +750,7 @@ export function useDigitDelta() {
         }
       }
     },
-    [balance, finishRound, getNextTick, placeBet, selectedIndex, stake],
+    [balance, consumeTick, finishRound, getNextTick, placeBet, selectedIndex, stake],
   );
 
   const onHold = useCallback(async () => {
@@ -660,12 +768,16 @@ export function useDigitDelta() {
       const held = hold(current);
       roundRef.current = held;
       setRound(held);
+      if (held.status !== 'OPEN') {
+        finishRound(held);
+        return;
+      }
       await runDealerPhase(held);
     } catch (err) {
       setPlayError(err instanceof Error ? err.message : 'Hold failed');
       busyRef.current = false;
     }
-  }, [runDealerPhase]);
+  }, [runDealerPhase, finishRound]);
 
   const dismissResult = useCallback(() => {
     setResult(null);
@@ -692,8 +804,12 @@ export function useDigitDelta() {
       case 'awaiting_dealer_tick':
         return "Dealer's turn";
       case 'settled':
-        if (result?.outcome === 'WON') return `You lead by Δ${result.delta}`;
+        if (result?.settleReason === 'auto_win_cap') return 'Jackpot · length 6';
+        if (result?.settleReason === 'dealer_bust') return 'Dealer bust · you win';
+        if (result?.outcome === 'WON') return `Won · Δ${result.delta}`;
         if (result?.outcome === 'REFUNDED') return 'Push';
+        if (result?.settleReason === 'player_bust') return 'Bust';
+        if (result?.settleReason === 'length_loss') return 'Dealer longer';
         return 'Round over';
       default:
         return 'Digit Delta';
@@ -714,6 +830,9 @@ export function useDigitDelta() {
     tableTick,
     liveDigit,
     liveTick: latestTick,
+    ticks,
+    highlightedTicks,
+    lastConsumedTick,
     extractionKey,
     settleCompare,
     pendingCall,
