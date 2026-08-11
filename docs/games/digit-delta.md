@@ -4,7 +4,7 @@ Locked product brief + playable ideations POC. Full mechanics and platform_stand
 
 ## Thesis
 
-Digit Delta is a **trading-gamified** Higher/Lower digit game: build a streak on live last digits, **Hold**, then beat the house dealer’s run. You are paid on the **length Δ** (player − dealer) via a fixed pay table. Length ties refund the stake.
+Digit Delta is a **trading-gamified** Higher/Lower digit game: build a streak on live last digits, **Hold**, then beat the house dealer’s run. You are paid on the **length Δ** via a fixed pay table. Length ties (on stand) refund the stake. Dealer bust always pays the player (Δ = player length).
 
 Inspired by casino Ride the Tide structure, but framed as digit trading — not a Digit Ladder variant (no parlay multipliers).
 
@@ -15,9 +15,10 @@ Inspired by casino Ride the Tide structure, but framed as digit trading — not 
 | Face | **Free draw** — next tick locks D before stake |
 | Collect | Strict Higher / Lower; equal or wrong → **LOST** |
 | Hold | Allowed at length ≥ 2 (face + ≥1 correct call) |
-| Dealer | **0–4 Higher · 5 Stand (settle) · 6–9 Lower** until stand or bust |
-| Win | `playerLen > dealerLen` → fixed payout by Δ |
-| Tie | `playerLen === dealerLen` → **REFUNDED** |
+| Dealer | **0–3 Higher · 4–6 Stand (settle) · 7–9 Lower** until stand or bust |
+| Dealer bust | Player **WON**; Δ = `playerLen` (dealer treated as 0) |
+| Stand win | `playerLen > dealerLen` → fixed payout by Δ |
+| Stand tie | `playerLen === dealerLen` → **REFUNDED** |
 | Pricing | Fixed total-return table (not live step mults) |
 
 Statuses: `OPEN` → `WON` | `LOST` | `REFUNDED`.
@@ -30,9 +31,9 @@ Under uniform digits + optimal player picks:
 | --- | --- |
 | Hold at 3 (recommended) | **~97%** |
 | Hold at 4 | ~96% |
-| Hold at 2 | ~83% (worse — encourages longer streaks) |
+| Hold at 2 | ~95% (slightly worse) |
 
-Pay table (total return incl. stake): Δ1 **2.7×** · Δ2 **3.65×** · Δ3 **4.9×** · Δ4 **6.8×** · Δ5+ **9.5×**.
+Pay table (total return incl. stake): Δ1 **1.5×** · Δ2 **2.3×** · Δ3 **3.3×** · Δ4 **4.75×** · Δ5+ **6.75×**.
 
 ## Playable surface
 

@@ -288,6 +288,20 @@ export function useDigitDelta() {
             : last.pick === 'lower'
               ? 'Lower'
               : String(last.pick);
+      } else if (settleReason === 'dealer_bust') {
+        reasonLabel = `Dealer bust · you win Δ${sd?.delta ?? 0}`;
+        compareLine =
+          last && last.side === 'dealer'
+            ? `${last.entryDigit} → ${last.settlementDigit}`
+            : null;
+        pickLabel =
+          last && last.side === 'dealer'
+            ? last.pick === 'higher'
+              ? 'Higher'
+              : last.pick === 'lower'
+                ? 'Lower'
+                : String(last.pick)
+            : null;
       } else if (settleReason === 'length_win') {
         reasonLabel = `You ${sd?.player_len ?? 0} · Dealer ${sd?.dealer_len ?? 0}`;
         compareLine = null;
@@ -400,7 +414,7 @@ export function useDigitDelta() {
           roundRef.current = next;
           setRound(next);
 
-          if (next.dealer_stop_reason === 'stand_on_5') {
+          if (next.dealer_stop_reason === 'stand') {
             setDealerChip('stand');
             setPendingCall(null);
           }

@@ -1,6 +1,6 @@
 # Digit Delta — Product Specification
 
-**Version:** 1.0 · **Date:** August 2026  
+**Version:** 1.1 · **Date:** August 2026  
 **Read `platform_standard.md` first** (trading-game-specs). This document defines only product-specific behavior. Everything in the platform standard applies unchanged when this product is ported to the Deriv Product Mesh.
 
 **Ideations note:** The playable POC in this repo is client-side. Engine types, money (integer cents), round status, `locked_pricing`, and `settlement_data` mirror platform_standard §6.2 / §8.1 / §23.7 so a Go backend can lift them without reshaping the product.
@@ -19,11 +19,13 @@
 
 **Length:** Count of digits in a hand including the starting face.
 
-**Δ (Delta):** `playerLen − dealerLen` at settlement. Only positive Δ pays.
+**Δ (Delta):** Settlement length edge used for payout.
+- On **dealer stand:** `playerLen − dealerLen` (only positive Δ pays).
+- On **dealer bust:** `playerLen` (dealer treated as length 0).
 
-**House dealer rules:** Deterministic policy — face 0–4 must call Higher; face 5 **Stand** (settle immediately); face 6–9 must call Lower.
+**House dealer rules:** Deterministic policy — face 0–3 must call Higher; face 4–6 **Stand** (settle immediately); face 7–9 must call Lower.
 
-**Dealer stop reason:** `stand_on_5` or `bust` (wrong/equal call).
+**Dealer stop reason:** `stand` or `bust` (wrong/equal call).
 
 **Locked Pricing:** Snapshot of pay table version + stake at open. Required by platform_standard §6.2.
 
@@ -33,11 +35,11 @@
 
 ## 2. Product Concept
 
-Digit Delta turns live last digits into a Hold-and-compare streak game. The player free-draws a face, stakes once, collects with Higher/Lower, Holds, then the house dealer must follow a strict call table until Stand or bust. Payout is a fixed total-return multiple of stake based on how much longer the player’s streak is.
+Digit Delta turns live last digits into a Hold-and-compare streak game. The player free-draws a face, stakes once, collects with Higher/Lower, Holds, then the house dealer must follow a strict call table until Stand or bust. Payout is a fixed total-return multiple of stake based on settlement Δ.
 
 **Why this product exists:** Digit Ladder is climb-and-parlay. Digit Delta is beat-the-market-continuation — trading language (Hold, Δ) with a gamified dealer phase.
 
-**Core loop:** (1) Free-draw face; (2) stake; (3) Higher/Lower collect; (4) Hold; (5) dealer runs house rules; (6) settle by length Δ / tie refund / loss.
+**Core loop:** (1) Free-draw face; (2) stake; (3) Higher/Lower collect; (4) Hold; (5) dealer runs house rules; (6) settle by bust / length Δ / tie refund / loss.
 
 ---
 
@@ -76,36 +78,37 @@ Digit Delta turns live last digits into a Hold-and-compare streak game. The play
 
 | Face D | Action |
 | --- | --- |
-| 0–4 | Must call **Higher** |
-| 5 | **Stand** — settle immediately |
-| 6–9 | Must call **Lower** |
+| 0–3 | Must call **Higher** |
+| 4–6 | **Stand** — settle immediately |
+| 7–9 | Must call **Lower** |
 
-After a successful Higher/Lower, re-evaluate the new face. Stand on 5 can occur on the opening face or mid-run.
+After a successful Higher/Lower, re-evaluate the new face. Stand on 4–6 can occur on the opening face or mid-run.
 
 ### 4.4 Settlement
 
-| Condition | Status | Payout |
-| --- | --- | --- |
-| `playerLen > dealerLen` | `WON` | `floor(stake_cents × payTable[Δ])` |
-| `playerLen === dealerLen` | `REFUNDED` | stake back (`settle_reason: length_tie`) |
-| `playerLen < dealerLen` | `LOST` | 0 |
-| Player bust before Hold | `LOST` | 0 |
+| Condition | Status | Payout | `settle_reason` |
+| --- | --- | --- | --- |
+| Dealer bust | `WON` | `floor(stake_cents × payTable[playerLen])` | `dealer_bust` |
+| Stand and `playerLen > dealerLen` | `WON` | `floor(stake_cents × payTable[Δ])` | `length_win` |
+| Stand and `playerLen === dealerLen` | `REFUNDED` | stake back | `length_tie` |
+| Stand and `playerLen < dealerLen` | `LOST` | 0 | `length_loss` |
+| Player bust before Hold | `LOST` | 0 | `player_bust` |
 
 ---
 
 ## 5. Pricing Model
 
-### 5.1 Fixed pay table (`digit_delta_length_v1`)
+### 5.1 Fixed pay table (`digit_delta_length_v2`)
 
 Total return including stake:
 
 | Δ | Multiplier |
 | --- | --- |
-| 1 | 2.70 |
-| 2 | 3.65 |
-| 3 | 4.90 |
-| 4 | 6.80 |
-| ≥5 | 9.50 |
+| 1 | 1.50 |
+| 2 | 2.30 |
+| 3 | 3.30 |
+| 4 | 4.75 |
+| ≥5 | 6.75 |
 
 ### 5.2 RTP (Monte Carlo, uniform digits, optimal player picks)
 
@@ -113,15 +116,15 @@ Total return including stake:
 | --- | --- |
 | Hold at 3 (recommended) | ~97% |
 | Hold at 4 | ~96% |
-| Hold at 2 | ~83% |
+| Hold at 2 | ~95% |
 
 ### 5.3 `locked_pricing`
 
 ```json
 {
-  "pricing_model": "digit_delta_length_v1",
-  "pay_table_version": "v1",
-  "pay_table": [0, 2.7, 3.65, 4.9, 6.8, 9.5],
+  "pricing_model": "digit_delta_length_v2",
+  "pay_table_version": "v2",
+  "pay_table": [0, 1.5, 2.3, 3.3, 4.75, 6.75],
   "instrument": "1HZ100V",
   "stake_cents": 10000
 }

@@ -205,13 +205,13 @@ export const GAMES: GameInfo[] = [
     name: 'Digit Delta',
     shortName: 'Delta',
     description:
-      'Collect a Higher/Lower digit streak, Hold, then beat the dealer’s run. Paid on the length Δ — ties refund your stake.',
+      'Collect a Higher/Lower digit streak, Hold, then beat the dealer’s run. Dealer stands on 4–6; bust pays your length as Δ.',
     shortPitch: 'Hold your digit streak. Beat the dealer. Win the Δ.',
     category: 'Strategy',
     risk: 'Medium',
     sessionLength: '15-90 sec',
     mechanics:
-      'Free-draw a face, stake once, collect with Higher/Lower, Hold at length ≥ 2. Dealer follows 0–4 Higher / 5 Stand / 6–9 Lower until stand or bust. Fixed Δ pay table.',
+      'Free-draw a face, stake once, collect with Higher/Lower, Hold at length ≥ 2. Dealer follows 0–3 Higher / 4–6 Stand / 7–9 Lower until stand or bust. Bust pays your length as Δ. Fixed Δ pay table.',
     marketSource: 'Tick feed',
     status: 'Live',
     track: 'other',

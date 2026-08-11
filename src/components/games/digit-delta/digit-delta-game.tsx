@@ -30,7 +30,8 @@ const INFO_SECTIONS: GameInfoSection[] = [
         </p>
         <p>
           <strong className="text-on-prominent">3. Beat the dealer</strong> —
-          Win if your length beats theirs. Paid on Δ. Ties refund stake.
+          Dealer bust → you win (Δ = your length). Stand → win if your length is
+          longer; paid on Δ. Ties refund stake.
         </p>
       </div>
     ),
@@ -42,10 +43,14 @@ const INFO_SECTIONS: GameInfoSection[] = [
       <div className="space-y-2 text-sm text-on-subtle">
         <p>House policy is fixed — no choice:</p>
         <ul className="list-disc space-y-1 pl-4">
-          <li>Face 0–4 → must call Higher</li>
-          <li>Face 5 → Stand (settle now)</li>
-          <li>Face 6–9 → must call Lower</li>
+          <li>Face 0–3 → must call Higher</li>
+          <li>Face 4–6 → Stand (settle now)</li>
+          <li>Face 7–9 → must call Lower</li>
         </ul>
+        <p>
+          Dealer bust → you win with Δ = your length. Stand → Δ = your length −
+          dealer length.
+        </p>
       </div>
     ),
   },
@@ -56,7 +61,7 @@ const INFO_SECTIONS: GameInfoSection[] = [
       <div className="space-y-2 text-sm text-on-subtle">
         <p>Total return including stake:</p>
         <p className="font-display tabular-nums text-on-prominent">
-          Δ1 2.7× · Δ2 3.65× · Δ3 4.9× · Δ4 6.8× · Δ5+ 9.5×
+          Δ1 1.5× · Δ2 2.3× · Δ3 3.3× · Δ4 4.75× · Δ5+ 6.75×
         </p>
         <p>~97% RTP if you Hold around length 3.</p>
       </div>
