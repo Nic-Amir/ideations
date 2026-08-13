@@ -50,8 +50,8 @@ export function useIndexAscent(symbol: CrashSymbol) {
   const prevQuoteRef = useRef<number | null>(null);
   const streakRef = useRef(0);
   const roundIdRef = useRef(0);
-  const avgTicksRef = useRef(info.avgTicksPerCrash);
-  avgTicksRef.current = info.avgTicksPerCrash;
+  const growthRateRef = useRef(info.growthRate);
+  growthRateRef.current = info.growthRate;
 
   const settleRound = useCallback(
     (outcome: 'crashed' | 'cashed_out', settledMultiplier: number) => {
@@ -101,7 +101,7 @@ export function useIndexAscent(symbol: CrashSymbol) {
 
       // Market-wide crash tracking (independent of any active bet).
       if (isCrashTick(prevQuote, quote)) {
-        const climbMultiplier = getDisplayedMultiplier(streakRef.current, avgTicksRef.current);
+        const climbMultiplier = getDisplayedMultiplier(streakRef.current, growthRateRef.current);
         setMarketCrashes((prev) => [climbMultiplier, ...prev].slice(0, MAX_MARKET_CRASHES));
         streakRef.current = 0;
       } else {
@@ -117,7 +117,7 @@ export function useIndexAscent(symbol: CrashSymbol) {
         prevQuote,
         quote,
         round.ticksSurvived,
-        avgTicksRef.current,
+        growthRateRef.current,
         round.autoCashoutTarget
       );
 
@@ -178,7 +178,7 @@ export function useIndexAscent(symbol: CrashSymbol) {
   const cashOut = useCallback(() => {
     const round = roundRef.current;
     if (!round || round.ticksSurvived < 1) return;
-    const settled = getDisplayedMultiplier(round.ticksSurvived, avgTicksRef.current);
+    const settled = getDisplayedMultiplier(round.ticksSurvived, growthRateRef.current);
     settleRoundRef.current('cashed_out', settled);
   }, []);
 

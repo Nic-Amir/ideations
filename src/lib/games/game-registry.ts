@@ -8,14 +8,14 @@ export const GAMES: GameInfo[] = [
     name: 'Index Ascent',
     shortName: 'Ascent',
     description:
-      'Watch a live Crash index climb tick by tick. Your multiplier grows as it rises — cash out before the index corrects.',
-    shortPitch: 'Ride a rising Crash index. Cash out before it drops.',
+      'Watch a synthetic ascent index climb tick by tick. Your multiplier grows at 1%, 5%, or 10% per survived tick — cash out before it corrects.',
+    shortPitch: 'Ride an ascent index. Cash out before it drops.',
     category: 'Momentum',
     risk: 'High',
     sessionLength: '10 sec - 5 min',
     mechanics:
-      'Pick Crash 50/150/300, enter on any tick, and exit manually or at a target — an index correction closes the position.',
-    marketSource: 'Tick feed (Crash indices)',
+      'Pick Ascent 1%/5%/10%, enter on any tick, and exit manually or at a target — a correction closes the position.',
+    marketSource: 'Tick feed (synthetic ascent indices)',
     status: 'Live',
     track: 'roadmap',
     iconKey: 'index-ascent',

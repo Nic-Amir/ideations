@@ -14,7 +14,7 @@ import { isCrashTick } from '@/lib/games/index-ascent';
 describe('mock tick helpers', () => {
   test('seedQuoteForSymbol differs by symbol family', () => {
     expect(seedQuoteForSymbol('1HZ100V')).toBeGreaterThan(0);
-    expect(seedQuoteForSymbol('CRASH50')).not.toBe(seedQuoteForSymbol('1HZ100V'));
+    expect(seedQuoteForSymbol('ASCENT5')).not.toBe(seedQuoteForSymbol('1HZ100V'));
     expect(seedQuoteForSymbol('R_100')).not.toBe(seedQuoteForSymbol('1HZ100V'));
   });
 
@@ -34,35 +34,35 @@ describe('mock tick helpers', () => {
     expect(parseFloat(quote)).toBeGreaterThanOrEqual(1);
   });
 
-  test('crashAvgTicksFromSymbol parses Crash ids', () => {
-    expect(crashAvgTicksFromSymbol('CRASH50')).toBe(50);
-    expect(crashAvgTicksFromSymbol('CRASH150N')).toBe(150);
-    expect(crashAvgTicksFromSymbol('CRASH300N')).toBe(300);
+  test('crashAvgTicksFromSymbol resolves Ascent ids', () => {
+    expect(crashAvgTicksFromSymbol('ASCENT1')).toBe(100);
+    expect(crashAvgTicksFromSymbol('ASCENT5')).toBe(20);
+    expect(crashAvgTicksFromSymbol('ASCENT10')).toBe(10);
     expect(crashAvgTicksFromSymbol('1HZ100V')).toBeNull();
   });
 
-  test('Crash mock drifts up between corrections', () => {
+  test('Ascent mock drifts up between corrections', () => {
     // rng >= p → drift; use 1 so crash never fires
-    const quote = nextCrashMockQuote(8000, 50, () => 1);
+    const quote = nextCrashMockQuote(8000, 20, () => 1);
     expect(parseFloat(quote)).toBeGreaterThan(8000);
     expect(isCrashTick(8000, parseFloat(quote))).toBe(false);
   });
 
-  test('Crash mock drops on a correction', () => {
+  test('Ascent mock drops on a correction', () => {
     // First draw < p forces crash; second draw sizes the drop
     let calls = 0;
     const rng = () => {
       calls += 1;
       return calls === 1 ? 0 : 0.5;
     };
-    const quote = nextCrashMockQuote(8000, 50, rng);
+    const quote = nextCrashMockQuote(8000, 20, rng);
     expect(parseFloat(quote)).toBeLessThan(8000);
     expect(isCrashTick(8000, parseFloat(quote))).toBe(true);
   });
 
-  test('nextMockQuoteForSymbol routes Crash symbols to crash model', () => {
-    const crash = nextMockQuoteForSymbol('CRASH150N', 8000, () => 1);
-    expect(parseFloat(crash)).toBeGreaterThan(8000);
+  test('nextMockQuoteForSymbol routes Ascent symbols to crash model', () => {
+    const ascent = nextMockQuoteForSymbol('ASCENT5', 8000, () => 1);
+    expect(parseFloat(ascent)).toBeGreaterThan(8000);
     const vol = nextMockQuoteForSymbol('1HZ100V', 1000, () => 0.75);
     expect(vol).toMatch(/^\d+\.\d{2}$/);
   });

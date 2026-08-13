@@ -77,10 +77,11 @@ export default function ProvablyFairPage() {
           Index Ascent
         </h2>
         <p className="body-sm text-on-subtle leading-relaxed">
-          A momentum game built on Crash-style synthetic indices (Crash 50,
-          150, 300). A Crash N index ascends and corrects on average once every
-          N ticks. A correction is detected as any downward move in the quote,
-          since the index only rises between correction events.
+          A momentum game on synthetic ascent indices (Ascent 1%, 5%, 10%).
+          Each instrument pays a labeled per-tick growth rate while crashing
+          on average once every house-rounded N ticks (100 / 20 / 10). A
+          correction is detected as any downward move in the quote, since the
+          index only rises between correction events.
         </p>
         <p className="body-sm text-on-subtle leading-relaxed">
           The correction distribution is geometric and therefore{' '}
@@ -94,16 +95,15 @@ export default function ProvablyFairPage() {
             <div className="font-display text-xs space-y-1 text-on-subtle">
               <p>p (correction per tick) = 1 / N</p>
               <p>P(survive k ticks) = (1 − p)^k</p>
-              <p>Fair multiplier after k ticks = 1 / (1 − p)^k</p>
-              <p>Displayed multiplier = Fair × 0.98 (2% house edge)</p>
-              <p>RTP at any cash-out point = 98% by construction</p>
+              <p>Displayed multiplier after k ticks = (1 + g)^k</p>
+              <p>Process RTP at cash-out = [(1 − p)(1 + g)]^k</p>
+              <p>House edge = house-rounded N vs labeled g (no separate 2% display edge)</p>
             </div>
           </CardContent>
         </Card>
         <p className="body-sm text-on-subtle leading-relaxed">
-          Multipliers are capped at 100× and exits settle at a minimum of
-          1.01×. Every round is auditable against the public tick history of
-          the underlying Crash index.
+          Multipliers are capped at 100× and auto-exits settle at a minimum of
+          1.01×. Every round is auditable against the synthetic tick history.
         </p>
       </section>
 

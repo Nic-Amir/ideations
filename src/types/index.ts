@@ -46,34 +46,40 @@ export const SUPPORTED_SYMBOLS: SymbolInfo[] = [
   { id: '1HZ10V', name: 'Volatility 10 (1s)', tickFreq: '1 sec', description: 'Low volatility, 1-second ticks' },
 ];
 
-export type CrashSymbol = 'CRASH50' | 'CRASH150N' | 'CRASH300N';
+/** Synthetic Index Ascent instruments (house-rounded N for labeled growth). */
+export type CrashSymbol = 'ASCENT1' | 'ASCENT5' | 'ASCENT10';
 
 export interface CrashSymbolInfo {
   id: CrashSymbol;
   name: string;
-  /** Average number of ticks between crash events (the N in the index name). */
+  /** Average ticks between crash events (house-rounded N). */
   avgTicksPerCrash: number;
+  /** Advertised per-survived-tick growth rate used for M(k)=(1+g)^k. */
+  growthRate: number;
   description: string;
 }
 
 export const CRASH_SYMBOLS: CrashSymbolInfo[] = [
   {
-    id: 'CRASH50',
-    name: 'Crash 50',
-    avgTicksPerCrash: 50,
-    description: 'Crashes every ~50 ticks on average — fastest climb, highest bust rate',
+    id: 'ASCENT1',
+    name: 'Ascent 1%',
+    avgTicksPerCrash: 100,
+    growthRate: 0.01,
+    description: 'Grows 1% per survived tick — crashes about every 100 ticks',
   },
   {
-    id: 'CRASH150N',
-    name: 'Crash 150',
-    avgTicksPerCrash: 150,
-    description: 'Crashes every ~150 ticks on average — balanced pace',
+    id: 'ASCENT5',
+    name: 'Ascent 5%',
+    avgTicksPerCrash: 20,
+    growthRate: 0.05,
+    description: 'Grows 5% per survived tick — crashes about every 20 ticks',
   },
   {
-    id: 'CRASH300N',
-    name: 'Crash 300',
-    avgTicksPerCrash: 300,
-    description: 'Crashes every ~300 ticks on average — slower climb, rarer busts',
+    id: 'ASCENT10',
+    name: 'Ascent 10%',
+    avgTicksPerCrash: 10,
+    growthRate: 0.1,
+    description: 'Grows 10% per survived tick — crashes about every 10 ticks',
   },
 ];
 

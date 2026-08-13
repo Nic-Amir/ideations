@@ -4,7 +4,7 @@ A proof-of-concept web application that reimagines gambling as a market-driven e
 
 ## Games
 
-- **Index Ascent** — Ride live Deriv Crash synthetic indices (Crash 50/150/300) as they ascend tick by tick. Return builds with geometric pricing (98% RTP); exit before the index corrects.
+- **Index Ascent** — Ride synthetic ascent indices (Ascent 1%/5%/10%) as they climb tick by tick. Return grows at the labeled rate; crash spacing is house-rounded. Exit before the index corrects.
 - **Digit Collect** — Crash/chicken-out game. Collect unique digits (0–9) from live ticks. Cash out before a duplicate knocks you out.
 - **Digit Poker** — Video poker with digits. 5-digit hands dealt from live ticks. Hold/draw mechanics with a pay table.
 - **Digit Slots** — 3×3 live-digit slot. One feed per row (fills in parallel), eight additive paylines, wins credit automatically.

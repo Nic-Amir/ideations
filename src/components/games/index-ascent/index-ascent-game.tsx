@@ -9,7 +9,6 @@ import { useBalanceStore } from '@/stores/balance-store';
 import { useIsLandscape } from '@/hooks/use-landscape';
 import { useIndexAscent, type AscentRoundResult } from '@/hooks/use-index-ascent';
 import {
-  CRASH_HOUSE_EDGE,
   getMilestoneTable,
   getPerTickCrashProbability,
   getSurvivalProbability,
@@ -65,7 +64,7 @@ function PositionTicket({
 }) {
   const info = CRASH_SYMBOLS.find((item) => item.id === symbol)!;
   const perTickRisk = getPerTickCrashProbability(info.avgTicksPerCrash);
-  const targetTicks = target ? getTicksToReachMultiplier(target, info.avgTicksPerCrash) : null;
+  const targetTicks = target ? getTicksToReachMultiplier(target, info.growthRate) : null;
   const targetSurvival = targetTicks !== null
     ? getSurvivalProbability(targetTicks, info.avgTicksPerCrash)
     : null;
@@ -83,10 +82,10 @@ function PositionTicket({
 
       <div className="mt-3 [@media(max-height:520px)]:mt-2">
         <div className="mb-1.5 flex items-center justify-between text-[10px]">
-          <span className="font-semibold uppercase tracking-wide text-on-subtle">Crash index</span>
+          <span className="font-semibold uppercase tracking-wide text-on-subtle">Ascent index</span>
           <span className="tabular-nums text-semantic-loss">{percent(perTickRisk, perTickRisk < 0.01 ? 2 : 1)} correction / tick</span>
         </div>
-        <div role="radiogroup" aria-label="Crash index" className="grid grid-cols-3 gap-1.5">
+        <div role="radiogroup" aria-label="Ascent index" className="grid grid-cols-3 gap-1.5">
           {CRASH_SYMBOLS.map((item) => (
             <button
               key={item.id}
@@ -101,7 +100,7 @@ function PositionTicket({
                   : 'border-border-subtle text-on-subtle hover:text-on-prominent',
               )}
             >
-              <span className="block font-display text-sm font-bold">{item.name.replace('Crash ', '')}</span>
+              <span className="block font-display text-sm font-bold">{item.name.replace('Ascent ', '')}</span>
               <span className="block text-[8px] font-medium uppercase tracking-wide opacity-75">1 in {item.avgTicksPerCrash}</span>
             </button>
           ))}
@@ -425,7 +424,7 @@ function ResultDetails({ result, symbol, ticksSurvived }: { result: AscentRoundR
 export function IndexAscentGame() {
   const { balance } = useBalanceStore();
   const isLandscape = useIsLandscape();
-  const [symbol, setSymbol] = useState<CrashSymbol>('CRASH150N');
+  const [symbol, setSymbol] = useState<CrashSymbol>('ASCENT5');
   const [stake, setStake] = useState(100);
   const [autoExitMode, setAutoExitMode] = useState<AutoExitMode>('off');
   const [presetTarget, setPresetTarget] = useState<number>(1.5);
@@ -462,7 +461,7 @@ export function IndexAscentGame() {
   const resultReturn = lastResult?.outcome === 'cashed_out' ? lastResult.winAmount : 0;
   const resultNetPL = lastResult ? resultReturn - lastResult.stake : 0;
   const resultTier = resultNetPL > 0 ? 'win' : resultNetPL < 0 ? 'loss' : 'push';
-  const milestones = getMilestoneTable(info.avgTicksPerCrash).filter((milestone) => Number.isFinite(milestone.ticks));
+  const milestones = getMilestoneTable(info.avgTicksPerCrash, info.growthRate).filter((milestone) => Number.isFinite(milestone.ticks));
 
   const handleEnter = useCallback(() => {
     launch(stake, autoCashout);
@@ -483,7 +482,7 @@ export function IndexAscentGame() {
           {milestones.map((milestone) => (
             <div key={milestone.multiplier} className="grid grid-cols-3 gap-2 rounded-lg bg-subtle px-3 py-2 text-xs text-on-subtle"><span className="font-display tabular-nums text-on-prominent">{milestone.multiplier}×</span><span className="font-display tabular-nums">{milestone.seconds >= 120 ? `${Math.round(milestone.seconds / 60)} min` : `${milestone.seconds}s`}</span><span className="text-right font-display tabular-nums">{percent(milestone.survivalProb)}</span></div>
           ))}
-          <p className="text-xs text-on-subtle">Payouts carry a {(CRASH_HOUSE_EDGE * 100).toFixed(0)}% platform margin at every exit point.</p>
+          <p className="text-xs text-on-subtle">Multiplier grows at the labeled rate each survived tick. Crash spacing is house-rounded so expected return declines with depth.</p>
         </div>
       ),
     },

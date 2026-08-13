@@ -2,32 +2,39 @@
 
 /**
  * Pure helpers for the local tick feed used by the ideations POC.
- * Crash symbols still model Crash N average spacing for realism.
+ * Ascent symbols model geometric crash spacing for realism.
  */
+
+import { CRASH_SYMBOLS } from '@/types';
 
 export const MOCK_TICK_INTERVAL_MS = 1_000;
 export const MOCK_PIP_SIZE = 2;
 
-/** Relative upward drift between Crash corrections (~0.002–0.004%). */
+/** Relative upward drift between crash corrections (~0.002–0.004%). */
 const CRASH_DRIFT_MIN = 0.00002;
 const CRASH_DRIFT_MAX = 0.00004;
-/** Relative drop size on a Crash correction (~0.2–2%). */
+/** Relative drop size on a crash correction (~0.2–2%). */
 const CRASH_DROP_MIN = 0.002;
 const CRASH_DROP_MAX = 0.02;
 
-/** Seed quote per symbol family so Crash / Vol indices look distinct. */
+/** Seed quote per symbol family so Ascent / Vol indices look distinct. */
 export function seedQuoteForSymbol(symbol: string): number {
-  if (symbol.startsWith('CRASH')) return 8000 + (symbol.length % 7) * 111;
+  if (symbol.startsWith('ASCENT') || symbol.startsWith('CRASH')) {
+    return 8000 + (symbol.length % 7) * 111;
+  }
   if (symbol.startsWith('1HZ')) return 1000 + (symbol.length % 5) * 37;
   if (symbol.startsWith('R_')) return 500 + (symbol.length % 5) * 23;
   return 1000;
 }
 
 /**
- * Average ticks between Crash events from a Deriv Crash symbol id
- * (`CRASH50`, `CRASH150N`, `CRASH300N`, …). Returns null for non-Crash symbols.
+ * Average ticks between crash events for an Ascent (or legacy Crash) symbol.
+ * Returns null for non-crash symbols.
  */
 export function crashAvgTicksFromSymbol(symbol: string): number | null {
+  const ascent = CRASH_SYMBOLS.find((s) => s.id === symbol);
+  if (ascent) return ascent.avgTicksPerCrash;
+
   const match = /^CRASH(\d+)N?$/i.exec(symbol);
   if (!match) return null;
   const n = Number(match[1]);
@@ -35,7 +42,7 @@ export function crashAvgTicksFromSymbol(symbol: string): number | null {
 }
 
 /**
- * One Crash-index step: drift slightly up with probability (1 - 1/N),
+ * One Crash/Ascent-index step: drift slightly up with probability (1 - 1/N),
  * otherwise drop (a correction). Matches the memoryless geometric model
  * Index Ascent prices against.
  */
@@ -69,7 +76,7 @@ export function nextMockQuote(
   return next.toFixed(MOCK_PIP_SIZE);
 }
 
-/** Symbol-aware mock tick — Crash indices use geometric corrections. */
+/** Symbol-aware mock tick — Ascent indices use geometric corrections. */
 export function nextMockQuoteForSymbol(
   symbol: string,
   previous: number,
